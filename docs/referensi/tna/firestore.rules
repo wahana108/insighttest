@@ -1,0 +1,310 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    // Akun harus terdaftar DAN berstatus "aktif" untuk punya hak berbasis
+    // role di mana pun (isAdmin/isSuperAdmin/isModerator). Akun "pending"
+    // atau "nonaktif" kehilangan seluruh hak admin walau role-nya masih
+    // tersimpan di dokumen.
+    // email_verified WAJIB true untuk hak berbasis role (isAdmin/isSuperAdmin/
+    // isModerator, lewat hasRole() di bawah). Google selalu true sejak awal
+    // sign-in (dibuktikan lewat sign-in Google sungguhan di emulator, bukan
+    // asumsi). Ini SENGAJA tidak ditambahkan ke hasUsableInvitation() —
+    // menambahkannya di sana akan menggagalkan setiap pendaftaran
+    // email/password tertutup (email_verified pasti false persis saat
+    // request create users/{uid} terjadi, sebelum pengguna sempat klik
+    // tautan verifikasi). Undangan tetap tertandai terpakai seperti biasa;
+    // yang dikunci di sini murni PEMAKAIAN privilege role-nya.
+    function userExists() {
+      return isSignedIn()
+        && exists(userPath())
+        && userData().get('status', null) == 'aktif'
+        && request.auth.token.email_verified == true;
+    }
+
+    function userData() {
+      return get(userPath()).data;
+    }
+
+    function hasRole(roles) {
+      return userExists() && userData().get('role', null) in roles;
+    }
+
+    function isAdmin() {
+      return hasRole(['super_admin', 'admin']);
+    }
+
+    function isSuperAdmin() {
+      return hasRole(['super_admin']);
+    }
+
+    function isModerator() {
+      return hasRole(['moderator']);
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isSupervisorOf(employeeId) {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(employeeId))
+        && get(/databases/$(database)/documents/users/$(employeeId)).data.get('supervisorId', null) == request.auth.uid;
+    }
+
+    function invitationRef(email) {
+      return /databases/$(database)/documents/user_invitations/$(email);
+    }
+
+    // Mode pendaftaran "tertutup": undangan cocok kalau ada, belum dipakai,
+    // dan role yang diminta sama persis dengan yang diundang admin.
+    // PENTING: pakai .get('field', null), BUKAN .data.field langsung — field
+    // yang TIDAK ADA di dokumen (mis. undangan dibuat manual lewat Firestore
+    // Console tanpa mengisi usedAt) membuat .data.field error saat dievaluasi,
+    // bukan mengembalikan null, sehingga seluruh kondisi dianggap false
+    // (ditolak). Insiden nyata: undangan produksi tanpa field usedAt membuat
+    // pendaftaran gagal total lalu di-rollback. Lihat konteks.md.
+    function hasUsableInvitation(email, role) {
+      return exists(invitationRef(email))
+        && get(invitationRef(email)).data.get('usedAt', null) == null
+        && get(invitationRef(email)).data.get('role', null) == role;
+    }
+
+    function isOwnInvitation(email) {
+      return isSignedIn()
+        && request.auth.token.email != null
+        && request.auth.token.email.lower() == email;
+    }
+
+    function testSessionRef(employeeId, periodId) {
+      return /databases/$(database)/documents/test_sessions/$(employeeId + '_' + periodId);
+    }
+
+    // Kunci jawaban tes pengetahuan terbuka untuk dibaca HANYA kalau pembaca
+    // sudah submit test_sessions miliknya SENDIRI untuk periode yang SAMA
+    // dengan periode kunci ini (periodeId disimpan di dokumen kunci itu
+    // sendiri, jadi tidak perlu query — cukup satu get() ke ID deterministik
+    // employeeId+'_'+periodeId). Ini per-periode: peserta tes tahun lalu
+    // TIDAK otomatis bisa baca kunci soal tahun ini.
+    function hasSubmittedTestForKey() {
+      return isSignedIn()
+        && resource.data.periodeId is string
+        && exists(testSessionRef(request.auth.uid, resource.data.periodeId))
+        && get(testSessionRef(request.auth.uid, resource.data.periodeId)).data.status == 'submitted';
+    }
+
+    match /users/{userId} {
+      allow read: if isOwner(userId) || isAdmin() || isModerator()
+        || (isSignedIn() && resource.data.get('supervisorId', null) == request.auth.uid);
+      // Dua jalur pendaftaran mandiri (client menulis dokumennya sendiri):
+      // 1. Mode "terbuka" (atau tanpa undangan cocok): role dipaksa 'pegawai',
+      //    status dipaksa 'pending' — tidak bisa self-elevate.
+      // 2. Mode "tertutup" dengan undangan valid: role & status boleh sesuai
+      //    undangan (termasuk non-'pegawai'), status langsung 'aktif'.
+      allow create: if isOwner(userId)
+        && request.resource.data.id == userId
+        && request.resource.data.email == request.auth.token.email.lower()
+        && (
+          (request.resource.data.role == 'pegawai' && request.resource.data.status == 'pending')
+          || (
+            request.resource.data.status == 'aktif'
+            && hasUsableInvitation(request.resource.data.email, request.resource.data.role)
+          )
+        );
+      allow update: if isSuperAdmin()
+        || (
+          isAdmin()
+          && !request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasAny(['role', 'id'])
+        )
+        || (
+          isOwner(userId)
+          && !request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasAny(['role', 'id', 'supervisorId', 'status'])
+        );
+      allow delete: if false;
+    }
+
+    // ID dokumen = email huruf kecil. "hanya admin" untuk kelola undangan
+    // secara umum; pengecualian sempit: pendaftar boleh MEMBACA undangan
+    // miliknya sendiri (dipakai saat cek kelayakan sebelum daftar) dan
+    // menandai usedAt milik sendiri (bagian dari alur pendaftaran, sekali
+    // jalan dari null -> terisi, tidak bisa mengubah field lain).
+    match /user_invitations/{email} {
+      allow read: if isAdmin() || isOwnInvitation(email);
+      allow create, delete: if isAdmin();
+      allow update: if isAdmin()
+        || (
+          isOwnInvitation(email)
+          && resource.data.get('usedAt', null) == null
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['usedAt'])
+        );
+    }
+
+    match /unit_kerja/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /jabatan/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /pangkat/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /tusi/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /kompetensi/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /kompetensi_levels/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /standar_kompetensi/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /questions/{id} {
+      allow read: if isSignedIn();
+      // Hapus permanen (Tong Sampah) baru ada sejak fitur ini — beda dari
+      // aktif/nonaktif/buang (yang tetap update biasa, isAdmin()). Delete
+      // sungguhan dibatasi lebih ketat karena tidak bisa dibatalkan.
+      allow create, update: if isAdmin();
+      allow delete: if isSuperAdmin();
+    }
+
+    match /questionnaires/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    // Kunci jawaban pilihan ganda — TIDAK BOLEH dibaca lewat rule terbuka
+    // seperti questions/. Lihat hasSubmittedTestForKey() di atas.
+    match /question_answer_keys/{questionId} {
+      allow read: if isAdmin() || hasSubmittedTestForKey();
+      allow write: if isAdmin();
+    }
+
+    // ID dokumen = {employeeId}_{periodId}. Ditulis client dalam 2 tahap:
+    // (1) create dengan skorPerKompetensi: null (jawaban mentah dikunci di
+    //     sini, tidak bisa diubah lagi sesudahnya — itulah "satu kali
+    //     pengerjaan"); (2) SATU KALI update null -> nilai skor, dan hanya
+    //     field skor yang boleh berubah pada update itu. Rule ini TIDAK
+    //     bisa memverifikasi skornya benar secara matematis (Firestore
+    //     rules tidak bisa iterasi array + get() per item) — itu dicatat
+    //     sebagai utang teknis di konteks.md, sama seperti A5.
+    match /test_sessions/{sessionId} {
+      allow read: if isSignedIn() && (
+        resource.data.employeeId == request.auth.uid
+        || isAdmin()
+        || isModerator()
+        || isSupervisorOf(resource.data.employeeId)
+      );
+      allow create: if isSignedIn()
+        && sessionId == request.auth.uid + '_' + request.resource.data.periodId
+        && request.resource.data.employeeId == request.auth.uid
+        && request.resource.data.status == 'submitted'
+        && request.resource.data.skorPerKompetensi == null;
+      allow update: if isSignedIn()
+        && resource.data.employeeId == request.auth.uid
+        && resource.data.skorPerKompetensi == null
+        && request.resource.data.skorPerKompetensi != null
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['skorPerKompetensi', 'updatedAt']);
+      allow delete: if false;
+    }
+
+    match /system_parameters/{id} {
+      allow read: if isSignedIn();
+      allow write: if isSuperAdmin();
+    }
+
+    match /assessment_periods/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin();
+    }
+
+    match /assessments/{id} {
+      allow read: if isSignedIn() && (
+        resource == null
+        || resource.data.employeeId == request.auth.uid
+        || resource.data.assessorId == request.auth.uid
+        || isAdmin()
+        || isModerator()
+        || isSupervisorOf(resource.data.employeeId)
+      );
+      allow create: if isSignedIn() && (
+        (
+          request.resource.data.employeeId == request.auth.uid
+          && request.resource.data.assessorId == request.auth.uid
+          && request.resource.data.type == 'self'
+        )
+        || (
+          request.resource.data.assessorId == request.auth.uid
+          && request.resource.data.type == 'supervisor'
+          && isSupervisorOf(request.resource.data.employeeId)
+        )
+        || isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.assessorId == request.auth.uid
+        || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /assessment_answers/{id} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn();
+      allow delete: if isAdmin();
+    }
+
+    match /training_proposals/{id} {
+      allow read: if isSignedIn() && (
+        resource == null
+        || resource.data.employeeId == request.auth.uid
+        || resource.data.proposedBy == request.auth.uid
+        || isAdmin()
+        || isModerator()
+      );
+      allow create: if isSignedIn() && (
+        request.resource.data.employeeId == request.auth.uid
+        || request.resource.data.proposedBy == request.auth.uid
+        || isAdmin()
+      );
+      allow update: if isSignedIn() && (
+        resource.data.proposedBy == request.auth.uid
+        || isAdmin()
+      );
+      allow delete: if isAdmin();
+    }
+
+    match /tna_recaps/{id} {
+      allow read: if isSignedIn();
+      allow write: if isAdmin() || isModerator();
+    }
+  }
+}
