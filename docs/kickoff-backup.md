@@ -296,143 +296,38 @@ JANGAN commit apa pun. Laporkan hasil dan cara menjalankannya.
 
 Hasil: bisa daftar, masuk, keluar. Dokumen `users/{uid}` terbentuk sekali dan benar.
 
-**Ini slice paling rawan di seluruh tahap 1.** Salin **seluruh** `firestore.rules` dari
-project TNA ke `docs/referensi/tna/firestore.rules` lebih dulu — jangan dipisah-pisah,
-biarkan agen yang mengambil bagian yang relevan.
+Salin dari TNA: `src/lib/auth/session.ts`, `src/lib/auth/user-profile.ts`,
+`src/types/user.ts`. Yang **wajib** dipertahankan (ARSITEKTUR.md KA-2):
 
-```text
-Baca docs/arsitektur.md sampai selesai, terutama KA-1, KA-2, KA-3, dan KA-7.
-Berkas di docs/referensi/tna/ adalah KODE RUJUKAN untuk disesuaikan, bukan disalin
-mentah. JANGAN bawa konsep kompetensi, unit kerja, jabatan, pangkat, atau tusi.
-
-Kerjakan HANYA Slice 1.2 — Autentikasi.
-
-1. src/types/user.ts
-   UserProfile: uid, email, displayName, photoURL,
-   role: 'superadmin' | 'admin' | 'panitia' | 'peserta',
-   status: 'pending' | 'aktif' | 'nonaktif',
-   createdAt, updatedAt. Tanpa field khas TNA.
-
-2. src/lib/auth/user-profile.ts
-   createProfileForNewAccount(user) — SATU-SATUNYA fungsi di seluruh project yang
-   membuat atau menulis dokumen users/{uid}. Default role 'peserta',
-   status 'aktif' (gerbang undangan menyusul di slice 1.3).
-
-3. src/lib/auth/session.ts
-   registerWithEmail(), signInWithEmail(), signInWithGoogle(), signOutUser().
-   Setiap jalur pendaftaran memanggil createProfileForNewAccount().
-   Kalau pembuatan profil GAGAL, hapus akun Firebase Auth yang baru dibuat
-   (rollback), supaya tidak ada akun yatim tanpa profil.
-
-4. Auth provider (React context) di src/lib/auth/
-   HANYA MEMBACA: onAuthStateChanged + onSnapshot ke users/{uid}.
-   DILARANG KERAS menulis atau membuat dokumen users di provider ini.
-   Ini mencegah race condition dua penulis — lihat KA-2.
-
-5. Halaman: /masuk, /daftar, tombol keluar, dan /beranda yang menampilkan
-   email, role, dan status pengguna yang sedang masuk.
-   Redirect ke /masuk kalau belum login.
-
-6. firestore.rules — ganti deny-all dengan:
-   - fungsi bantu isSignedIn(), isOwner(uid), hasRole(r), isAdmin(), isSuperAdmin()
-   - users/{uid}: pemilik boleh read; pemilik boleh create HANYA dokumen dirinya
-     sendiri dengan role 'peserta' dan status 'aktif'; pemilik boleh update HANYA
-     displayName dan photoURL — TIDAK BOLEH mengubah role maupun status;
-     admin boleh read semua; superadmin boleh update role dan status.
-   ATURAN KERAS: selalu resource.data.get('field', default),
-   TIDAK PERNAH resource.data.field. Lihat KA-1.
-
-Tanpa library UI tambahan; Tailwind polos cukup.
-Jalankan npx tsc --noEmit dan npm run lint sampai bersih.
-JANGAN commit. Laporkan hasil dan daftar berkas yang dibuat atau diubah.
-```
-
-**Setelah agen selesai, rules harus diterbitkan** — berkas di repo belum berlaku
-sampai dipasang. Cara termudah untuk sekarang: buka Firebase Console → Firestore →
-Rules, tempel isi `firestore.rules`, klik **Publish**. (Firebase CLI dipasang belakangan.)
+- `createProfileForNewAccount()` adalah **satu-satunya** penulis `users/{uid}`
+- Auth provider **hanya membaca** (`onSnapshot`), tidak pernah menulis
+- Rollback akun Auth kalau pembuatan profil gagal
 
 **Cara Anda memeriksa** — ini pengujian terpenting di seluruh tahap 1:
+daftar akun baru **lewat browser sungguhan** (bukan skrip), lalu buka Firestore Console
+dan pastikan `users/{uid}` ada **satu** dokumen dengan field lengkap. Ulangi dengan
+Google Sign-In. Race condition ini lolos dari skrip Node — hanya muncul di browser asli.
 
-1. Daftar akun baru **lewat browser sungguhan**, bukan skrip. Race condition ini lolos
-   dari skrip Node karena skrip tidak me-mount provider.
-2. Buka Firestore Console → `users`. Harus ada **tepat satu** dokumen, field lengkap.
-3. Ulangi dengan Google Sign-In memakai email berbeda. Tetap satu dokumen per akun.
-4. Di Console, ubah `role` salah satu akun jadi `superadmin` secara manual. Ini
-   sekaligus membuktikan rules bekerja: pengguna tidak bisa melakukannya sendiri.
-5. Coba ubah `role` sendiri lewat aplikasi (kalau ada jalannya) — harus ditolak.
-
-> **Urutan 1.3 dan 1.4 ditukar** dari rencana awal. Undangan membutuhkan dua hal yang
-> belum ada: sebuah **parameter** untuk menyimpan mode pendaftaran, dan sebuah **halaman
-> admin** tempat undangan dikelola. Jadi kerangka admin dibangun lebih dulu.
-
-### Slice 1.3 — AdminShell & parameter sistem
-
-Hasil: area admin yang terjaga peran, dan pengaturan yang bisa diubah tanpa deploy ulang.
-
-**Sebelum menguji**, ubah `role` akun Anda jadi `superadmin` lewat Firestore Console —
-tanpa itu Anda tidak bisa masuk ke `/admin`.
-
-```text
-Baca docs/arsitektur.md, terutama §7 (peran bertingkat) dan KA-1.
-Rujukan pola ada di docs/referensi/tna/.
-
-Kerjakan HANYA Slice 1.3 — AdminShell & parameter.
-
-1. src/types/parameter.ts
-   SystemParameter: namaPlatform (string), modePendaftaran ('terbuka' | 'undangan'),
-   pesanBeranda (string), updatedAt, updatedBy.
-
-2. src/lib/services/system-parameter.ts
-   getSystemParameter() dan updateSystemParameter().
-   Dokumen tunggal: parameter/global.
-   POLA WAJIB: parameter dibaca SEKALI oleh pemanggil lalu dioper sebagai argumen
-   fungsi. Fungsi lain TIDAK BOLEH membaca ulang parameter di dalam dirinya.
-   Kalau dokumen belum ada, kembalikan nilai default (namaPlatform 'InsightTest',
-   modePendaftaran 'terbuka', pesanBeranda kosong) — jangan membuat dokumen diam-diam.
-
-3. Area admin dengan route group (admin):
-   - AdminShell: sidebar + header, satu tautan "Parameter" untuk sekarang
-   - Penjaga peran: hanya role admin atau superadmin yang boleh masuk.
-     peserta atau belum login dialihkan ke /beranda atau /masuk.
-     Penjaga di klien HANYA untuk pengalaman pengguna — rules yang menegakkan.
-
-4. Halaman /admin/parameter
-   Form untuk mengubah ketiga field. Hanya superadmin yang boleh menyimpan;
-   admin boleh melihat. Menyimpan saat dokumen belum ada berarti membuatnya.
-
-5. Pakai namaPlatform dari parameter di halaman depan dan di judul AdminShell,
-   dengan fallback 'InsightTest' kalau dokumen belum ada.
-
-6. firestore.rules — tambahkan blok parameter/global:
-   - read: siapa pun (termasuk belum login), karena isinya murni teks tampilan
-   - write: hanya superadmin
-   ATURAN KERAS: selalu resource.data.get('field', default). Lihat KA-1.
-   CATATAN: karena dokumen ini terbuka dibaca, JANGAN pernah menaruh field
-   sensitif di dalamnya. Beri komentar peringatan itu di rules.
-
-Tanpa library UI tambahan; Tailwind polos cukup.
-Jalankan npx tsc --noEmit dan npm run lint sampai bersih.
-Terbitkan rules dengan: npx firebase deploy --only firestore:rules
-JANGAN commit. Laporkan hasil dan daftar berkas yang dibuat atau diubah.
-```
-
-**Cara memeriksa**: masuk sebagai peserta → `/admin` ditolak. Masuk sebagai superadmin
-→ sidebar muncul, ubah `namaPlatform` jadi sesuatu yang lain, muat ulang halaman depan
-→ namanya berubah **tanpa deploy ulang**. Lalu coba tulis `parameter/global` sebagai
-peserta lewat Rules Playground → harus ditolak.
-
-### Slice 1.4 — Undangan & status akun
+### Slice 1.3 — Undangan & status akun
 
 Hasil: admin mengendalikan siapa yang boleh mendaftar.
 
-Sesuaikan `docs/referensi/tna/user-invitation.ts`. Mode pendaftaran dibaca dari
-`parameter/global.modePendaftaran` yang dibuat di slice 1.3. Pola create dua-jalur di
-rules: pendaftaran mandiri terbatas, versus pendaftaran lewat undangan dengan hak lebih
-luas.
+Salin `src/lib/services/user-invitation.ts`. Mode pendaftaran terbuka/tertutup, status
+`pending/aktif/nonaktif`, pola create dua-jalur di rules.
 
-**Cara memeriksa**: dengan mode `undangan`, pendaftaran email yang tidak diundang harus
-**ditolak** dan akun Auth-nya ter-rollback — tidak menyisakan akun yatim. Ini persis
-insiden yang tercatat di REUSABLE.md §4, jadi ujilah dengan sungguh-sungguh.
+**Cara memeriksa**: dengan mode tertutup, pendaftaran email yang tidak diundang harus
+**ditolak** dan akun Auth-nya ter-rollback (tidak menyisakan akun yatim).
+
+### Slice 1.4 — AdminShell & parameter
+
+Hasil: kerangka admin dan pengaturan yang bisa diubah tanpa deploy ulang.
+
+Salin `AdminShell`, kerangka `hasRole()/isAdmin()/isSuperAdmin()`, dan
+`services/system-parameter.ts` (pola: dibaca sekali oleh pemanggil, dioper sebagai
+argumen — jangan dibaca ulang di dalam fungsi).
+
+**Cara memeriksa**: masuk sebagai peserta → halaman admin tertolak. Masuk sebagai
+superadmin → sidebar admin muncul, parameter bisa diubah dan efeknya terasa tanpa deploy.
 
 ---
 

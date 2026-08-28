@@ -1,9 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { signOutUser } from "@/lib/auth/session";
+
+const ADMIN_ROLES = ["admin", "superadmin"];
 
 export default function BerandaPage() {
   const router = useRouter();
@@ -50,6 +53,15 @@ export default function BerandaPage() {
           <span className="text-black dark:text-zinc-50">{profile?.status ?? "-"}</span>
         </p>
       </div>
+
+      {profile && ADMIN_ROLES.includes(profile.role) && (
+        <Link
+          href="/admin"
+          className="text-sm font-medium text-black underline dark:text-zinc-50"
+        >
+          Panel Admin
+        </Link>
+      )}
 
       <button
         type="button"
