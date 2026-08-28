@@ -33,6 +33,31 @@ export default function BerandaPage() {
     );
   }
 
+  if (profile && (profile.status === "pending" || profile.status === "nonaktif")) {
+    return (
+      <div className="flex min-h-screen flex-1 flex-col items-center justify-center gap-4 bg-zinc-50 px-4 text-center dark:bg-black">
+        <h1 className="text-xl font-semibold text-black dark:text-zinc-50">
+          {profile.status === "pending"
+            ? "Menunggu persetujuan admin"
+            : "Akun dinonaktifkan"}
+        </h1>
+        <p className="max-w-sm text-sm text-zinc-600 dark:text-zinc-400">
+          {profile.status === "pending"
+            ? "Akun Anda sudah terdaftar dan sedang menunggu persetujuan admin. Anda akan bisa masuk setelah disetujui."
+            : "Akun Anda telah dinonaktifkan. Hubungi admin apabila Anda merasa ini keliru."}
+        </p>
+        <button
+          type="button"
+          onClick={handleSignOut}
+          disabled={signingOut}
+          className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+        >
+          Keluar
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="flex min-h-screen flex-1 flex-col items-center justify-center gap-6 bg-zinc-50 px-4 dark:bg-black">
       <h1 className="text-2xl font-semibold text-black dark:text-zinc-50">Beranda</h1>

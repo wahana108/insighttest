@@ -1,4 +1,4 @@
-export type ModePendaftaran = "terbuka" | "undangan";
+export type ModePendaftaran = "terbuka" | "persetujuan" | "undangan";
 
 export interface SystemParameter {
   namaPlatform: string;

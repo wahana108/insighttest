@@ -13,7 +13,7 @@ export const DEFAULT_SYSTEM_PARAMETER: SystemParameter = {
 };
 
 function isModePendaftaran(value: unknown): value is ModePendaftaran {
-  return value === "terbuka" || value === "undangan";
+  return value === "terbuka" || value === "persetujuan" || value === "undangan";
 }
 
 function mapSystemParameter(data: DocumentData): SystemParameter {

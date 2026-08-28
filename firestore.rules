@@ -36,26 +36,71 @@ service cloud.firestore {
       return hasRole('superadmin');
     }
 
+    function undanganPath(email) {
+      return /databases/$(database)/documents/undangan/$(email);
+    }
+
+    // Mode pendaftaran dibaca dari parameter/global. KA-1 berlaku juga di
+    // sini: default 'terbuka' kalau field belum diisi.
+    function modePendaftaran() {
+      return get(/databases/$(database)/documents/parameter/global)
+        .data.get('modePendaftaran', 'terbuka');
+    }
+
+    // Undangan pendaftar saat ini (dari email token-nya) harus ada, dan role
+    // yang diminta di profil baru harus sama dengan role di undangan itu.
+    function roleSesuaiUndangan() {
+      let email = request.auth.token.email;
+      return exists(undanganPath(email))
+        && get(undanganPath(email)).data.get('role', null)
+          == request.resource.data.get('role', null);
+    }
+
+    function canCreateUserProfile(uid) {
+      let mode = modePendaftaran();
+      return request.resource.data.get('uid', null) == uid
+        && (
+          (
+            mode == 'terbuka'
+            && request.resource.data.get('role', null) == 'peserta'
+            && request.resource.data.get('status', null) == 'aktif'
+          ) || (
+            mode == 'persetujuan'
+            && request.resource.data.get('role', null) == 'peserta'
+            && request.resource.data.get('status', null) == 'pending'
+          ) || (
+            mode == 'undangan'
+            && request.resource.data.get('status', null) == 'aktif'
+            && roleSesuaiUndangan()
+          )
+        );
+    }
+
     // KA-2: satu-satunya penulis yang sah adalah createProfileForNewAccount()
     // di client (src/lib/auth/user-profile.ts) — rule create di bawah adalah
     // penjaganya di sisi server.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
 
-      // Pemilik hanya boleh membuat dokumen dirinya sendiri, dan hanya
-      // dengan role 'peserta' + status 'aktif' — tidak bisa self-elevate.
-      allow create: if isOwner(uid)
-        && request.resource.data.get('uid', null) == uid
-        && request.resource.data.get('role', null) == 'peserta'
-        && request.resource.data.get('status', null) == 'aktif';
+      // Pemilik hanya boleh membuat dokumen dirinya sendiri, dengan role dan
+      // status yang sesuai mode pendaftaran saat ini — tidak bisa self-elevate.
+      // Lihat canCreateUserProfile() untuk tiga jalur mode terbuka /
+      // persetujuan / undangan.
+      allow create: if isOwner(uid) && canCreateUserProfile(uid);
 
-      // Pemilik: hanya displayName/photoURL. Superadmin: hanya role/status.
-      // Tidak ada jalur yang bisa mengubah keduanya sekaligus.
+      // Pemilik: hanya displayName/photoURL. Admin: hanya status. Superadmin:
+      // role dan/atau status. Tidak ada jalur yang mencampur milik pemilik
+      // dengan milik admin/superadmin dalam satu update.
       allow update: if (
           isOwner(uid)
           && request.resource.data.diff(resource.data)
             .affectedKeys()
             .hasOnly(['displayName', 'photoURL', 'updatedAt'])
+        ) || (
+          isAdmin()
+          && request.resource.data.diff(resource.data)
+            .affectedKeys()
+            .hasOnly(['status', 'updatedAt'])
         ) || (
           isSuperAdmin()
           && request.resource.data.diff(resource.data)
@@ -64,6 +109,31 @@ service cloud.firestore {
         );
 
       allow delete: if false;
+    }
+
+    // undangan/{email}: id dokumen = email ternormalisasi (trim + lowercase),
+    // lihat normalizeEmail() di src/lib/services/user-invitation.ts. ID
+    // deterministik ini yang membuat exists()/get() di atas bisa dilakukan
+    // tanpa query (KA-3, docs/arsitektur.md).
+    match /undangan/{email} {
+      allow read: if isAdmin() || (isSignedIn() && request.auth.token.email == email);
+
+      allow create: if isAdmin();
+      allow delete: if isAdmin();
+
+      // Hanya pengguna yang diundang, hanya mengisi usedAt+usedBy, dan hanya
+      // kalau usedAt saat ini masih kosong. PERINGATAN (KA-1): pakai
+      // .get('usedAt', null), JANGAN PERNAH .data.usedAt — dokumen tanpa
+      // field usedAt bukan null, ia membuat evaluasi error dan menolak.
+      // Insiden nyata di TNA persis pada field ini membuat pendaftaran
+      // tertutup gagal total dan akun ter-rollback.
+      allow update: if isSignedIn()
+        && request.auth.token.email == email
+        && resource.data.get('usedAt', null) == null
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(['usedAt', 'usedBy'])
+        && request.resource.data.get('usedBy', null) == request.auth.uid;
     }
 
     // parameter/global dibaca siapa pun, termasuk yang belum login — isinya

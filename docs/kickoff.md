@@ -423,16 +423,100 @@ peserta lewat Rules Playground → harus ditolak.
 
 ### Slice 1.4 — Undangan & status akun
 
-Hasil: admin mengendalikan siapa yang boleh mendaftar.
+Dipecah dua supaya bagian paling berisiko — rules dan gerbang pendaftaran — diuji
+**terpisah** sebelum UI dibangun di atasnya. Undangan uji dibuat manual lewat Firestore
+Console di 1.4a; halaman adminnya baru dibuat di 1.4b.
 
-Sesuaikan `docs/referensi/tna/user-invitation.ts`. Mode pendaftaran dibaca dari
-`parameter/global.modePendaftaran` yang dibuat di slice 1.3. Pola create dua-jalur di
-rules: pendaftaran mandiri terbatas, versus pendaftaran lewat undangan dengan hak lebih
-luas.
+Tiga mode pendaftaran, disimpan di `parameter/global.modePendaftaran`:
 
-**Cara memeriksa**: dengan mode `undangan`, pendaftaran email yang tidak diundang harus
-**ditolak** dan akun Auth-nya ter-rollback — tidak menyisakan akun yatim. Ini persis
-insiden yang tercatat di REUSABLE.md §4, jadi ujilah dengan sungguh-sungguh.
+| Mode | Perilaku |
+|---|---|
+| `terbuka` | siapa pun boleh daftar, langsung `status: aktif` |
+| `persetujuan` | siapa pun boleh daftar, tapi `status: pending` sampai admin mengaktifkan |
+| `undangan` | hanya email yang punya undangan belum terpakai; ditolak kalau tidak ada |
+
+#### Slice 1.4a — Model, rules, dan gerbang pendaftaran
+
+```text
+Baca docs/arsitektur.md, terutama KA-1, KA-2, KA-3, dan §7.
+Rujukan: docs/referensi/tna/user-invitation.ts dan firestore.rules.
+
+Kerjakan HANYA Slice 1.4a. JANGAN membuat halaman admin apa pun di slice ini.
+
+1. src/types/undangan.ts
+   Undangan: email, role ('admin' | 'panitia' | 'peserta'), catatan,
+   createdAt, createdBy, usedAt (string | null), usedBy (string | null).
+
+2. src/lib/services/user-invitation.ts
+   ID dokumen = alamat email yang sudah di-trim dan di-lowercase, koleksi 'undangan'.
+   ID deterministik ini WAJIB (KA-3) supaya rules bisa exists()/get() tanpa query.
+   Sediakan getUndanganByEmail(), createUndangan(), deleteUndangan().
+
+3. Perluas modePendaftaran di src/types/parameter.ts menjadi
+   'terbuka' | 'persetujuan' | 'undangan'. Perbarui halaman /admin/parameter
+   agar ketiganya bisa dipilih.
+
+4. Gerbang pendaftaran di src/lib/auth/session.ts:
+   - Baca parameter SEKALI di awal alur pendaftaran, lalu OPER sebagai argumen.
+     Fungsi di bawahnya TIDAK BOLEH membaca ulang parameter.
+   - terbuka     -> profil role 'peserta', status 'aktif'
+   - persetujuan -> profil role 'peserta', status 'pending'
+   - undangan    -> harus ada undangan untuk email itu dengan usedAt masih null.
+                    Profil memakai role dari undangan, status 'aktif'.
+                    Kalau tidak ada undangan atau sudah terpakai: TOLAK, dan
+                    rollback akun Firebase Auth yang baru dibuat.
+   - Pada mode undangan, pembuatan profil dan penandaan undangan terpakai
+     (usedAt, usedBy) HARUS satu writeBatch — semua atau tidak sama sekali.
+
+5. Gerbang masuk:
+   Pengguna dengan status 'pending' atau 'nonaktif' TIDAK boleh masuk ke /beranda.
+   Tampilkan halaman penjelasan yang sopan beserta tombol keluar.
+
+6. firestore.rules:
+   - undangan/{email}: read hanya oleh admin/superadmin ATAU oleh pengguna yang
+     request.auth.token.email-nya sama dengan id dokumen.
+     create/delete hanya admin/superadmin.
+     update hanya oleh pengguna yang diundang, HANYA untuk mengisi usedAt dan usedBy,
+     dan HANYA jika usedAt saat ini masih kosong.
+   - users/{uid} create jadi dua jalur:
+     (a) mode terbuka/persetujuan -> role dipaksa 'peserta'
+     (b) mode undangan -> role harus sama dengan role di dokumen undangan
+     Mode dibaca di rules dengan
+     get(/databases/$(database)/documents/parameter/global).data.get('modePendaftaran','terbuka')
+   - admin boleh update status pengguna; superadmin boleh update role dan status.
+
+   PERINGATAN KHUSUS: gunakan .data.get('usedAt', null), JANGAN PERNAH .data.usedAt.
+   Field yang tidak ada bukan null — ia menghasilkan evaluation error dan menolak.
+   Insiden nyata di TNA persis pada field usedAt ini membuat pendaftaran tertutup
+   gagal total dan akun ter-rollback. Lihat KA-1.
+
+Tanpa library UI tambahan. Jalankan npx tsc --noEmit dan npm run lint sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa** (undangan dibuat manual lewat Firestore Console):
+
+1. Mode `terbuka` → daftar email baru → berhasil, `status: aktif`.
+2. Mode `persetujuan` → daftar email baru → berhasil tapi `status: pending`, dan
+   pengguna itu tidak bisa masuk ke `/beranda`. Ubah status jadi `aktif` lewat Console
+   → sekarang bisa masuk.
+3. Mode `undangan`, tanpa undangan → daftar → **ditolak**. Lalu buka
+   **Authentication → Users** dan pastikan tidak ada akun yatim tertinggal.
+4. Mode `undangan`, buat dokumen `undangan/{email}` di Console berisi
+   `role: "panitia"` dan `usedAt: null` → daftar dengan email itu → berhasil, profil
+   ber-`role: panitia`, dan `usedAt` di undangan terisi.
+5. Daftar lagi dengan email yang sama → **ditolak** karena undangan sudah terpakai.
+6. **Uji kasus field hilang**: buat dokumen undangan di Console **tanpa** field `usedAt`
+   sama sekali, lalu daftar dengan email itu. Harus tetap **berhasil**. Kalau gagal,
+   berarti rules memakai `.data.usedAt` dan bukan `.data.get('usedAt', null)` —
+   itu persis insiden TNA yang terulang.
+
+#### Slice 1.4b — Halaman admin
+
+`/admin/undangan` (daftar, tambah, hapus, tampak mana yang sudah terpakai) dan
+`/admin/pengguna` (daftar pengguna, aktifkan/nonaktifkan, ubah peran — peran hanya oleh
+superadmin). Setelah ini, mengubah peran tidak perlu lagi lewat Firestore Console.
 
 ---
 

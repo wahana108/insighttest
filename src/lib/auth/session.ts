@@ -10,7 +10,10 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
+import { getSystemParameter } from "@/lib/services/system-parameter";
+import { getUndanganByEmail } from "@/lib/services/user-invitation";
 import { createProfileForNewAccount } from "./user-profile";
+import type { SystemParameter } from "@/types/parameter";
 import type { UserProfile } from "@/types/user";
 
 export class RegistrationError extends Error {
@@ -50,11 +53,38 @@ async function rollbackFailedRegistration(user: User): Promise<void> {
   }
 }
 
+/**
+ * Gerbang pendaftaran. `parameter` dioper dari pemanggil (dibaca SEKALI di
+ * awal alur pendaftaran) — fungsi ini dan createProfileForNewAccount() TIDAK
+ * boleh membaca ulang parameter/global.
+ *
+ * Mode 'undangan': undangan harus ada dan belum terpakai, kalau tidak
+ * langsung ditolak di sini (sebelum ada tulisan apa pun) supaya pemanggil
+ * melakukan rollback akun Auth yang baru dibuat.
+ */
+async function completeRegistration(
+  user: User,
+  parameter: SystemParameter
+): Promise<UserProfile> {
+  if (parameter.modePendaftaran === "undangan") {
+    const undangan = await getUndanganByEmail(user.email ?? "");
+    if (!undangan || undangan.usedAt) {
+      throw new RegistrationError(
+        "Email Anda belum diundang untuk mendaftar, atau undangan sudah dipakai. Hubungi admin."
+      );
+    }
+    return createProfileForNewAccount(user, parameter, undangan);
+  }
+
+  return createProfileForNewAccount(user, parameter);
+}
+
 export async function registerWithEmail(
   email: string,
   password: string,
   displayName?: string
 ): Promise<{ user: User; profile: UserProfile }> {
+  const parameter = await getSystemParameter();
   const credential = await createUserWithEmailAndPassword(auth, email, password);
 
   const name = displayName?.trim();
@@ -63,7 +93,7 @@ export async function registerWithEmail(
   }
 
   try {
-    const profile = await createProfileForNewAccount(credential.user);
+    const profile = await completeRegistration(credential.user, parameter);
     return { user: credential.user, profile };
   } catch (error) {
     await rollbackFailedRegistration(credential.user);
@@ -81,9 +111,9 @@ export async function signInWithEmail(
 
 /**
  * Login Google pertama kali = pendaftaran (tidak ada form daftar terpisah
- * untuk Google). Kalau users/{uid} belum ada, buat lewat
- * createProfileForNewAccount() dengan rollback yang sama seperti daftar
- * email. Login berikutnya tidak menulis apa pun.
+ * untuk Google). Kalau users/{uid} belum ada, baca parameter SEKALI lalu
+ * jalankan gerbang pendaftaran yang sama seperti daftar email. Login
+ * berikutnya tidak menulis apa pun dan tidak menyentuh parameter.
  */
 export async function signInWithGoogle(): Promise<User> {
   const provider = new GoogleAuthProvider();
@@ -94,7 +124,8 @@ export async function signInWithGoogle(): Promise<User> {
 
   if (!snapshot.exists()) {
     try {
-      await createProfileForNewAccount(credential.user);
+      const parameter = await getSystemParameter();
+      await completeRegistration(credential.user, parameter);
     } catch (error) {
       await rollbackFailedRegistration(credential.user);
       throw error;

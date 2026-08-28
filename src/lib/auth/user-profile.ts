@@ -1,6 +1,9 @@
 import type { User } from "firebase/auth";
-import { doc, setDoc, type DocumentData } from "firebase/firestore";
+import { doc, setDoc, writeBatch, type DocumentData } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { markUndanganUsedInBatch } from "@/lib/services/user-invitation";
+import type { SystemParameter } from "@/types/parameter";
+import type { Undangan } from "@/types/undangan";
 import type { UserProfile, UserRole, UserStatus } from "@/types/user";
 
 function isUserRole(value: unknown): value is UserRole {
@@ -32,26 +35,52 @@ export function mapUserProfile(uid: string, data: DocumentData): UserProfile {
   };
 }
 
-/**
- * SATU-SATUNYA fungsi di seluruh project yang membuat atau menulis dokumen
- * users/{uid}. Dipanggil dari setiap jalur pendaftaran di session.ts.
- * Gerbang undangan (siapa boleh mendaftar) menyusul di slice 1.3 — untuk
- * sekarang setiap akun baru langsung role 'peserta', status 'aktif'.
- * Auth provider TIDAK PERNAH memanggil ini — lihat KA-2 di docs/arsitektur.md.
- */
-export async function createProfileForNewAccount(user: User): Promise<UserProfile> {
+function baseProfile(user: User, role: UserRole, status: UserStatus): UserProfile {
   const now = new Date().toISOString();
-  const profile: UserProfile = {
+  return {
     uid: user.uid,
     email: user.email ?? "",
     displayName: user.displayName?.trim() || user.email || "Peserta",
     photoURL: user.photoURL,
-    role: "peserta",
-    status: "aktif",
+    role,
+    status,
     createdAt: now,
     updatedAt: now,
   };
+}
 
+/**
+ * SATU-SATUNYA fungsi di seluruh project yang menulis dokumen users/{uid}
+ * (langsung, atau lewat writeBatch untuk mode undangan). Dipanggil dari
+ * gerbang pendaftaran di session.ts, yang membaca parameter/global SEKALI
+ * dan mengopernya ke sini — fungsi ini TIDAK membaca ulang parameter.
+ * Auth provider TIDAK PERNAH memanggil ini — lihat KA-2 di docs/arsitektur.md.
+ *
+ * `undangan` wajib diisi (dan sudah divalidasi belum terpakai) kalau
+ * `parameter.modePendaftaran === 'undangan'` — pengecekan itu jadi tanggung
+ * jawab pemanggil di session.ts.
+ */
+export async function createProfileForNewAccount(
+  user: User,
+  parameter: SystemParameter,
+  undangan?: Undangan
+): Promise<UserProfile> {
+  if (parameter.modePendaftaran === "undangan") {
+    if (!undangan) {
+      throw new Error("Undangan wajib diisi untuk mode pendaftaran 'undangan'.");
+    }
+
+    const profile = baseProfile(user, undangan.role, "aktif");
+    const batch = writeBatch(db);
+    batch.set(doc(db, "users", user.uid), profile);
+    markUndanganUsedInBatch(batch, undangan.email, user.uid);
+    await batch.commit();
+    return profile;
+  }
+
+  const status: UserStatus =
+    parameter.modePendaftaran === "persetujuan" ? "pending" : "aktif";
+  const profile = baseProfile(user, "peserta", status);
   await setDoc(doc(db, "users", user.uid), profile);
   return profile;
 }

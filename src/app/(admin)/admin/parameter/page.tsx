@@ -106,6 +106,7 @@ export default function AdminParameterPage() {
             className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           >
             <option value="terbuka">Terbuka</option>
+            <option value="persetujuan">Persetujuan</option>
             <option value="undangan">Undangan</option>
           </select>
         </div>
