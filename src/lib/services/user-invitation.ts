@@ -28,7 +28,7 @@ function isUndanganRole(value: unknown): value is UndanganRole {
   return value === "admin" || value === "panitia" || value === "peserta";
 }
 
-function mapUndangan(email: string, data: DocumentData): Undangan {
+export function mapUndangan(email: string, data: DocumentData): Undangan {
   return {
     email,
     role: isUndanganRole(data.role) ? data.role : "peserta",
@@ -62,6 +62,11 @@ export async function createUndangan(
     throw new UndanganError("Email tidak valid.");
   }
 
+  const existing = await getUndanganByEmail(email);
+  if (existing) {
+    throw new UndanganError("Undangan untuk email ini sudah ada.");
+  }
+
   const record: Undangan = {
     email,
     role: input.role,
@@ -76,7 +81,19 @@ export async function createUndangan(
   return record;
 }
 
+/**
+ * Hanya menghapus undangan yang belum terpakai — dijaga di sini (bukan di
+ * firestore.rules, lihat laporan slice 1.4b) supaya jejak "email X sudah
+ * pernah dipakai daftar" tidak hilang dari histori.
+ */
 export async function deleteUndangan(email: string): Promise<void> {
+  const existing = await getUndanganByEmail(email);
+  if (existing?.usedAt) {
+    throw new UndanganError(
+      "Undangan yang sudah terpakai tidak bisa dihapus — dibiarkan sebagai jejak."
+    );
+  }
+
   await deleteDoc(undanganRef(email));
 }
 

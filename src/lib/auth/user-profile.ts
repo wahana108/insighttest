@@ -50,11 +50,19 @@ function baseProfile(user: User, role: UserRole, status: UserStatus): UserProfil
 }
 
 /**
- * SATU-SATUNYA fungsi di seluruh project yang menulis dokumen users/{uid}
+ * SATU-SATUNYA fungsi di seluruh project yang MEMBUAT dokumen users/{uid}
  * (langsung, atau lewat writeBatch untuk mode undangan). Dipanggil dari
  * gerbang pendaftaran di session.ts, yang membaca parameter/global SEKALI
  * dan mengopernya ke sini — fungsi ini TIDAK membaca ulang parameter.
  * Auth provider TIDAK PERNAH memanggil ini — lihat KA-2 di docs/arsitektur.md.
+ *
+ * Update administratif atas dokumen yang SUDAH ADA (ubah status/role oleh
+ * admin/superadmin) adalah jalur terpisah dan sah: lihat
+ * src/lib/services/user-management.ts. Jalur itu tidak pernah membuat
+ * dokumen baru dan tidak berjalan bersamaan dengan registrasi, jadi tidak
+ * membuka kembali race condition yang dicegah KA-2 — tapi itu berarti
+ * "satu-satunya penulis" di sini spesifik untuk PEMBUATAN profil, bukan
+ * setiap tulisan ke users/{uid}.
  *
  * `undangan` wajib diisi (dan sudah divalidasi belum terpakai) kalau
  * `parameter.modePendaftaran === 'undangan'` — pengecekan itu jadi tanggung

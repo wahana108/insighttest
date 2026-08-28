@@ -334,9 +334,17 @@ dan menolak. Insiden nyata TNA: dokumen dibuat manual lewat Console tanpa field 
 → pendaftaran tertutup gagal total + rollback akun (REUSABLE.md §4). Audit menyeluruh
 sekali di awal.
 
-**KA-2 — Satu fungsi tunggal penulis `users/{uid}`.**
-Auth provider **hanya membaca** (`onSnapshot`). Race condition ini lolos dari skrip Node
-karena skrip tidak me-mount provider — **uji registrasi lewat browser sungguhan**.
+**KA-2 — Satu fungsi tunggal *pembuat* `users/{uid}`.**
+`createProfileForNewAccount()` adalah satu-satunya yang **membuat** dokumen profil.
+Auth provider **hanya membaca** (`onSnapshot`), tidak pernah menulis. Race condition ini
+lolos dari skrip Node karena skrip tidak me-mount provider — **uji registrasi lewat
+browser sungguhan**.
+
+Yang dilarang adalah **pembuatan** dari dua tempat, bukan semua tulisan. Update
+administratif — mengubah status atau peran lewat `/admin/pengguna` — tetap sah: ia
+berjalan dari aksi eksplisit admin terhadap dokumen yang **sudah ada**, tidak pernah
+bersamaan dengan alur registrasi, dan rules membatasi field yang boleh disentuh tiap
+peran. (Dipertajam setelah audit pra-tahap 2, 28 Agu 2026.)
 
 **KA-3 — Kunci jawaban tidak pernah turun ke browser.**
 `kunci_soal`: `allow read, write: if false`. Ini menghapus kerumitan gerbang-baca-

@@ -73,6 +73,18 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Parameter
           </Link>
+          <Link
+            href="/admin/undangan"
+            className="block rounded px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Undangan
+          </Link>
+          <Link
+            href="/admin/pengguna"
+            className="block rounded px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Pengguna
+          </Link>
         </nav>
       </aside>
 
