@@ -97,6 +97,12 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
           >
             Soal
           </Link>
+          <Link
+            href="/admin/kegiatan"
+            className="block rounded px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+          >
+            Kegiatan
+          </Link>
         </nav>
       </aside>
 

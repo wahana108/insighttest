@@ -53,10 +53,10 @@ function truncate(teks: string, max = 70): string {
 
 export default function AdminSoalPage() {
   const { user } = useAuth();
-  const { items: topikList } = useTopikList();
+  const { items: topikList, error: topikError } = useTopikList();
 
   const [filterTopikKode, setFilterTopikKode] = useState("");
-  const { items, loading } = useSoalList(filterTopikKode || undefined);
+  const { items, loading, error: soalError } = useSoalList(filterTopikKode || undefined);
 
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -218,6 +218,10 @@ export default function AdminSoalPage() {
           Impor berbantuan AI
         </Link>
       </div>
+
+      {topikError && (
+        <p className="text-sm text-red-600">Gagal memuat daftar topik: {topikError}</p>
+      )}
 
       <form
         onSubmit={handleSubmit}
@@ -406,7 +410,14 @@ export default function AdminSoalPage() {
                 </td>
               </tr>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && soalError && (
+              <tr>
+                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
+                  Gagal memuat soal: {soalError}
+                </td>
+              </tr>
+            )}
+            {!loading && !soalError && items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada soal.

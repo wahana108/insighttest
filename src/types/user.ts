@@ -9,6 +9,11 @@ export interface UserProfile {
   photoURL: string | null;
   role: UserRole;
   status: UserStatus;
+  /** Nama yang akan tercetak di sertifikat (§11, docs/arsitektur.md) — beda dari displayName Google yang sering informal. */
+  namaLengkap: string;
+  institusi: string;
+  nomorIdentitas: string;
+  noTelepon: string;
   createdAt: string;
   updatedAt: string;
 }

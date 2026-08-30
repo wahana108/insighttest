@@ -12,7 +12,7 @@ const ROLE_OPTIONS: UserRole[] = ["superadmin", "admin", "panitia", "peserta"];
 
 export default function AdminPenggunaPage() {
   const { user, profile } = useAuth();
-  const { items, loading } = useUserList();
+  const { items, loading, error: listError } = useUserList();
   const [error, setError] = useState<string | null>(null);
   const [savingUid, setSavingUid] = useState<string | null>(null);
 
@@ -74,7 +74,14 @@ export default function AdminPenggunaPage() {
                 </td>
               </tr>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && listError && (
+              <tr>
+                <td colSpan={5} className="px-4 py-6 text-center text-red-600">
+                  Gagal memuat pengguna: {listError}
+                </td>
+              </tr>
+            )}
+            {!loading && !listError && items.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada pengguna.

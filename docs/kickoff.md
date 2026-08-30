@@ -677,3 +677,169 @@ JANGAN commit. Laporkan hasilnya.
 5. **Rules Playground**: simulasi `get` ke `/kunci_soal/<id soal>` dengan uid akun
    **peserta** → harus **ditolak**. Ulangi dengan uid superadmin → diizinkan.
    Ini pengujian terpenting di slice ini.
+
+### Slice 2.3 — Impor soal berbantuan AI
+
+Selesai 29 Agu 2026. Skema JSON berversi `1.0`, validasi dua lapis (zod untuk bentuk,
+lalu `validasiSoal()` yang sama dengan form manual), pratinjau per baris, simpan dalam
+satu `writeBatch` lewat `buildSoalWrite()`. Batas 200 soal per berkas karena satu batch
+maksimal 500 operasi dan tiap soal memakai dua.
+
+---
+
+## H. Tahap 3 — Kegiatan, pendaftaran, dan penilaian server
+
+Tahap terbesar, dan yang pertama memakai **Route Handler + Firebase Admin SDK**.
+Sampai sekarang semua kode berjalan di browser; mulai di sini ada kode yang berjalan
+di server dan memegang kunci yang tidak boleh dilihat siapa pun.
+
+| Slice | Isi |
+|---|---|
+| 3.1 | Fondasi Admin SDK + satu Route Handler uji |
+| 3.2 | Kegiatan + modul evaluasi (sisi admin) |
+| 3.3 | Katalog kegiatan + pendaftaran peserta |
+| 3.4 | Attempt, runner soal, penilaian di server |
+
+3.1 sengaja kecil. Ia tidak menghasilkan fitur yang terlihat, tapi membuktikan tiga hal
+yang kalau salah akan menyulitkan seluruh tahap: kunci service account terbaca di server,
+token pengguna bisa diverifikasi, dan peran bisa dibaca dari sisi server.
+
+### Yang Anda siapkan sendiri sebelum 3.1
+
+Dari berkas JSON service account yang diunduh saat menyiapkan Firebase (Project settings
+→ Service accounts), ambil tiga nilai dan masukkan ke `.env.local`:
+
+```
+FIREBASE_ADMIN_PROJECT_ID=insighttest-66524
+FIREBASE_ADMIN_CLIENT_EMAIL=...
+FIREBASE_ADMIN_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
+```
+
+**Tanpa awalan `NEXT_PUBLIC_`.** Awalan itu membuat nilainya ikut dikirim ke browser —
+untuk kunci server, itu kebocoran total. Private key dibungkus tanda kutip dan tetap
+memuat `\n` sebagai dua karakter; kodenya yang akan menerjemahkannya.
+
+Nilai yang sama nanti juga perlu ditambahkan di **Vercel → Settings → Environment
+Variables** sebelum deploy berikutnya.
+
+### Slice 3.1 — Fondasi Route Handler
+
+```text
+Kerjakan HANYA Slice 3.1 — fondasi Route Handler dengan Firebase Admin SDK.
+Slice ini sengaja kecil karena memperkenalkan hal baru: kode yang berjalan
+di server, bukan di browser.
+
+1. npm install firebase-admin
+
+2. src/lib/firebase/admin.ts — SATU-SATUNYA tempat Admin SDK diinisialisasi.
+   - Baca FIREBASE_ADMIN_PROJECT_ID, FIREBASE_ADMIN_CLIENT_EMAIL,
+     FIREBASE_ADMIN_PRIVATE_KEY dari process.env.
+   - PENTING: private key di env memuat urutan karakter \n secara harfiah.
+     Wajib diubah jadi baris baru sungguhan: .replace(/\\n/g, "\n").
+     Tanpa ini inisialisasi gagal dengan pesan galat yang menyesatkan.
+   - Pola singleton, seperti client.ts.
+   - Ekspor adminAuth dan adminDb.
+   - Berkas ini TIDAK BOLEH diimpor dari komponen klien mana pun.
+
+3. src/lib/api/auth-server.ts
+   verifyRequest(req): baca header Authorization: Bearer <idToken>,
+   verifikasi dengan adminAuth.verifyIdToken(), lalu ambil profil pengguna
+   dari adminDb koleksi users.
+   Kembalikan { uid, email, role, status }, atau lempar galat terstruktur:
+   401 kalau token tidak ada atau tidak sah, 403 kalau status bukan 'aktif'.
+
+4. src/lib/api/client-fetch.ts
+   Helper sisi klien: ambil ID token lewat auth.currentUser.getIdToken(),
+   lalu panggil fetch dengan header Authorization: Bearer <token>.
+
+5. GET /api/whoami — Route Handler yang memakai verifyRequest dan mengembalikan
+   { uid, email, role, status }. Semata alat uji fondasi.
+
+6. Di /beranda, tambahkan tombol kecil "Uji koneksi server" yang memanggil
+   /api/whoami lewat helper poin 4 dan menampilkan hasilnya apa adanya.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**: masuk sebagai superadmin, klik "Uji koneksi server" di `/beranda` —
+harus muncul uid, email, dan `role: superadmin` yang dibaca **dari sisi server**, bukan
+dari keadaan di browser. Lalu masuk sebagai peserta dan ulangi — `role: peserta`.
+
+Uji jalur gagal: buka `/api/whoami` langsung di alamat browser tanpa header apa pun →
+harus membalas **401**, bukan data.
+
+> **Catatan yang sering membingungkan**: alamat di bilah browser **selalu** menghasilkan
+> 401, siapa pun yang sedang masuk. Browser mengirim cookie, tapi token identitas Firebase
+> bukan cookie — ia hanya bisa dilampirkan oleh kode aplikasi lewat `fetchWithAuth`.
+> Jadi 401 dari bilah alamat adalah tanda penjaganya bekerja, bukan tanda rusak.
+> Pengujian yang sesungguhnya hanya lewat tombol di `/beranda`.
+
+Selesai 29 Agu 2026: `{"status":200, "role":"superadmin", "status":"aktif"}`.
+
+### Slice 3.2 — Kegiatan & modul evaluasi
+
+Sisi admin saja. Peserta, pendaftaran, dan penilaian menyusul di 3.3 dan 3.4.
+
+```text
+Baca docs/arsitektur.md, terutama §2 (tiga kategori isi kegiatan), §5 (model data),
+KA-4 (syarat kelulusan sebagai parameter), KA-5 (snapshot), dan KA-6 (bank soal
+tidak terikat kegiatan). Ikuti pola yang sudah ada di /admin/soal.
+
+Kerjakan HANYA Slice 3.2 — kegiatan dan modul evaluasi, sisi admin.
+JANGAN membuat halaman peserta, pendaftaran, attempt, maupun Route Handler baru.
+
+1. src/types/kegiatan.ts
+   Kegiatan: judul, deskripsi, dibukaPada, ditutupPada (ISO string atau null),
+   isPublished, isArchived, syaratSertifikat, createdAt/By, updatedAt/By.
+   syaratSertifikat: { jenis: 'nilai_minimum' | 'manual_admin', nilaiMinimum: number }
+   — disimpan sekarang meski sertifikat baru dibangun di tahap 4.
+   KA-4: syarat kelulusan TIDAK BOLEH di-hardcode di kode.
+
+   ModulKegiatan: judul, kategori ('referensi' | 'atestasi' | 'evaluasi'),
+   urutan, wajib (boolean), dan konfigurasi khusus evaluasi:
+   { pemilihanSoal: { mode: 'tetap' | 'acak', soalIds: string[],
+     topikKode: string | null, jumlah: number | null },
+     nilaiMinimum, maksPercobaan, batasWaktuMenit, acakUrutanSoal }
+   Di slice ini HANYA kategori 'evaluasi' yang diimplementasikan. Dua kategori lain
+   sudah masuk tipe supaya tidak perlu migrasi nanti, tapi belum ada UI-nya.
+
+2. src/lib/services/kegiatan.ts dan modul.ts
+   Koleksi 'kegiatan' (auto-ID), subkoleksi 'kegiatan/{id}/modul' (auto-ID).
+   TIDAK ADA hapus permanen untuk kegiatan — pakai isArchived.
+   KA-6: modul menyimpan RUJUKAN ke soal (daftar id, atau topikKode + jumlah),
+   TIDAK PERNAH menyalin isi soal.
+   Validasi: mode 'tetap' wajib punya minimal 1 soalId; mode 'acak' wajib punya
+   topikKode dan jumlah >= 1, dan jumlah tidak boleh melebihi banyaknya soal
+   aktif di topik itu.
+
+3. Hook use-kegiatan-list.ts dan use-modul-list.ts (onSnapshot).
+
+4. /admin/kegiatan
+   Tabel: judul, jendela waktu, jumlah modul, status terbit/arsip.
+   Form tambah/sunting. Tombol terbitkan/tarik dan arsipkan.
+
+5. /admin/kegiatan/[id]
+   Sunting kegiatan dan kelola daftar modulnya.
+   Form modul evaluasi: judul, urutan, wajib, nilai minimum, maks percobaan,
+   batas waktu, acak urutan, dan pemilihan soal — mode tetap dengan pemilih soal
+   per topik, atau mode acak dengan topik + jumlah.
+   Kalau kegiatan sudah diterbitkan, tampilkan peringatan sebelum menyunting modul:
+   perubahan setelah ada peserta bisa membuat hasil lama tidak konsisten (KA-5).
+
+6. firestore.rules:
+   - kegiatan/{id}: read kalau sudah masuk DAN (isPublished true ATAU admin);
+     create/update admin/superadmin; delete ditolak.
+   - kegiatan/{id}/modul/{mid}: read semua yang sudah masuk; write admin/superadmin.
+   ATURAN KERAS: selalu .data.get('field', default).
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**: buat kegiatan, tambahkan satu modul evaluasi mode **acak** dengan
+topik `PENALARAN` dan jumlah melebihi banyaknya soal di topik itu → harus ditolak.
+Buat modul mode **tetap** tanpa memilih soal sama sekali → ditolak. Terbitkan kegiatan,
+lalu coba sunting modulnya → muncul peringatan. Terakhir, di Firestore Console periksa
+dokumen modul: ia hanya memuat **id soal atau topik + jumlah**, tidak pernah teks soal.

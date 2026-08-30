@@ -21,7 +21,7 @@ const EMPTY_FORM: FormState = { kode: "", nama: "", deskripsi: "", urutan: "0" }
 
 export default function AdminTopikPage() {
   const { user } = useAuth();
-  const { items, loading } = useTopikList();
+  const { items, loading, error: listError } = useTopikList();
 
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [editingKode, setEditingKode] = useState<string | null>(null);
@@ -226,7 +226,14 @@ export default function AdminTopikPage() {
                 </td>
               </tr>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && listError && (
+              <tr>
+                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
+                  Gagal memuat topik: {listError}
+                </td>
+              </tr>
+            )}
+            {!loading && !listError && items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada topik.

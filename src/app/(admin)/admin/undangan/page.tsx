@@ -11,7 +11,7 @@ const ROLE_OPTIONS: UndanganRole[] = ["admin", "panitia", "peserta"];
 
 export default function AdminUndanganPage() {
   const { user } = useAuth();
-  const { items, loading } = useUndanganList();
+  const { items, loading, error: listError } = useUndanganList();
 
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<UndanganRole>("peserta");
@@ -151,7 +151,14 @@ export default function AdminUndanganPage() {
                 </td>
               </tr>
             )}
-            {!loading && items.length === 0 && (
+            {!loading && listError && (
+              <tr>
+                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
+                  Gagal memuat undangan: {listError}
+                </td>
+              </tr>
+            )}
+            {!loading && !listError && items.length === 0 && (
               <tr>
                 <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada undangan.

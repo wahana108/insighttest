@@ -88,14 +88,18 @@ service cloud.firestore {
       // persetujuan / undangan.
       allow create: if isOwner(uid) && canCreateUserProfile(uid);
 
-      // Pemilik: hanya displayName/photoURL. Admin: hanya status. Superadmin:
-      // role dan/atau status. Tidak ada jalur yang mencampur milik pemilik
-      // dengan milik admin/superadmin dalam satu update.
+      // Pemilik: profil tampilan + data formulir sertifikat (§11) — TIDAK
+      // PERNAH role/status (KA-7). Admin: hanya status. Superadmin: role
+      // dan/atau status. Tidak ada jalur yang mencampur milik pemilik dengan
+      // milik admin/superadmin dalam satu update.
       allow update: if (
           isOwner(uid)
           && request.resource.data.diff(resource.data)
             .affectedKeys()
-            .hasOnly(['displayName', 'photoURL', 'updatedAt'])
+            .hasOnly([
+              'displayName', 'photoURL', 'namaLengkap', 'institusi',
+              'nomorIdentitas', 'noTelepon', 'updatedAt'
+            ])
         ) || (
           isAdmin()
           && request.resource.data.diff(resource.data)
@@ -166,6 +170,34 @@ service cloud.firestore {
     // bank soal boleh membaca atau menulisnya (KA-3, docs/arsitektur.md).
     match /kunci_soal/{soalId} {
       allow read, write: if isAdmin();
+    }
+
+    // kegiatan/{id}: satu gelombang = satu dokumen (§4, docs/arsitektur.md).
+    // Peserta hanya boleh membaca kegiatan yang sudah diterbitkan; admin
+    // boleh melihat draf juga supaya bisa menyunting sebelum menerbitkan.
+    // Tidak ada hapus permanen — pakai isArchived.
+    match /kegiatan/{id} {
+      allow read: if isSignedIn() && (resource.data.get('isPublished', false) == true || isAdmin());
+      allow create, update: if isAdmin();
+      allow delete: if false;
+
+      // kegiatan/{id}/modul/{mid}: kategori referensi | atestasi | evaluasi
+      // (§2). Bank soal tidak disalin ke sini — modul evaluasi hanya
+      // menyimpan rujukan (soalIds atau topikKode+jumlah), KA-6.
+      match /modul/{mid} {
+        allow read: if isSignedIn();
+        allow write: if isAdmin();
+      }
+    }
+
+    // pendaftaran/{kegiatanId}_{uid}: id deterministik (KA-3), ditulis
+    // HANYA oleh server lewat Admin SDK (POST /api/pendaftaran) — nomor
+    // urut dan modulSnapshot harus dijamin konsisten dalam satu transaksi,
+    // dan modulSnapshot tidak boleh berubah lagi setelah dibuat (KA-5).
+    // Klien tidak pernah menulis apa pun di sini, tanpa kecuali.
+    match /pendaftaran/{id} {
+      allow read: if isSignedIn() && (resource.data.get('uid', null) == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
     }
 
     // parameter/global dibaca siapa pun, termasuk yang belum login — isinya

@@ -30,6 +30,10 @@ export function mapUserProfile(uid: string, data: DocumentData): UserProfile {
     photoURL: typeof data.photoURL === "string" ? data.photoURL : null,
     role: isUserRole(data.role) ? data.role : "peserta",
     status: isUserStatus(data.status) ? data.status : "aktif",
+    namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
+    institusi: typeof data.institusi === "string" ? data.institusi : "",
+    nomorIdentitas: typeof data.nomorIdentitas === "string" ? data.nomorIdentitas : "",
+    noTelepon: typeof data.noTelepon === "string" ? data.noTelepon : "",
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
   };
@@ -44,6 +48,10 @@ function baseProfile(user: User, role: UserRole, status: UserStatus): UserProfil
     photoURL: user.photoURL,
     role,
     status,
+    namaLengkap: "",
+    institusi: "",
+    nomorIdentitas: "",
+    noTelepon: "",
     createdAt: now,
     updatedAt: now,
   };

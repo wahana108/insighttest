@@ -66,7 +66,7 @@ function badgeLabel(status: StatusBarisImpor): string {
 
 export default function AdminSoalImporPage() {
   const { user } = useAuth();
-  const { items: topikList } = useTopikList();
+  const { items: topikList, error: topikError } = useTopikList();
   const topikAktif = useMemo(() => topikList.filter((topik) => topik.isActive), [topikList]);
   const prompt = useMemo(() => buildPrompt(topikAktif), [topikAktif]);
 
@@ -154,6 +154,13 @@ export default function AdminSoalImporPage() {
           Salin prompt ke AI mana pun, tempel hasilnya, periksa, lalu simpan semua sekaligus.
         </p>
       </div>
+
+      {topikError && (
+        <p className="text-sm text-red-600">
+          Gagal memuat daftar topik: {topikError}. Daftar kode topik di prompt di bawah bisa
+          tidak lengkap — jangan pakai sampai ini teratasi.
+        </p>
+      )}
 
       <section className="space-y-3 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">
