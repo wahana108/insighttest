@@ -346,9 +346,16 @@ berjalan dari aksi eksplisit admin terhadap dokumen yang **sudah ada**, tidak pe
 bersamaan dengan alur registrasi, dan rules membatasi field yang boleh disentuh tiap
 peran. (Dipertajam setelah audit pra-tahap 2, 28 Agu 2026.)
 
-**KA-3 — Kunci jawaban tidak pernah turun ke browser.**
-`kunci_soal`: `allow read, write: if false`. Ini menghapus kerumitan gerbang-baca-
-per-periode dari TNA sekaligus.
+**KA-3 — Kunci jawaban tidak pernah turun ke browser *peserta*.**
+`kunci_soal/{soalId}`: read dan write **hanya** oleh admin dan superadmin. Ditolak untuk
+peserta dan panitia, tanpa kecuali. Admin yang menyusun soal jelas harus bisa melihat
+dan menyunting kuncinya — merekalah yang menulisnya. Yang dijaga adalah agar kunci tidak
+pernah sampai ke browser orang yang sedang dinilai.
+
+Ini menghapus kerumitan gerbang-baca-per-periode dari TNA sekaligus: peserta tidak pernah
+membaca `soal` maupun `kunci_soal` secara langsung. Di tahap 3, soal sampai ke peserta
+lewat Route Handler yang membuang field kunci sebelum mengirim.
+(Dipertajam saat menyiapkan slice 2.2, 29 Agu 2026.)
 
 **KA-4 — Syarat kelulusan adalah parameter sejak hari pertama.**
 Jangan hardcode "nilai ≥ 70". Kalau syarat bisa berupa

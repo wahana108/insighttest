@@ -136,6 +136,38 @@ service cloud.firestore {
         && request.resource.data.get('usedBy', null) == request.auth.uid;
     }
 
+    // topik/{kode}: id dokumen = kode topik ternormalisasi (trim, huruf
+    // besar, A-Z/0-9/tanda hubung), lihat normalizeKode() di
+    // src/lib/services/topik.ts. ID deterministik ini mencegah kode ganda
+    // by construction (KA-3, docs/arsitektur.md). Tidak ada hapus permanen —
+    // topik yang dihapus meninggalkan soal yatim di bank soal (KA-6).
+    match /topik/{kode} {
+      allow read: if isSignedIn();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // soal/{id}: bank soal, id dokumen auto (bukan deterministik — bank soal
+    // tidak terikat kegiatan, kegiatan hanya merujuk id-nya, KA-6). Opsi di
+    // sini TIDAK PERNAH membawa penanda benar/salah, lihat kunci_soal di
+    // bawah. Peserta tidak pernah membaca koleksi ini langsung — di tahap 3
+    // soal dikirim ke peserta lewat Route Handler yang menyaring kunci.
+    // Tidak ada hapus permanen, hanya isActive.
+    match /soal/{id} {
+      allow read: if isAdmin();
+      allow create, update: if isAdmin();
+      allow delete: if false;
+    }
+
+    // kunci_soal/{soalId}: id dokumen = id dokumen soal (deterministik,
+    // lihat buildSoalWrite() di src/lib/services/soal.ts) — pasangan 1:1
+    // dengan soal/{id}. Kunci jawaban tidak pernah turun ke peserta atau
+    // panitia dalam bentuk apa pun; hanya admin/superadmin yang mengelola
+    // bank soal boleh membaca atau menulisnya (KA-3, docs/arsitektur.md).
+    match /kunci_soal/{soalId} {
+      allow read, write: if isAdmin();
+    }
+
     // parameter/global dibaca siapa pun, termasuk yang belum login — isinya
     // murni teks tampilan (nama platform, mode pendaftaran, pesan beranda).
     // PERINGATAN: dokumen ini terbuka dibaca tanpa syarat apa pun. JANGAN

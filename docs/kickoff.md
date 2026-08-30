@@ -533,8 +533,147 @@ Sebelum lanjut ke tahap 2, lakukan sekali dan jangan diulur:
 
 ---
 
-## F. Setelah tahap 1
+## F. Tahap 1 selesai — 28 Agustus 2026
 
-Lanjut ke ARSITEKTUR.md §9 tahap 2 (topik + bank soal + impor AI). Bank soal yang terisi
-membuat seluruh tahap berikutnya bisa dicoba dengan data sungguhan — itu sebabnya ia
-didahulukan.
+Live di `https://insighttest-gamma.vercel.app`. Firebase project `insighttest-66524`.
+Auth (email + Google), profil penulis-tunggal, tiga mode pendaftaran, undangan, halaman
+admin untuk parameter/undangan/pengguna. Audit KA-1 bersih, `npm run build` bersih.
+
+---
+
+## G. Tahap 2 — Topik & bank soal
+
+Bank soal yang terisi membuat seluruh tahap berikutnya bisa dicoba dengan data
+sungguhan. Itu sebabnya ia didahulukan sebelum kegiatan dan sertifikat.
+
+| Slice | Isi |
+|---|---|
+| 2.1 | Topik sebagai data master, ID dokumen = kode |
+| 2.2 | Bank soal + kunci jawaban di koleksi terpisah |
+| 2.3 | Impor JSON berbantuan AI (REUSABLE.md §5) |
+
+**Keputusan yang menentukan di 2.1**: ID dokumen topik = **kodenya sendiri**
+(`topik/PENALARAN`), bukan auto-ID. Alasannya baru terasa di 2.3 — berkas impor merujuk
+topik lewat `topikKode`, dan dengan ID deterministik validasinya cukup `exists()` tanpa
+query, sekaligus mencegah kode ganda by construction (KA-3).
+
+### Slice 2.1 — Topik
+
+```text
+Baca docs/arsitektur.md, terutama KA-3 (ID deterministik) dan §7 (peran).
+Ikuti pola yang sudah ada di /admin/undangan: service murni CRUD, hook onSnapshot,
+halaman memakai keduanya.
+
+Kerjakan HANYA Slice 2.1.
+
+0. Perbaikan kecil: ganti metadata title di src/app/layout.tsx dari "Create Next App"
+   menjadi "InsightTest". Judul tab browser masih bawaan scaffold.
+
+1. src/types/topik.ts
+   Topik: kode, nama, deskripsi, urutan (number), isActive (boolean),
+   createdAt, createdBy, updatedAt, updatedBy.
+
+2. src/lib/services/topik.ts
+   Koleksi 'topik'. ID DOKUMEN = kode (KA-3), dinormalkan: trim, huruf besar,
+   hanya A-Z, 0-9, dan tanda hubung. Tolak kode di luar pola itu dengan pesan jelas.
+   createTopik menolak kalau kode sudah dipakai.
+   TIDAK ADA hapus permanen — sediakan nonaktifkan/aktifkan lewat isActive.
+   Alasannya: topik yang dihapus akan meninggalkan soal yatim.
+
+3. src/lib/hooks/use-topik-list.ts — onSnapshot, urut berdasarkan 'urutan' lalu 'nama'.
+
+4. /admin/topik
+   Tabel: kode, nama, deskripsi, urutan, status aktif.
+   Form tambah dan sunting. Kode hanya bisa diisi saat membuat — saat menyunting
+   kode dikunci, karena ia adalah ID dokumen.
+   Tombol aktifkan/nonaktifkan. Hanya admin dan superadmin yang boleh membuka.
+   Tambahkan ke sidebar AdminShell.
+
+5. firestore.rules — tambahkan blok topik/{kode}:
+   - read: semua pengguna yang sudah masuk (peserta perlu melihat topik nanti)
+   - create, update: admin atau superadmin
+   - delete: tidak diizinkan siapa pun
+   ATURAN KERAS: selalu .data.get('field', default). Lihat KA-1.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**: buat topik `PENALARAN` dan `UMUM`. Coba buat `PENALARAN` lagi →
+ditolak. Coba isi kode `Penalaran Dasar` (ada spasi dan huruf kecil) → dinormalkan jadi
+`PENALARAN-DASAR` atau ditolak dengan pesan jelas, bukan tersimpan apa adanya.
+Nonaktifkan satu topik → tetap ada di daftar, ditandai nonaktif. Masuk sebagai peserta →
+`/admin/topik` tertolak.
+
+### Slice 2.2 — Bank soal & kunci jawaban
+
+Dua keputusan menentukan di sini, dan keduanya baru terasa manfaatnya belakangan.
+
+**Kunci jawaban di koleksi terpisah** (KA-3). `soal` tidak pernah memuat penanda jawaban
+benar. Kuncinya di `kunci_soal/{soalId}`, hanya terbaca admin. Di tahap 3, soal sampai ke
+peserta lewat Route Handler yang tidak pernah menyentuh koleksi kunci.
+
+**Satu helper penulis yang menerima `batch` dari luar** (REUSABLE.md §3). Form manual dan
+importer massal nanti memakai fungsi yang **sama**, jadi validasinya satu sumber
+kebenaran dan impor massal tetap bersifat semua-atau-tidak.
+
+```text
+Baca docs/arsitektur.md, terutama KA-1, KA-3, dan KA-6 (bank soal tidak terikat kegiatan).
+Ikuti pola yang sudah ada di /admin/topik.
+
+Kerjakan HANYA Slice 2.2.
+
+1. src/types/soal.ts
+   Soal: teks, tipe ('pilihan_ganda'), topikKode, tingkat ('mudah'|'sedang'|'sulit'),
+   opsi: array { id, label }, isActive, createdAt/By, updatedAt/By.
+   PENTING: opsi TIDAK punya penanda benar/salah sama sekali. Tipe KunciSoal terpisah:
+   { opsiBenarId, pembahasan }.
+
+2. src/lib/services/soal.ts
+   - normalisasiTeks(): trim, rapatkan spasi ganda, untuk deteksi duplikat.
+   - validasiSoal(): dipakai BERSAMA oleh form manual dan importer nanti —
+     minimal 2 opsi, tepat satu opsi ditandai benar oleh pemanggil, teks tidak kosong,
+     topikKode harus ada di koleksi topik dan aktif.
+   - buildSoalWrite(batch, data, ctx): helper yang MENERIMA writeBatch dari luar
+     lalu menambahkan tulisan ke 'soal' DAN 'kunci_soal' sekaligus.
+     Ini wajib — slice 2.3 (impor massal) akan memakai fungsi yang sama.
+   - createSoal() dan updateSoal(): buat batch sendiri, panggil buildSoalWrite,
+     lalu commit. Soal dan kuncinya harus tersimpan atomik — semua atau tidak.
+   - TIDAK ADA hapus permanen; pakai isActive.
+
+3. src/lib/hooks/use-soal-list.ts — onSnapshot, bisa disaring per topikKode.
+
+4. /admin/soal
+   - Tabel: teks (dipotong), topik, tingkat, jumlah opsi, status aktif.
+   - Saringan berdasarkan topik.
+   - Form tambah/sunting: teks, topik (dropdown dari topik AKTIF saja), tingkat,
+     dan daftar opsi dengan tepat satu yang ditandai benar (radio).
+   - Saat menyunting, kunci jawaban yang tersimpan ikut dimuat dan ditampilkan.
+   - Peringatan duplikat: kalau teks soal yang dinormalkan sudah ada di topik yang sama,
+     tampilkan peringatan sebelum menyimpan.
+   - Hanya admin dan superadmin. Tambahkan ke sidebar.
+
+5. firestore.rules:
+   - soal/{id}: read admin/superadmin; create/update admin/superadmin; delete ditolak.
+     Peserta TIDAK membaca koleksi ini — di tahap 3 soal dikirim lewat Route Handler.
+   - kunci_soal/{soalId}: read DAN write hanya admin/superadmin.
+     Ditolak untuk peserta dan panitia tanpa kecuali. Lihat KA-3.
+   ATURAN KERAS: selalu .data.get('field', default).
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**:
+
+1. Buat tiga soal di topik `PENALARAN`. Buka Firestore Console → koleksi `soal` →
+   pastikan **tidak ada** field apa pun yang menandai jawaban benar. Lalu buka
+   `kunci_soal` → kuncinya ada di sana, satu dokumen per soal dengan ID yang sama.
+2. Sunting satu soal, ubah jawaban benarnya, simpan. Periksa `kunci_soal` ikut berubah.
+3. Coba simpan soal dengan hanya satu opsi → ditolak.
+4. Simpan soal dengan teks yang sama persis di topik yang sama → muncul peringatan.
+5. **Rules Playground**: simulasi `get` ke `/kunci_soal/<id soal>` dengan uid akun
+   **peserta** → harus **ditolak**. Ulangi dengan uid superadmin → diizinkan.
+   Ini pengujian terpenting di slice ini.
