@@ -10,7 +10,21 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
-import type { JenisSyaratSertifikat, Kegiatan, SyaratSertifikat } from "@/types/kegiatan";
+import type {
+  JenisSyaratSertifikat,
+  Kegiatan,
+  SyaratSertifikat,
+  TemplateSertifikat,
+} from "@/types/kegiatan";
+
+export const TEMPLATE_SERTIFIKAT_KOSONG: TemplateSertifikat = {
+  logoUrl: "",
+  kopUrl: "",
+  penandatanganNama: "",
+  penandatanganJabatan: "",
+  tandaTanganUrl: "",
+  teksTambahan: "",
+};
 
 export class KegiatanError extends Error {
   constructor(message: string) {
@@ -63,6 +77,30 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
   };
 }
 
+function mapTemplateSertifikat(value: unknown): TemplateSertifikat {
+  const data = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return {
+    logoUrl: typeof data.logoUrl === "string" ? data.logoUrl : "",
+    kopUrl: typeof data.kopUrl === "string" ? data.kopUrl : "",
+    penandatanganNama: typeof data.penandatanganNama === "string" ? data.penandatanganNama : "",
+    penandatanganJabatan:
+      typeof data.penandatanganJabatan === "string" ? data.penandatanganJabatan : "",
+    tandaTanganUrl: typeof data.tandaTanganUrl === "string" ? data.tandaTanganUrl : "",
+    teksTambahan: typeof data.teksTambahan === "string" ? data.teksTambahan : "",
+  };
+}
+
+function normalizeTemplateSertifikat(t: TemplateSertifikat): TemplateSertifikat {
+  return {
+    logoUrl: t.logoUrl.trim(),
+    kopUrl: t.kopUrl.trim(),
+    penandatanganNama: t.penandatanganNama.trim(),
+    penandatanganJabatan: t.penandatanganJabatan.trim(),
+    tandaTanganUrl: t.tandaTanganUrl.trim(),
+    teksTambahan: t.teksTambahan.trim(),
+  };
+}
+
 export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
   return {
     id,
@@ -74,6 +112,7 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     isPublished: typeof data.isPublished === "boolean" ? data.isPublished : false,
     isArchived: typeof data.isArchived === "boolean" ? data.isArchived : false,
     syaratSertifikat: mapSyaratSertifikat(data.syaratSertifikat),
+    templateSertifikat: mapTemplateSertifikat(data.templateSertifikat),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
@@ -88,6 +127,7 @@ export interface KegiatanWriteInput {
   dibukaPada: string | null;
   ditutupPada: string | null;
   syaratSertifikat: SyaratSertifikat;
+  templateSertifikat: TemplateSertifikat;
 }
 
 /**
@@ -144,6 +184,7 @@ export async function createKegiatan(
     isPublished: false,
     isArchived: false,
     syaratSertifikat: input.syaratSertifikat,
+    templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     createdAt: now,
     createdBy: actorId,
     updatedAt: now,
@@ -166,6 +207,7 @@ export async function updateKegiatan(
     dibukaPada: input.dibukaPada,
     ditutupPada: input.ditutupPada,
     syaratSertifikat: input.syaratSertifikat,
+    templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });

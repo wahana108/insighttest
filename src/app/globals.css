@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/*
+ * Cetak sertifikat (/sertifikat/[id]) — WAJIB terang, terlepas dari tema
+ * gelap di layar. Sertifikat gelap menghabiskan tinta dan sering tidak
+ * terbaca dipindai. .cetak-kertas membungkus kartu sertifikat,
+ * .cetak-sembunyi membungkus navigasi/tombol yang tidak boleh ikut cetak.
+ */
+@media print {
+  @page {
+    size: A4 landscape;
+  }
+
+  body {
+    background: #ffffff !important;
+  }
+
+  .cetak-sembunyi {
+    display: none !important;
+  }
+
+  .cetak-kertas,
+  .cetak-kertas * {
+    background: #ffffff !important;
+    color: #000000 !important;
+    box-shadow: none !important;
+    border-color: #d4d4d8 !important;
+  }
+}

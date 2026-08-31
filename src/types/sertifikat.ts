@@ -39,3 +39,44 @@ export type SertifikatRingkas = Pick<
   | "status"
   | "terbitPada"
 >;
+
+/**
+ * Dipakai GET /api/sertifikat/[id] (halaman /sertifikat/[id], berlogin) —
+ * gabungan snapshot sertifikat + template LIVE dari kegiatan saat ini
+ * (lihat TemplateSertifikat di types/kegiatan.ts, sengaja tidak dibekukan).
+ */
+export interface SertifikatDetail {
+  id: string;
+  kegiatanId: string;
+  serial: string;
+  kodeVerifikasi: string;
+  namaLengkap: string;
+  judulKegiatan: string;
+  nilaiAkhir: number;
+  items: ItemSertifikat[];
+  status: StatusSertifikat;
+  terbitPada: string;
+  template: {
+    logoUrl: string;
+    kopUrl: string;
+    penandatanganNama: string;
+    penandatanganJabatan: string;
+    tandaTanganUrl: string;
+    teksTambahan: string;
+  };
+}
+
+/**
+ * Dipakai halaman publik /s/[kode]. TIDAK PERNAH membawa email, uid, nomor
+ * identitas, nomor telepon, atau institusi — lihat komentar di
+ * src/app/s/[kode]/page.tsx.
+ */
+export interface SertifikatPublik {
+  namaLengkap: string;
+  judulKegiatan: string;
+  serial: string;
+  nilaiAkhir: number;
+  items: ItemSertifikat[];
+  status: StatusSertifikat;
+  terbitPada: string;
+}

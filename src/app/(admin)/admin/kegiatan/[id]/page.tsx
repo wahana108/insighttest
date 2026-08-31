@@ -20,7 +20,12 @@ import {
   type ModulWriteInput,
 } from "@/lib/services/modul";
 import { formatTopikLabel } from "@/lib/services/topik";
-import type { JenisSyaratSertifikat, ModePemilihanSoal, ModulKegiatan } from "@/types/kegiatan";
+import type {
+  JenisSyaratSertifikat,
+  ModePemilihanSoal,
+  ModulKegiatan,
+  TemplateSertifikat,
+} from "@/types/kegiatan";
 
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
@@ -34,6 +39,7 @@ interface KegiatanFormState {
   ditutupJam: string;
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
+  templateSertifikat: TemplateSertifikat;
 }
 
 interface ModulFormState {
@@ -124,6 +130,7 @@ export default function AdminKegiatanDetailPage({
           ditutupJam: isoToTimeValue(kegiatan.ditutupPada),
           syaratJenis: kegiatan.syaratSertifikat.jenis,
           syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
+          templateSertifikat: kegiatan.templateSertifikat,
         }
       : null);
 
@@ -151,6 +158,7 @@ export default function AdminKegiatanDetailPage({
           jenis: editingKegiatanForm.syaratJenis,
           nilaiMinimum: Number(editingKegiatanForm.syaratNilaiMinimum) || 0,
         },
+        templateSertifikat: editingKegiatanForm.templateSertifikat,
       };
       await updateKegiatan(id, input, user.uid);
       setKegiatanForm(null);
@@ -511,6 +519,162 @@ export default function AdminKegiatanDetailPage({
                 </div>
               )}
             </div>
+
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Template sertifikat
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Semuanya opsional — sertifikat minimum tetap sah kalau dikosongkan.
+                  Gambar ditautkan lewat URL, tidak diunggah.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <label
+                    htmlFor="tpl-logo"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    URL logo
+                  </label>
+                  <input
+                    id="tpl-logo"
+                    type="url"
+                    placeholder="https://..."
+                    value={editingKegiatanForm.templateSertifikat.logoUrl}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          logoUrl: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="tpl-kop"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    URL kop/header
+                  </label>
+                  <input
+                    id="tpl-kop"
+                    type="url"
+                    placeholder="https://..."
+                    value={editingKegiatanForm.templateSertifikat.kopUrl}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          kopUrl: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="tpl-nama"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    Nama penandatangan
+                  </label>
+                  <input
+                    id="tpl-nama"
+                    type="text"
+                    value={editingKegiatanForm.templateSertifikat.penandatanganNama}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          penandatanganNama: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+                <div>
+                  <label
+                    htmlFor="tpl-jabatan"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    Jabatan penandatangan
+                  </label>
+                  <input
+                    id="tpl-jabatan"
+                    type="text"
+                    value={editingKegiatanForm.templateSertifikat.penandatanganJabatan}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          penandatanganJabatan: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="tpl-ttd"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    URL gambar tanda tangan
+                  </label>
+                  <input
+                    id="tpl-ttd"
+                    type="url"
+                    placeholder="https://..."
+                    value={editingKegiatanForm.templateSertifikat.tandaTanganUrl}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          tandaTanganUrl: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="tpl-teks"
+                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    Teks tambahan
+                  </label>
+                  <textarea
+                    id="tpl-teks"
+                    rows={2}
+                    value={editingKegiatanForm.templateSertifikat.teksTambahan}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        templateSertifikat: {
+                          ...editingKegiatanForm.templateSertifikat,
+                          teksTambahan: event.target.value,
+                        },
+                      })
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                </div>
+              </div>
+            </div>
+
             {kegiatanError && <p className="text-sm text-red-600">{kegiatanError}</p>}
             <button
               type="submit"

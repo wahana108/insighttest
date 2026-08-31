@@ -1114,3 +1114,85 @@ JANGAN commit. Laporkan hasilnya.
    berubah isi diam-diam.
 4. Sebagai peserta yang **belum** lulus, coba terbitkan → ditolak dengan alasan jelas.
 5. **Rules Playground**: `create` ke `/sertifikat/apa_saja` sebagai peserta → ditolak.
+
+**Slice 4.1 selesai 31 Agu 2026.** Serial `UJI2026/2026/0001`. Uji snapshot lolos telak:
+nama profil diubah jadi "wahana garuda" dan judul kegiatan jadi "kegiatan pionir
+pengujian", dokumen sertifikat tetap menyimpan "agus wahana" dan "kegiatan tahap
+pengujian".
+
+**Pelajaran operasional dari pengujian ini**: cuplikan modul dibekukan saat peserta
+mendaftar. Modul yang ditambahkan **setelah** itu tidak masuk ke program peserta lama —
+tidak ke penilaian, tidak ke sertifikat. Prosedur yang benar: susun seluruh modul dulu,
+terbitkan kegiatan, baru buka pendaftaran. Kalau program berubah setelah peserta masuk,
+itu gelombang baru — buat kegiatan baru.
+
+### Slice 4.2 — Halaman sertifikat, cetak, dan verifikasi publik
+
+```text
+Baca docs/arsitektur.md: §10 (sertifikat), §11 (standar minimum & lanjutan), KA-6.
+
+Kerjakan HANYA Slice 4.2. Penerbitan massal untuk admin tetap di 4.3.
+
+0. PERBAIKAN PENTING: di /kegiatan/[id], untuk peserta yang SUDAH terdaftar,
+   tampilkan daftar modul dari modulSnapshot miliknya sendiri — BUKAN daftar modul
+   kegiatan yang hidup. Sekarang keduanya bisa berbeda, dan peserta melihat modul
+   yang tidak dinilai untuknya. Untuk yang belum terdaftar, tetap tampilkan
+   daftar hidup sebagai gambaran isi kegiatan.
+
+1. Field template sertifikat pada Kegiatan (semua opsional, semua berupa URL/teks):
+   logoUrl, kopUrl, penandatanganNama, penandatanganJabatan, tandaTanganUrl,
+   teksTambahan. Tampilkan di form /admin/kegiatan/[id] dalam satu blok
+   "Template sertifikat". Semuanya boleh kosong — sertifikat minimum tetap sah.
+   Gambar DITAUTKAN lewat URL, tidak diunggah. Belum perlu Cloud Storage.
+
+2. npm install qrcode dan @types/qrcode
+
+3. Halaman /sertifikat/[id] — hanya pemilik atau admin yang boleh membuka.
+   Isi wajib: nama lengkap, judul kegiatan, tanggal terbit, serial, tabel modul
+   dari items (judul, skor, status), nilai akhir, kode verifikasi,
+   dan QR code menuju halaman verifikasi publiknya.
+   Isi opsional: logo, kop, penandatangan beserta gambar tanda tangan, teks tambahan
+   — tampilkan hanya kalau terisi.
+   Footer wajib: "Daftar di atas hanya memuat materi yang ditetapkan pada kegiatan
+   ini. Bukan dokumen negara."
+   Tombol "Cetak" memanggil window.print().
+
+   CETAK: tambahkan @media print yang WAJIB memaksa latar putih dan teks hitam,
+   menyembunyikan navigasi dan tombol, dan memakai @page { size: A4 landscape }.
+   Versi layar boleh gelap seperti sisa aplikasi; versi cetak harus terang —
+   sertifikat gelap akan menghabiskan tinta dan tidak terbaca.
+
+   Tautkan dari /beranda (seksi "Sertifikat saya") dan dari /kegiatan/[id].
+
+4. Halaman publik /s/[kode] — TANPA login.
+   Server component yang membaca sertifikat lewat Admin SDK berdasarkan
+   kodeVerifikasi (rules menolak baca publik, jadi WAJIB lewat Admin SDK).
+   Tampilkan HANYA: nama lengkap, judul kegiatan, tanggal terbit, serial,
+   nilai akhir, daftar modul, dan status berlaku atau dicabut.
+   JANGAN pernah menampilkan email, uid, nomor identitas, nomor telepon,
+   atau institusi. Halaman ini terbuka untuk siapa pun di internet.
+   Kode tidak dikenal: tampilkan "Sertifikat tidak ditemukan" yang sama untuk
+   semua kasus — jangan membocorkan apakah formatnya benar atau kodenya pernah ada.
+   Sertifikat dicabut: tampilkan jelas bahwa ia TIDAK berlaku.
+
+5. Jangan mengubah firestore.rules. Halaman publik memakai Admin SDK, bukan
+   klien. Kalau menurutmu ada yang kurang, LAPORKAN saja.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**:
+
+1. Buka `/sertifikat/[id]` sebagai pemiliknya → semua isi tampil, QR muncul.
+2. Tekan **Ctrl+P**. Di pratinjau cetak, latar harus **putih** dan teks hitam,
+   navigasi hilang, muat dalam satu halaman A4 lanskap.
+3. Pindai QR-nya dengan ponsel, atau buka `/s/{kodeVerifikasi}` **di jendela incognito
+   tanpa login** → halaman verifikasi tampil.
+4. **Uji kebocoran**: di halaman `/s/{kode}` itu, tekan Ctrl+U atau periksa DevTools →
+   pastikan **tidak ada** email, uid, nomor identitas, atau nomor telepon di mana pun
+   dalam sumber halamannya. Halaman ini terbuka untuk seluruh internet.
+5. Buka `/s/KODEASAL-ASALAN` → "Sertifikat tidak ditemukan", bukan galat server.
+6. Buka `/sertifikat/[id]` milik orang lain sebagai peserta biasa → ditolak.
+7. Isi logo dan penandatangan di admin, muat ulang sertifikat → keduanya muncul.
+   Kosongkan lagi → sertifikat tetap sah tanpa keduanya.

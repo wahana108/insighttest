@@ -179,7 +179,12 @@ export default function BerandaPage() {
                 key={item.id}
                 className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0 dark:border-zinc-900"
               >
-                <p className="font-medium text-black dark:text-zinc-50">{item.judulKegiatan}</p>
+                <Link
+                  href={`/sertifikat/${item.id}`}
+                  className="font-medium text-black hover:underline dark:text-zinc-50"
+                >
+                  {item.judulKegiatan}
+                </Link>
                 <p className="text-xs text-zinc-500">
                   {item.serial} · Terbit {formatDate(item.terbitPada)}
                 </p>

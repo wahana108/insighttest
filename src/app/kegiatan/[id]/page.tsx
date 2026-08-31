@@ -83,6 +83,7 @@ export default function KegiatanDetailPage({
   const [menerbitkan, setMenerbitkan] = useState(false);
   const [errorSertifikat, setErrorSertifikat] = useState<string | null>(null);
   const [sertifikatBaru, setSertifikatBaru] = useState<{
+    id: string;
     serial: string;
     terbitPada: string;
   } | null>(null);
@@ -131,7 +132,7 @@ export default function KegiatanDetailPage({
           typeof body?.error === "string" ? body.error : "Gagal menerbitkan sertifikat."
         );
       }
-      setSertifikatBaru({ serial: body.serial, terbitPada: body.terbitPada });
+      setSertifikatBaru({ id: body.id, serial: body.serial, terbitPada: body.terbitPada });
       refetchSertifikat();
     } catch (err) {
       setErrorSertifikat(
@@ -220,47 +221,74 @@ export default function KegiatanDetailPage({
         <h2 className="mb-3 text-sm font-semibold text-black dark:text-zinc-50">
           Modul dalam kegiatan ini
         </h2>
-        {loadingModul && <p className="text-sm text-zinc-500">Memuat...</p>}
-        {!loadingModul && modulListError && (
-          <p className="text-sm text-red-600">Gagal memuat modul: {modulListError}</p>
-        )}
-        {!loadingModul && !modulListError && modulList.length === 0 && (
-          <p className="text-sm text-zinc-500">Belum ada modul.</p>
-        )}
-        <ul className="space-y-2">
-          {modulList.map((modul) => {
-            const hasil = pendaftaranKegiatanIni?.hasilModul[modul.id];
-            return (
-              <li
-                key={modul.id}
-                className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
-              >
-                <div>
+        {pendaftaranKegiatanIni ? (
+          // Sudah terdaftar — pakai modulSnapshot milik pendaftaran, BUKAN
+          // daftar modul hidup. Admin bisa menyunting modul kegiatan setelah
+          // ada peserta (KA-5); peserta yang sudah terdaftar harus tetap
+          // melihat persis modul yang dinilai untuknya, bukan versi terbaru.
+          <ul className="space-y-2">
+            {pendaftaranKegiatanIni.modulSnapshot.length === 0 && (
+              <p className="text-sm text-zinc-500">Belum ada modul.</p>
+            )}
+            {pendaftaranKegiatanIni.modulSnapshot.map((modul) => {
+              const hasil = pendaftaranKegiatanIni.hasilModul[modul.modulId];
+              return (
+                <li
+                  key={modul.modulId}
+                  className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
+                >
+                  <div>
+                    <span className="text-black dark:text-zinc-50">{modul.judul}</span>
+                    <span className="ml-2 text-xs text-zinc-500">
+                      {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
+                      {modul.wajib ? "Wajib" : "Opsional"}
+                    </span>
+                    {hasil && (
+                      <span
+                        className={`ml-2 text-xs font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
+                      >
+                        Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
+                      </span>
+                    )}
+                  </div>
+                  {modul.kategori === "evaluasi" && (
+                    <Link
+                      href={`/kegiatan/${id}/modul/${modul.modulId}`}
+                      className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                    >
+                      Kerjakan
+                    </Link>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          // Belum terdaftar — gambaran isi kegiatan lewat daftar modul hidup.
+          <>
+            {loadingModul && <p className="text-sm text-zinc-500">Memuat...</p>}
+            {!loadingModul && modulListError && (
+              <p className="text-sm text-red-600">Gagal memuat modul: {modulListError}</p>
+            )}
+            {!loadingModul && !modulListError && modulList.length === 0 && (
+              <p className="text-sm text-zinc-500">Belum ada modul.</p>
+            )}
+            <ul className="space-y-2">
+              {modulList.map((modul) => (
+                <li
+                  key={modul.id}
+                  className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
+                >
                   <span className="text-black dark:text-zinc-50">{modul.judul}</span>
-                  <span className="ml-2 text-xs text-zinc-500">
+                  <span className="text-xs text-zinc-500">
                     {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
                     {modul.wajib ? "Wajib" : "Opsional"}
                   </span>
-                  {hasil && (
-                    <span
-                      className={`ml-2 text-xs font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
-                    >
-                      Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
-                    </span>
-                  )}
-                </div>
-                {modul.kategori === "evaluasi" && pendaftaranKegiatanIni && (
-                  <Link
-                    href={`/kegiatan/${id}/modul/${modul.id}`}
-                    className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
-                  >
-                    Kerjakan
-                  </Link>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
 
       <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
@@ -315,7 +343,7 @@ export default function KegiatanDetailPage({
               Gagal memeriksa sertifikat: {sertifikatListError}
             </p>
           ) : sertifikatKegiatanIni || sertifikatBaru ? (
-            <div className="space-y-1">
+            <div className="space-y-2">
               <p className="text-sm text-green-600">Sertifikat sudah terbit.</p>
               <p className="text-sm text-black dark:text-zinc-50">
                 Serial:{" "}
@@ -327,6 +355,12 @@ export default function KegiatanDetailPage({
                 Terbit{" "}
                 {formatDate(sertifikatKegiatanIni?.terbitPada ?? sertifikatBaru?.terbitPada ?? "")}
               </p>
+              <Link
+                href={`/sertifikat/${sertifikatKegiatanIni?.id ?? sertifikatBaru?.id}`}
+                className="inline-block text-sm font-medium text-black underline dark:text-zinc-50"
+              >
+                Lihat sertifikat
+              </Link>
             </div>
           ) : kegiatan.syaratSertifikat.jenis === "manual_admin" ? (
             <p className="text-sm text-zinc-500">

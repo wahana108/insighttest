@@ -15,10 +15,11 @@ import {
   createKegiatan,
   setKegiatanArchived,
   setKegiatanPublished,
+  TEMPLATE_SERTIFIKAT_KOSONG,
   updateKegiatan,
   type KegiatanWriteInput,
 } from "@/lib/services/kegiatan";
-import type { JenisSyaratSertifikat, Kegiatan } from "@/types/kegiatan";
+import type { JenisSyaratSertifikat, Kegiatan, TemplateSertifikat } from "@/types/kegiatan";
 
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
@@ -32,6 +33,7 @@ interface FormState {
   ditutupJam: string;
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
+  templateSertifikat: TemplateSertifikat;
 }
 
 function emptyForm(): FormState {
@@ -45,6 +47,7 @@ function emptyForm(): FormState {
     ditutupJam: "",
     syaratJenis: "manual_admin",
     syaratNilaiMinimum: "70",
+    templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
   };
 }
 
@@ -102,6 +105,10 @@ export default function AdminKegiatanPage() {
       ditutupJam: isoToTimeValue(kegiatan.ditutupPada),
       syaratJenis: kegiatan.syaratSertifikat.jenis,
       syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
+      // Blok "Template sertifikat" disunting di /admin/kegiatan/[id], bukan
+      // di sini — dioper apa adanya supaya "Simpan perubahan" di halaman
+      // ini tidak menimpanya jadi kosong.
+      templateSertifikat: kegiatan.templateSertifikat,
     });
   }
 
@@ -123,6 +130,7 @@ export default function AdminKegiatanPage() {
           jenis: form.syaratJenis,
           nilaiMinimum: Number(form.syaratNilaiMinimum) || 0,
         },
+        templateSertifikat: form.templateSertifikat,
       };
 
       if (editingId) {
