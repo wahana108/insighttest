@@ -15,6 +15,17 @@ export interface ModulSnapshotItem {
   nilaiMinimum: number | null;
 }
 
+/**
+ * Skor yang dipakai adalah TERTINGGI antar percobaan. Diperbarui oleh
+ * POST /api/attempt/[id]/submit dalam transaksi yang sama dengan attempt
+ * itu sendiri.
+ */
+export interface HasilModul {
+  skorTertinggi: number;
+  lulus: boolean;
+  percobaan: number;
+}
+
 export interface Pendaftaran {
   id: string;
   kegiatanId: string;
@@ -26,9 +37,11 @@ export interface Pendaftaran {
   modulSnapshot: ModulSnapshotItem[];
   status: StatusPendaftaran;
   daftarPada: string;
+  /** Kunci = modulId. Kosong sampai peserta menyelesaikan attempt pertamanya di modul itu. */
+  hasilModul: Record<string, HasilModul>;
 }
 
 export type PendaftaranRingkas = Pick<
   Pendaftaran,
-  "id" | "kegiatanId" | "nomorUrut" | "status" | "daftarPada"
+  "id" | "kegiatanId" | "nomorUrut" | "status" | "daftarPada" | "hasilModul"
 >;

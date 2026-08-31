@@ -843,3 +843,178 @@ topik `PENALARAN` dan jumlah melebihi banyaknya soal di topik itu → harus dito
 Buat modul mode **tetap** tanpa memilih soal sama sekali → ditolak. Terbitkan kegiatan,
 lalu coba sunting modulnya → muncul peringatan. Terakhir, di Firestore Console periksa
 dokumen modul: ia hanya memuat **id soal atau topik + jumlah**, tidak pernah teks soal.
+
+### Slice 3.3 — Profil, katalog, dan pendaftaran
+
+Slice pertama yang benar-benar menyentuh peserta. Tiga bagian yang saling bergantung.
+
+**Nama lengkap peserta** disimpan di profil, bukan diketik ulang tiap mendaftar — lalu
+di-snapshot ke pendaftaran. §11 sudah memperingatkan: `displayName` dari Google sering
+informal, dan sertifikat yang salah nama berarti mencetak ulang ratusan lembar.
+
+**Pendaftaran dikerjakan Route Handler, bukan klien.** Nomor urut sertifikat dialokasikan
+di sini (§10), dan menaikkan penghitung di dokumen `kegiatan` menuntut hak tulis yang
+tidak boleh dimiliki peserta. Sekalian pemeriksaan kelayakan dan pengambilan snapshot
+modul dipusatkan di satu tempat yang tidak bisa dilewati.
+
+```text
+Baca docs/arsitektur.md: §7 (model data), §10 (nomor serial dialokasikan saat
+pendaftaran), §11 (formulir peserta), KA-3, KA-5.
+Slice 3.1 sudah menyediakan verifyRequest() dan fetchWithAuth() — pakai keduanya.
+
+Kerjakan HANYA Slice 3.3. JANGAN membuat attempt, runner soal, atau penilaian.
+
+1. Perluas UserProfile di src/types/user.ts:
+   tambahkan namaLengkap, institusi, nomorIdentitas, noTelepon (semua string,
+   boleh kosong). Jangan sentuh role dan status.
+
+2. Halaman /profil untuk peserta mengisi keempat field itu.
+   Label namaLengkap harus eksplisit: "Nama lengkap — inilah yang akan tercetak
+   di sertifikat". Tampilkan pratinjau nama itu di bawah kolomnya.
+
+3. firestore.rules — perluas izin update users/{uid} oleh pemilik menjadi
+   displayName, photoURL, namaLengkap, institusi, nomorIdentitas, noTelepon.
+   role dan status TETAP terlarang bagi pemilik. Lihat KA-1 dan KA-7.
+
+4. Katalog peserta:
+   - /kegiatan — daftar kegiatan yang isPublished true dan tidak diarsipkan.
+   - /kegiatan/[id] — judul, deskripsi, jendela waktu, daftar modul (hanya judul,
+     kategori, dan wajib/opsional — JANGAN tampilkan konfigurasi soal), status
+     pendaftaran pengguna, dan tombol Daftar.
+
+5. POST /api/pendaftaran — Route Handler, memakai verifyRequest.
+   Body: { kegiatanId }. Semua pemeriksaan di server:
+   - kegiatan ada, isPublished true, tidak diarsipkan
+   - waktu sekarang berada di dalam dibukaPada..ditutupPada (kalau diisi)
+   - pengguna belum terdaftar di kegiatan ini
+   - profil pengguna sudah punya namaLengkap tidak kosong; kalau kosong balas
+     400 dengan pesan yang menyuruh melengkapi profil dulu
+   Lalu dalam SATU transaksi Firestore:
+   - baca kegiatan.nomorUrutTerakhir (default 0), naikkan satu, tulis balik
+   - buat pendaftaran/{kegiatanId}_{uid} berisi: kegiatanId, uid, email,
+     namaLengkap dan institusi (snapshot dari profil), nomorUrut,
+     modulSnapshot (array { modulId, judul, kategori, wajib, nilaiMinimum }),
+     status 'terdaftar', daftarPada
+   KA-5: snapshot ini yang dipakai nanti, bukan modul yang bisa berubah.
+
+6. GET /api/pendaftaran/saya — daftar pendaftaran milik pengguna yang sedang masuk.
+   Tampilkan di /beranda sebagai "Kegiatan saya".
+
+7. firestore.rules — pendaftaran/{id}:
+   read oleh pemilik (uid cocok) atau admin/superadmin.
+   create, update, delete DITOLAK untuk semua klien — hanya server yang menulis.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**:
+
+1. Sebagai peserta yang profilnya kosong, coba daftar → ditolak dengan pesan yang
+   menyuruh melengkapi nama lengkap.
+2. Isi profil, daftar lagi → berhasil. Di Firestore, `pendaftaran/{kegiatanId}_{uid}`
+   berisi `nomorUrut: 1` dan `modulSnapshot` yang lengkap.
+3. Daftar lagi di kegiatan yang sama → ditolak, dan **tidak ada** dokumen kedua.
+4. Daftarkan peserta kedua → `nomorUrut: 2`. Periksa `kegiatan.nomorUrutTerakhir`
+   ikut menjadi 2.
+5. **Rules Playground**: simulasi `create` ke `/pendaftaran/apa_saja` sebagai peserta
+   → harus **ditolak**. Ini membuktikan pendaftaran tidak bisa dipalsukan dari
+   console browser, melewati semua pemeriksaan di Route Handler.
+6. Ubah kegiatan jadi belum terbit, lalu coba daftar → ditolak.
+
+**Pelajaran dari 3.2/3.3 yang berlaku seterusnya**: rules Firestore **bukan penyaring**.
+Query yang tidak menjamin batasannya ditolak seluruhnya, bukan disaring. Karena itu
+query peserta wajib menyertakan `where('isPublished','==',true)`. Dan hook yang menelan
+galat lalu menampilkannya sebagai keadaan kosong lebih berbahaya daripada bug-nya
+sendiri — semua hook kini membedakan memuat, gagal, dan kosong.
+
+### Slice 3.4a — Attempt, pengerjaan soal, penilaian server
+
+Slice yang menutup janji utama platform: peserta mengerjakan, nilai keluar, dan nilainya
+tidak bisa dipalsukan dari browser. Antarmuka sengaja sederhana dulu; penghitung waktu
+yang terlihat dan poles tampilan menyusul di 3.4b.
+
+```text
+Baca docs/arsitektur.md: KA-1, KA-3 (kunci jawaban), KA-5 (snapshot),
+§5 (jebakan kuota tulis), §7 (model data).
+Slice 3.1 menyediakan verifyRequest() dan fetchWithAuth(). Pakai keduanya.
+
+Kerjakan HANYA Slice 3.4a. Antarmuka sederhana: semua soal dalam satu halaman,
+satu tombol kirim. Penghitung waktu terlihat dan poles tampilan menyusul di 3.4b.
+
+1. src/types/attempt.ts
+   Attempt: kegiatanId, modulId, uid, attemptKe, status
+   ('berlangsung' | 'selesai' | 'kadaluarsa'), mulaiPada, kadaluarsaPada (ISO | null),
+   selesaiPada (ISO | null), soalIds (string[]), jawaban (array {soalId, opsiId}),
+   skor, benar, total, lulus.
+
+   PENTING (§5): jawaban disimpan sebagai ARRAY di dalam dokumen attempt,
+   BUKAN dokumen per soal. 500 peserta x 40 soal = 20.000 tulis, tepat
+   menghabiskan kuota gratis harian. Satu attempt selesai = satu tulis.
+
+2. POST /api/attempt — body { kegiatanId, modulId }. Semua diperiksa di server:
+   - pengguna terdaftar di kegiatan itu
+   - jendela waktu kegiatan terbuka
+   - jumlah attempt sebelumnya belum mencapai maksPercobaan
+   - kalau ada attempt 'berlangsung' yang belum kadaluarsa, KEMBALIKAN ITU,
+     jangan membuat yang baru
+   - pilih soal: mode 'tetap' pakai soalIds modul; mode 'acak' ambil soal aktif
+     bertopik itu, acak, ambil sebanyak 'jumlah'
+   - acak urutan kalau acakUrutanSoal true
+   - SIMPAN soalIds ke dokumen attempt — dibekukan, supaya memuat ulang halaman
+     tidak mengacak ulang soal
+   - hitung kadaluarsaPada dari batasWaktuMenit (null kalau tidak dibatasi)
+   - balas { attemptId, kadaluarsaPada, soal: [{id, teks, opsi:[{id,label}]}] }
+   ATURAN MUTLAK: handler ini TIDAK BOLEH menyentuh koleksi kunci_soal sama sekali.
+   Jawaban benar tidak pernah ikut ke browser. Lihat KA-3.
+
+3. POST /api/attempt/[id]/submit — body { jawaban: [{soalId, opsiId}] }
+   - verifikasi pemilik attempt; tolak kalau status bukan 'berlangsung'
+   - PERIKSA WAKTU DI SERVER: kalau sudah melewati kadaluarsaPada, set status
+     'kadaluarsa' dan nilai apa adanya. Jangan percaya penghitung di browser.
+   - baca kunci_soal untuk soalIds yang beku (Admin SDK), hitung benar,
+     skor = round(benar / total * 100)
+   - lulus = skor >= nilaiMinimum dari modulSnapshot di pendaftaran (KA-5),
+     bukan dari modul yang bisa berubah
+   - tulis hasil ke attempt dalam SATU operasi tulis
+   - perbarui pendaftaran: hasilModul[modulId] =
+     { skorTertinggi, lulus, percobaan } — skor yang dipakai adalah TERTINGGI
+   - balas { skor, benar, total, lulus }
+
+4. GET /api/attempt/[id] — kembalikan attempt milik pengguna beserta soalnya
+   (tanpa kunci), untuk halaman yang dimuat ulang.
+
+5. Halaman /kegiatan/[id]/modul/[modulId]
+   - Layar mulai: judul modul, jumlah soal, nilai minimum, batas waktu,
+     percobaan ke berapa dari berapa. Tombol "Mulai mengerjakan".
+   - Layar pengerjaan: semua soal dalam satu halaman, radio per soal,
+     tombol "Kirim jawaban" dengan konfirmasi.
+   - Layar hasil: skor, benar dari total, lulus atau belum.
+   - WAJIB nyaman di layar 390px potret. Peserta mengerjakan sambil memegang
+     ponsel berdiri — ini bukan halaman admin yang boleh desktop-first.
+   - Tautkan dari /kegiatan/[id]: tiap modul evaluasi punya tombol menuju sini.
+
+6. firestore.rules — attempt/{id}:
+   read oleh pemilik atau admin/superadmin.
+   create, update, delete DITOLAK untuk semua klien — server saja.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa** — tiga di antaranya menguji hal yang tidak terlihat dari tampilan:
+
+1. Kerjakan modul sebagai peserta, kirim jawaban, lihat skornya keluar.
+2. **DevTools → tab Network**, buka respons `POST /api/attempt`. Periksa isinya:
+   soal dan opsi ada, **tidak ada satu pun penanda jawaban benar**. Kalau ada,
+   siapa pun bisa membaca kunci sebelum menjawab.
+3. Muat ulang halaman di tengah pengerjaan → soalnya **sama persis**, tidak teracak
+   ulang. Itu bukti `soalIds` dibekukan.
+4. Kerjakan ulang sampai melewati maksPercobaan → ditolak.
+5. Kerjakan dua kali dengan skor berbeda → `pendaftaran.hasilModul` menyimpan yang
+   **tertinggi**.
+6. **Rules Playground**: `update` ke `/attempt/<id>` sebagai pemiliknya sendiri →
+   harus **ditolak**. Ini yang membuktikan peserta tidak bisa menimpa skornya sendiri
+   lewat console browser.

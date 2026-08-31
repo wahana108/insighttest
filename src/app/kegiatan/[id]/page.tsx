@@ -169,18 +169,38 @@ export default function KegiatanDetailPage({
           <p className="text-sm text-zinc-500">Belum ada modul.</p>
         )}
         <ul className="space-y-2">
-          {modulList.map((modul) => (
-            <li
-              key={modul.id}
-              className="flex items-center justify-between border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
-            >
-              <span className="text-black dark:text-zinc-50">{modul.judul}</span>
-              <span className="text-xs text-zinc-500">
-                {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
-                {modul.wajib ? "Wajib" : "Opsional"}
-              </span>
-            </li>
-          ))}
+          {modulList.map((modul) => {
+            const hasil = pendaftaranKegiatanIni?.hasilModul[modul.id];
+            return (
+              <li
+                key={modul.id}
+                className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
+              >
+                <div>
+                  <span className="text-black dark:text-zinc-50">{modul.judul}</span>
+                  <span className="ml-2 text-xs text-zinc-500">
+                    {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
+                    {modul.wajib ? "Wajib" : "Opsional"}
+                  </span>
+                  {hasil && (
+                    <span
+                      className={`ml-2 text-xs font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
+                    >
+                      Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
+                    </span>
+                  )}
+                </div>
+                {modul.kategori === "evaluasi" && pendaftaranKegiatanIni && (
+                  <Link
+                    href={`/kegiatan/${id}/modul/${modul.id}`}
+                    className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                  >
+                    Kerjakan
+                  </Link>
+                )}
+              </li>
+            );
+          })}
         </ul>
       </div>
 

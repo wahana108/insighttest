@@ -117,6 +117,7 @@ export async function POST(request: Request) {
         modulSnapshot,
         status: "terdaftar",
         daftarPada: now.toISOString(),
+        hasilModul: {},
       });
     });
 
