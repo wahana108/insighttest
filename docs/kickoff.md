@@ -1018,3 +1018,99 @@ JANGAN commit. Laporkan hasilnya.
 6. **Rules Playground**: `update` ke `/attempt/<id>` sebagai pemiliknya sendiri →
    harus **ditolak**. Ini yang membuktikan peserta tidak bisa menimpa skornya sendiri
    lewat console browser.
+
+**Tahap 3 selesai 30 Agu 2026.** Diverifikasi lewat browser: respons `POST /api/attempt`
+hanya memuat `attemptId`, `kadaluarsaPada`, dan `soal[].{id, teks, opsi[].{id,label}}` —
+tidak ada field kunci jawaban di jalur mana pun. Memuat ulang halaman mempertahankan
+urutan soal yang sama persis. Penilaian benar di kedua arah: 67 tidak lulus, 100 lulus,
+ambang 70.
+
+**Slice 3.4b (penghitung waktu terlihat, poles tampilan) ditunda** ke fase poles bersama
+perapian tabel admin. Alasannya: runner soal sudah mobile-first, dan poles yang dikerjakan
+setelah gelombang nyata pertama jauh lebih tepat sasaran daripada menebak sekarang.
+
+---
+
+## I. Tahap 4 — Sertifikat
+
+| Slice | Isi |
+|---|---|
+| 4.1 | Penerbitan di server: kode kegiatan, serial, kelayakan, snapshot terkunci |
+| 4.2 | Halaman sertifikat peserta, cetak, dan verifikasi publik `/s/{kode}` |
+| 4.3 | Penerbitan massal berpratinjau untuk admin |
+
+**Buah dari keputusan lama**: nomor serial memakai `nomorUrut` yang sudah dialokasikan
+saat pendaftaran (§10). Jadi di saat ratusan peserta selesai bersamaan, tidak ada satu pun
+dokumen penghitung yang perlu dinaikkan — titik panas yang akan mematikan penerbitan
+massal sudah dihindari berbulan sebelum ia sempat terjadi.
+
+### Slice 4.1 — Penerbitan sertifikat di server
+
+```text
+Baca docs/arsitektur.md: §10 (sertifikat), KA-3, KA-4, KA-6 (snapshot & kunci), §7.
+Slice 3.1 menyediakan verifyRequest(). Pakai itu.
+
+Kerjakan HANYA Slice 4.1. JANGAN membuat halaman cetak, halaman verifikasi publik,
+atau penerbitan massal — itu 4.2 dan 4.3.
+
+1. Tambahkan field `kode` ke Kegiatan: huruf besar, hanya A-Z 0-9 dan tanda hubung,
+   wajib diisi, unik di antara kegiatan yang belum diarsipkan.
+   Tampilkan di form /admin/kegiatan. Kode ini menyusun nomor serial sertifikat.
+   Kegiatan lama yang belum punya kode: tolak penerbitan dengan pesan jelas
+   yang menyuruh admin mengisi kodenya dulu.
+
+2. src/types/sertifikat.ts
+   Sertifikat: kegiatanId, uid, serial, kodeVerifikasi, namaLengkap,
+   judulKegiatan, nilaiAkhir, items (array {modulId, judul, skor, lulus}),
+   status ('berlaku' | 'dicabut'), terbitPada, diterbitkanOleh.
+   SEMUANYA snapshot (KA-6): nama dan judul DISALIN saat terbit, bukan dirujuk.
+   Sertifikat yang sudah terbit tidak boleh berubah kalau nama profil atau judul
+   kegiatan disunting kemudian.
+
+3. src/lib/sertifikat-syarat.ts — evaluasiKelayakan(pendaftaran, kegiatan):
+   - jenis 'nilai_minimum': layak kalau SEMUA modul di modulSnapshot yang wajib
+     dan berkategori evaluasi punya hasilModul.lulus === true
+   - jenis 'manual_admin': tidak pernah layak otomatis; hanya admin yang menerbitkan
+   - kembalikan { layak, alasan, nilaiAkhir, items }.
+     nilaiAkhir = rata-rata skor modul wajib berkategori evaluasi.
+   Fungsi ini dipakai BERSAMA oleh penerbitan mandiri dan penerbitan massal nanti.
+
+4. POST /api/sertifikat/terbitkan — body { kegiatanId, uid? }
+   - tanpa uid: peserta menerbitkan miliknya sendiri. Hanya boleh kalau
+     syaratSertifikat.jenis 'nilai_minimum' DAN evaluasiKelayakan bilang layak.
+   - dengan uid: hanya admin/superadmin, boleh untuk jenis apa pun.
+   - ID deterministik: sertifikat/{kegiatanId}_{uid} (KA-3).
+     Kalau sudah ada dan status 'berlaku', KEMBALIKAN yang ada — jangan menerbitkan
+     ulang dan jangan menimpa.
+   - serial = `${kegiatan.kode}/${tahun}/${nomorUrut dipad 4 digit}`.
+     nomorUrut diambil dari dokumen pendaftaran — SUDAH dialokasikan saat mendaftar,
+     jadi TIDAK ADA penghitung yang dinaikkan di sini. Lihat §10.
+   - kodeVerifikasi: acak 10 karakter (huruf besar + angka), TIDAK boleh bisa
+     ditebak dari serial. Pastikan belum dipakai sertifikat lain.
+   - perbarui pendaftaran.status jadi 'selesai' kalau layak.
+
+5. GET /api/sertifikat/saya — daftar sertifikat milik pengguna yang masuk.
+   Tampilkan ringkas di /beranda: judul kegiatan, serial, tanggal terbit.
+
+6. firestore.rules — sertifikat/{id}:
+   read oleh pemilik atau admin/superadmin.
+   create, update, delete DITOLAK untuk semua klien — server saja.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih.
+Terbitkan rules: npx firebase deploy --only firestore:rules
+JANGAN commit. Laporkan hasilnya.
+```
+
+**Cara memeriksa**:
+
+1. Isi kode kegiatan, misalnya `UJI2026`. Sebagai peserta yang sudah lulus, terbitkan
+   sertifikat → serial berbentuk `UJI2026/2026/0001` dengan nomor yang sama dengan
+   `nomorUrut` pendaftarannya.
+2. Terbitkan lagi → mengembalikan sertifikat yang sama, **tidak** membuat dokumen kedua
+   dan tidak mengubah serialnya.
+3. **Uji snapshot**: setelah sertifikat terbit, ubah `namaLengkap` di `/profil` dan ubah
+   judul kegiatan di admin. Buka sertifikatnya lagi — nama dan judul di dalamnya harus
+   **tetap yang lama**. Kalau ikut berubah, snapshot-nya gagal dan sertifikat lama bisa
+   berubah isi diam-diam.
+4. Sebagai peserta yang **belum** lulus, coba terbitkan → ditolak dengan alasan jelas.
+5. **Rules Playground**: `create` ke `/sertifikat/apa_saja` sebagai peserta → ditolak.

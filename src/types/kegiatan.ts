@@ -14,6 +14,8 @@ export interface SyaratSertifikat {
 
 export interface Kegiatan {
   id: string;
+  /** Menyusun nomor serial sertifikat — lihat §10, docs/arsitektur.md. */
+  kode: string;
   judul: string;
   deskripsi: string;
   dibukaPada: string | null;

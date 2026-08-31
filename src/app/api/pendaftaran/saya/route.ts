@@ -1,9 +1,34 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { getAdminDb } from "@/lib/firebase/admin";
-import type { HasilModul, PendaftaranRingkas, StatusPendaftaran } from "@/types/pendaftaran";
+import type { KategoriModul } from "@/types/kegiatan";
+import type {
+  HasilModul,
+  ModulSnapshotItem,
+  PendaftaranRingkas,
+  StatusPendaftaran,
+} from "@/types/pendaftaran";
 
 function isStatusPendaftaran(value: unknown): value is StatusPendaftaran {
-  return value === "terdaftar";
+  return value === "terdaftar" || value === "selesai";
+}
+
+function isKategoriModul(value: unknown): value is KategoriModul {
+  return value === "referensi" || value === "atestasi" || value === "evaluasi";
+}
+
+function mapModulSnapshot(value: unknown): ModulSnapshotItem[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
+    .map((item) => ({
+      modulId: typeof item.modulId === "string" ? item.modulId : "",
+      judul: typeof item.judul === "string" ? item.judul : "",
+      kategori: isKategoriModul(item.kategori) ? item.kategori : "evaluasi",
+      wajib: typeof item.wajib === "boolean" ? item.wajib : true,
+      nilaiMinimum: typeof item.nilaiMinimum === "number" ? item.nilaiMinimum : null,
+    }));
 }
 
 function mapHasilModul(value: unknown): Record<string, HasilModul> {
@@ -43,6 +68,7 @@ export async function GET(request: Request) {
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",
         daftarPada: typeof data.daftarPada === "string" ? data.daftarPada : "",
         hasilModul: mapHasilModul(data.hasilModul),
+        modulSnapshot: mapModulSnapshot(data.modulSnapshot),
       };
     });
 

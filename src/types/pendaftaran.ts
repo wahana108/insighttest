@@ -1,6 +1,6 @@
 import type { KategoriModul } from "@/types/kegiatan";
 
-export type StatusPendaftaran = "terdaftar";
+export type StatusPendaftaran = "terdaftar" | "selesai";
 
 /**
  * KA-5 (docs/arsitektur.md): cuplikan modul saat peserta mendaftar — bukan
@@ -43,5 +43,5 @@ export interface Pendaftaran {
 
 export type PendaftaranRingkas = Pick<
   Pendaftaran,
-  "id" | "kegiatanId" | "nomorUrut" | "status" | "daftarPada" | "hasilModul"
+  "id" | "kegiatanId" | "nomorUrut" | "status" | "daftarPada" | "hasilModul" | "modulSnapshot"
 >;

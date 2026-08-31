@@ -210,6 +210,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
+    // sertifikat/{kegiatanId}_{uid}: id deterministik (KA-3), ditulis HANYA
+    // oleh server lewat Admin SDK (POST /api/sertifikat/terbitkan). Serial
+    // dan kodeVerifikasi tidak boleh dipalsukan atau ditimpa klien —
+    // klien tidak pernah menulis sertifikat sama sekali.
+    match /sertifikat/{id} {
+      allow read: if isSignedIn() && (resource.data.get('uid', null) == request.auth.uid || isAdmin());
+      allow create, update, delete: if false;
+    }
+
     // parameter/global dibaca siapa pun, termasuk yang belum login — isinya
     // murni teks tampilan (nama platform, mode pendaftaran, pesan beranda).
     // PERINGATAN: dokumen ini terbuka dibaca tanpa syarat apa pun. JANGAN

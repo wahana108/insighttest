@@ -2,8 +2,11 @@ import {
   collection,
   doc,
   getDoc,
+  getDocs,
+  query,
   setDoc,
   updateDoc,
+  where,
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
@@ -24,6 +27,34 @@ function isJenisSyarat(value: unknown): value is JenisSyaratSertifikat {
   return value === "nilai_minimum" || value === "manual_admin";
 }
 
+const KODE_PATTERN = /^[A-Z0-9-]+$/;
+
+/**
+ * Menyusun nomor serial sertifikat (§10, docs/arsitektur.md) — beda dari
+ * id dokumen (tetap auto), supaya admin bisa memilih kode yang enak dibaca
+ * tanpa mengubah rujukan yang sudah ada ke kegiatan itu.
+ */
+export function normalizeKodeKegiatan(kode: string): string {
+  const normalized = kode.trim().toUpperCase().replace(/\s+/g, "-");
+  if (!normalized || !KODE_PATTERN.test(normalized)) {
+    throw new KegiatanError(
+      "Kode kegiatan hanya boleh berisi huruf, angka, dan tanda hubung (mis. DIKLAT-2026)."
+    );
+  }
+  return normalized;
+}
+
+/**
+ * Unik hanya di antara kegiatan yang belum diarsipkan — kegiatan lama yang
+ * diarsipkan boleh "mewariskan" kodenya ke kegiatan baru.
+ */
+async function kodeSudahDipakai(kode: string, excludeId?: string): Promise<boolean> {
+  const snapshot = await getDocs(
+    query(collection(db, "kegiatan"), where("kode", "==", kode), where("isArchived", "==", false))
+  );
+  return snapshot.docs.some((item) => item.id !== excludeId);
+}
+
 function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
   const data = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
   return {
@@ -35,6 +66,7 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
 export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
   return {
     id,
+    kode: typeof data.kode === "string" ? data.kode : "",
     judul: typeof data.judul === "string" ? data.judul : "",
     deskripsi: typeof data.deskripsi === "string" ? data.deskripsi : "",
     dibukaPada: typeof data.dibukaPada === "string" ? data.dibukaPada : null,
@@ -50,6 +82,7 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
 }
 
 export interface KegiatanWriteInput {
+  kode: string;
   judul: string;
   deskripsi: string;
   dibukaPada: string | null;
@@ -57,7 +90,11 @@ export interface KegiatanWriteInput {
   syaratSertifikat: SyaratSertifikat;
 }
 
-function validasiKegiatan(input: KegiatanWriteInput): void {
+/**
+ * Mengembalikan kode ternormalisasi supaya pemanggil (create/update) tidak
+ * perlu menormalkan dua kali.
+ */
+async function validasiKegiatan(input: KegiatanWriteInput, excludeId?: string): Promise<string> {
   if (!input.judul.trim()) {
     throw new KegiatanError("Judul kegiatan wajib diisi.");
   }
@@ -72,6 +109,14 @@ function validasiKegiatan(input: KegiatanWriteInput): void {
   if (input.dibukaPada && input.ditutupPada && input.dibukaPada > input.ditutupPada) {
     throw new KegiatanError("Tanggal buka tidak boleh setelah tanggal tutup.");
   }
+
+  const kode = normalizeKodeKegiatan(input.kode);
+  if (await kodeSudahDipakai(kode, excludeId)) {
+    throw new KegiatanError(
+      "Kode kegiatan ini sudah dipakai kegiatan lain yang belum diarsipkan."
+    );
+  }
+  return kode;
 }
 
 export async function getKegiatanById(id: string): Promise<Kegiatan | null> {
@@ -86,11 +131,12 @@ export async function createKegiatan(
   input: KegiatanWriteInput,
   actorId: string
 ): Promise<Kegiatan> {
-  validasiKegiatan(input);
+  const kode = await validasiKegiatan(input);
   const ref = doc(collection(db, "kegiatan"));
   const now = new Date().toISOString();
   const record: Kegiatan = {
     id: ref.id,
+    kode,
     judul: input.judul.trim(),
     deskripsi: input.deskripsi.trim(),
     dibukaPada: input.dibukaPada,
@@ -112,8 +158,9 @@ export async function updateKegiatan(
   input: KegiatanWriteInput,
   actorId: string
 ): Promise<void> {
-  validasiKegiatan(input);
+  const kode = await validasiKegiatan(input, id);
   await updateDoc(kegiatanRef(id), {
+    kode,
     judul: input.judul.trim(),
     deskripsi: input.deskripsi.trim(),
     dibukaPada: input.dibukaPada,

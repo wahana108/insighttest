@@ -5,11 +5,13 @@ import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
-import { formatDateTime } from "@/lib/format-date";
+import { formatDate, formatDateTime } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
+import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
+import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
 
 const KATEGORI_LABEL: Record<string, string> = {
   referensi: "Referensi",
@@ -50,9 +52,40 @@ export default function KegiatanDetailPage({
     [pendaftaranSaya, id]
   );
 
+  const {
+    items: sertifikatSaya,
+    loading: loadingSertifikat,
+    error: sertifikatListError,
+    refetch: refetchSertifikat,
+  } = useSertifikatSaya();
+  const sertifikatKegiatanIni = useMemo(
+    () => sertifikatSaya.find((item) => item.kegiatanId === id) ?? null,
+    [sertifikatSaya, id]
+  );
+
+  const kelayakanSertifikat = useMemo(() => {
+    if (!pendaftaranKegiatanIni || !kegiatan) {
+      return null;
+    }
+    return evaluasiKelayakan(
+      {
+        modulSnapshot: pendaftaranKegiatanIni.modulSnapshot,
+        hasilModul: pendaftaranKegiatanIni.hasilModul,
+      },
+      { syaratSertifikat: kegiatan.syaratSertifikat }
+    );
+  }, [pendaftaranKegiatanIni, kegiatan]);
+
   const [mendaftar, setMendaftar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sukses, setSukses] = useState<string | null>(null);
+
+  const [menerbitkan, setMenerbitkan] = useState(false);
+  const [errorSertifikat, setErrorSertifikat] = useState<string | null>(null);
+  const [sertifikatBaru, setSertifikatBaru] = useState<{
+    serial: string;
+    terbitPada: string;
+  } | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -80,6 +113,32 @@ export default function KegiatanDetailPage({
       setError(err instanceof Error ? err.message : "Gagal mendaftar.");
     } finally {
       setMendaftar(false);
+    }
+  }
+
+  async function handleTerbitkanSertifikat() {
+    setErrorSertifikat(null);
+    setMenerbitkan(true);
+    try {
+      const res = await fetchWithAuth("/api/sertifikat/terbitkan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kegiatanId: id }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Gagal menerbitkan sertifikat."
+        );
+      }
+      setSertifikatBaru({ serial: body.serial, terbitPada: body.terbitPada });
+      refetchSertifikat();
+    } catch (err) {
+      setErrorSertifikat(
+        err instanceof Error ? err.message : "Gagal menerbitkan sertifikat."
+      );
+    } finally {
+      setMenerbitkan(false);
     }
   }
 
@@ -245,6 +304,64 @@ export default function KegiatanDetailPage({
           </div>
         )}
       </div>
+
+      {pendaftaranKegiatanIni && (
+        <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <h2 className="mb-3 text-sm font-semibold text-black dark:text-zinc-50">Sertifikat</h2>
+          {loadingSertifikat ? (
+            <p className="text-sm text-zinc-500">Memeriksa sertifikat...</p>
+          ) : sertifikatListError ? (
+            <p className="text-sm text-red-600">
+              Gagal memeriksa sertifikat: {sertifikatListError}
+            </p>
+          ) : sertifikatKegiatanIni || sertifikatBaru ? (
+            <div className="space-y-1">
+              <p className="text-sm text-green-600">Sertifikat sudah terbit.</p>
+              <p className="text-sm text-black dark:text-zinc-50">
+                Serial:{" "}
+                <span className="font-mono">
+                  {sertifikatKegiatanIni?.serial ?? sertifikatBaru?.serial}
+                </span>
+              </p>
+              <p className="text-xs text-zinc-500">
+                Terbit{" "}
+                {formatDate(sertifikatKegiatanIni?.terbitPada ?? sertifikatBaru?.terbitPada ?? "")}
+              </p>
+            </div>
+          ) : kegiatan.syaratSertifikat.jenis === "manual_admin" ? (
+            <p className="text-sm text-zinc-500">
+              Sertifikat kegiatan ini diterbitkan oleh admin, bukan otomatis.
+            </p>
+          ) : kelayakanSertifikat?.layak ? (
+            <div className="space-y-3">
+              <p className="text-sm text-green-600">Anda layak menerima sertifikat.</p>
+              {errorSertifikat && <p className="text-sm text-red-600">{errorSertifikat}</p>}
+              <button
+                type="button"
+                onClick={handleTerbitkanSertifikat}
+                disabled={menerbitkan}
+                className="w-full rounded bg-black px-4 py-3 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+                {menerbitkan ? "Menerbitkan..." : "Terbitkan sertifikat saya"}
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-500">
+                {kelayakanSertifikat?.alasan ?? "Belum layak menerima sertifikat."}
+              </p>
+              <button
+                type="button"
+                disabled
+                title={kelayakanSertifikat?.alasan}
+                className="w-full rounded bg-black px-4 py-3 text-sm font-medium text-white opacity-50 dark:bg-white dark:text-black"
+              >
+                Terbitkan sertifikat saya
+              </button>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { signOutUser } from "@/lib/auth/session";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
+import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
 import { formatDate } from "@/lib/format-date";
 
 const ADMIN_ROLES = ["admin", "superadmin"];
@@ -33,6 +34,12 @@ export default function BerandaPage() {
     kegiatanList.forEach((item) => map.set(item.id, item.judul));
     return map;
   }, [kegiatanList]);
+
+  const {
+    items: sertifikatSaya,
+    loading: loadingSertifikatSaya,
+    error: sertifikatSayaError,
+  } = useSertifikatSaya();
 
   async function handleTestServer() {
     setTestingServer(true);
@@ -149,6 +156,32 @@ export default function BerandaPage() {
                 </Link>
                 <p className="text-xs text-zinc-500">
                   Nomor urut {item.nomorUrut} · Daftar {formatDate(item.daftarPada)}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      <div className="w-full max-w-sm space-y-2 rounded-lg border border-zinc-200 bg-white p-6 text-sm dark:border-zinc-800 dark:bg-zinc-950">
+        <p className="font-medium text-zinc-500">Sertifikat saya</p>
+        {loadingSertifikatSaya && <p className="text-zinc-500">Memuat...</p>}
+        {!loadingSertifikatSaya && sertifikatSayaError && (
+          <p className="text-red-600">Gagal memuat: {sertifikatSayaError}</p>
+        )}
+        {!loadingSertifikatSaya && !sertifikatSayaError && sertifikatSaya.length === 0 && (
+          <p className="text-zinc-500">Belum ada sertifikat yang terbit.</p>
+        )}
+        {!loadingSertifikatSaya && !sertifikatSayaError && sertifikatSaya.length > 0 && (
+          <ul className="space-y-2">
+            {sertifikatSaya.map((item) => (
+              <li
+                key={item.id}
+                className="border-b border-zinc-100 pb-2 last:border-0 last:pb-0 dark:border-zinc-900"
+              >
+                <p className="font-medium text-black dark:text-zinc-50">{item.judulKegiatan}</p>
+                <p className="text-xs text-zinc-500">
+                  {item.serial} · Terbit {formatDate(item.terbitPada)}
                 </p>
               </li>
             ))}

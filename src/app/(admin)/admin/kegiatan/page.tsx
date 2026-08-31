@@ -23,6 +23,7 @@ import type { JenisSyaratSertifikat, Kegiatan } from "@/types/kegiatan";
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
 interface FormState {
+  kode: string;
   judul: string;
   deskripsi: string;
   dibukaTanggal: string;
@@ -35,6 +36,7 @@ interface FormState {
 
 function emptyForm(): FormState {
   return {
+    kode: "",
     judul: "",
     deskripsi: "",
     dibukaTanggal: "",
@@ -91,6 +93,7 @@ export default function AdminKegiatanPage() {
     setError(null);
     setEditingId(kegiatan.id);
     setForm({
+      kode: kegiatan.kode,
       judul: kegiatan.judul,
       deskripsi: kegiatan.deskripsi,
       dibukaTanggal: isoToDateValue(kegiatan.dibukaPada),
@@ -111,6 +114,7 @@ export default function AdminKegiatanPage() {
     setSubmitting(true);
     try {
       const input: KegiatanWriteInput = {
+        kode: form.kode,
         judul: form.judul,
         deskripsi: form.deskripsi,
         dibukaPada: dateAndTimeValuesToIso(form.dibukaTanggal, form.dibukaJam),
@@ -178,18 +182,41 @@ export default function AdminKegiatanPage() {
         onSubmit={handleSubmit}
         className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
       >
-        <div>
-          <label htmlFor="judul" className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
-            Judul
-          </label>
-          <input
-            id="judul"
-            type="text"
-            required
-            value={form.judul}
-            onChange={(event) => setForm((f) => ({ ...f, judul: event.target.value }))}
-            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-          />
+        <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
+          <div>
+            <label
+              htmlFor="kode"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Kode
+            </label>
+            <input
+              id="kode"
+              type="text"
+              required
+              placeholder="DIKLAT-2026"
+              value={form.kode}
+              onChange={(event) => setForm((f) => ({ ...f, kode: event.target.value }))}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+            <p className="mt-1 text-xs text-zinc-500">Dipakai di nomor serial sertifikat.</p>
+          </div>
+          <div>
+            <label
+              htmlFor="judul"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Judul
+            </label>
+            <input
+              id="judul"
+              type="text"
+              required
+              value={form.judul}
+              onChange={(event) => setForm((f) => ({ ...f, judul: event.target.value }))}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </div>
         </div>
 
         <div>
@@ -408,6 +435,9 @@ export default function AdminKegiatanPage() {
                   <Link href={`/admin/kegiatan/${item.id}`} className="hover:underline">
                     {item.judul}
                   </Link>
+                  <span className="ml-2 font-mono text-xs text-zinc-400">
+                    {item.kode || "(tanpa kode)"}
+                  </span>
                   {item.isArchived && (
                     <span className="ml-2 text-xs text-zinc-400">(diarsipkan)</span>
                   )}

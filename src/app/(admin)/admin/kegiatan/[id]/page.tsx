@@ -25,6 +25,7 @@ import type { JenisSyaratSertifikat, ModePemilihanSoal, ModulKegiatan } from "@/
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
 interface KegiatanFormState {
+  kode: string;
   judul: string;
   deskripsi: string;
   dibukaTanggal: string;
@@ -114,6 +115,7 @@ export default function AdminKegiatanDetailPage({
     kegiatanForm ??
     (kegiatan
       ? {
+          kode: kegiatan.kode,
           judul: kegiatan.judul,
           deskripsi: kegiatan.deskripsi,
           dibukaTanggal: isoToDateValue(kegiatan.dibukaPada),
@@ -134,6 +136,7 @@ export default function AdminKegiatanDetailPage({
     setSavingKegiatan(true);
     try {
       const input: KegiatanWriteInput = {
+        kode: editingKegiatanForm.kode,
         judul: editingKegiatanForm.judul,
         deskripsi: editingKegiatanForm.deskripsi,
         dibukaPada: dateAndTimeValuesToIso(
@@ -296,7 +299,10 @@ export default function AdminKegiatanDetailPage({
           ← Kembali ke Kegiatan
         </Link>
         <h1 className="mt-1 text-xl font-semibold text-black dark:text-zinc-50">
-          {kegiatan.judul}
+          {kegiatan.judul}{" "}
+          <span className="font-mono text-sm font-normal text-zinc-400">
+            {kegiatan.kode || "(tanpa kode)"}
+          </span>
         </h1>
       </div>
 
@@ -304,23 +310,44 @@ export default function AdminKegiatanDetailPage({
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">Sunting kegiatan</h2>
         {editingKegiatanForm && (
           <form onSubmit={handleSubmitKegiatan} className="space-y-4">
-            <div>
-              <label
-                htmlFor="det-judul"
-                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-              >
-                Judul
-              </label>
-              <input
-                id="det-judul"
-                type="text"
-                required
-                value={editingKegiatanForm.judul}
-                onChange={(event) =>
-                  setKegiatanForm({ ...editingKegiatanForm, judul: event.target.value })
-                }
-                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
+            <div className="grid gap-4 sm:grid-cols-[160px_1fr]">
+              <div>
+                <label
+                  htmlFor="det-kode"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Kode
+                </label>
+                <input
+                  id="det-kode"
+                  type="text"
+                  required
+                  placeholder="DIKLAT-2026"
+                  value={editingKegiatanForm.kode}
+                  onChange={(event) =>
+                    setKegiatanForm({ ...editingKegiatanForm, kode: event.target.value })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
+              <div>
+                <label
+                  htmlFor="det-judul"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Judul
+                </label>
+                <input
+                  id="det-judul"
+                  type="text"
+                  required
+                  value={editingKegiatanForm.judul}
+                  onChange={(event) =>
+                    setKegiatanForm({ ...editingKegiatanForm, judul: event.target.value })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
             </div>
             <div>
               <label
