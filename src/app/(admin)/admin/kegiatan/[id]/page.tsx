@@ -312,6 +312,12 @@ export default function AdminKegiatanDetailPage({
             {kegiatan.kode || "(tanpa kode)"}
           </span>
         </h1>
+        <Link
+          href={`/admin/kegiatan/${id}/peserta`}
+          className="mt-1 inline-block text-sm font-medium text-black underline dark:text-zinc-50"
+        >
+          Lihat peserta & terbitkan sertifikat
+        </Link>
       </div>
 
       <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">

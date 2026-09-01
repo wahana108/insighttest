@@ -12,6 +12,14 @@ export interface ItemSertifikat {
  * yang dibekukan saat terbit — namaLengkap dan judulKegiatan DISALIN, tidak
  * dirujuk. Menyunting profil peserta atau kegiatan setelahnya tidak boleh
  * mengubah sertifikat yang sudah terbit.
+ *
+ * penandatanganNama/penandatanganJabatan/tandaTanganUrl JUGA dibekukan di
+ * sini (beda dari logoUrl/kopUrl di TemplateSertifikat yang tetap live) —
+ * penandatangan (nama, jabatan, DAN gambar tanda tangannya) adalah
+ * pernyataan seseorang, bukan branding lembaga. Sertifikat lama dari
+ * sebelum field ini ada akan tidak memilikinya sama sekali (bukan string
+ * kosong) — pembaca (buildSertifikatDetail) mundur ke template hidup hanya
+ * untuk kasus itu.
  */
 export interface Sertifikat {
   id: string;
@@ -26,6 +34,12 @@ export interface Sertifikat {
   status: StatusSertifikat;
   terbitPada: string;
   diterbitkanOleh: string;
+  penandatanganNama: string;
+  penandatanganJabatan: string;
+  tandaTanganUrl: string;
+  dicabutPada: string | null;
+  dicabutOleh: string | null;
+  alasanPencabutan: string | null;
 }
 
 export type SertifikatRingkas = Pick<

@@ -471,6 +471,12 @@ export default function AdminKegiatanPage() {
                     >
                       Kelola modul
                     </Link>
+                    <Link
+                      href={`/admin/kegiatan/${item.id}/peserta`}
+                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                    >
+                      Peserta
+                    </Link>
                     <button
                       type="button"
                       onClick={() => startEdit(item)}

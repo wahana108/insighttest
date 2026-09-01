@@ -3,19 +3,30 @@ import { buildSertifikatDetail, SertifikatRouteError } from "@/lib/api/sertifika
 import { getAdminDb } from "@/lib/firebase/admin";
 
 /**
- * Untuk halaman /sertifikat/[id] (berlogin) — hanya pemilik atau admin.
+ * Untuk /sertifikat/cetak/[kodeVerifikasi] — alamat cetak yang bersih.
+ * Dicari lewat kodeVerifikasi (bukan id dokumen, yang memuat uid peserta),
+ * tapi penjagaan aksesnya SAMA dengan GET /api/sertifikat/[id]: hanya
+ * pemilik sertifikat itu atau admin/superadmin.
  */
-export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  { params }: { params: Promise<{ kodeVerifikasi: string }> }
+) {
   try {
     const user = await verifyRequest(request);
-    const { id } = await params;
+    const { kodeVerifikasi } = await params;
 
     const db = getAdminDb();
-    const snap = await db.collection("sertifikat").doc(id).get();
-    if (!snap.exists) {
+    const snapshot = await db
+      .collection("sertifikat")
+      .where("kodeVerifikasi", "==", kodeVerifikasi)
+      .limit(1)
+      .get();
+    if (snapshot.empty) {
       throw new SertifikatRouteError(404, "Sertifikat tidak ditemukan.");
     }
-    const data = snap.data() ?? {};
+    const snap = snapshot.docs[0];
+    const data = snap.data();
 
     const isOwner = data.uid === user.uid;
     const isAdminRole = user.role === "admin" || user.role === "superadmin";

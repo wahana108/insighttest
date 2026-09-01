@@ -26,14 +26,17 @@ body {
 }
 
 /*
- * Cetak sertifikat (/sertifikat/[id]) — WAJIB terang, terlepas dari tema
- * gelap di layar. Sertifikat gelap menghabiskan tinta dan sering tidak
- * terbaca dipindai. .cetak-kertas membungkus kartu sertifikat,
- * .cetak-sembunyi membungkus navigasi/tombol yang tidak boleh ikut cetak.
+ * Cetak sertifikat (/sertifikat/cetak/[kodeVerifikasi]) — WAJIB terang,
+ * terlepas dari tema gelap di layar. Sertifikat gelap menghabiskan tinta
+ * dan sering tidak terbaca dipindai. .cetak-kertas membungkus kartu
+ * sertifikat, .cetak-sembunyi membungkus navigasi/tombol yang tidak boleh
+ * ikut cetak. Margin @page (bukan padding kartu) supaya konsisten dengan
+ * printer mana pun, dan kartu dipaksa memenuhi lebar halaman potret.
  */
 @media print {
   @page {
-    size: A4 landscape;
+    size: A4 portrait;
+    margin: 15mm;
   }
 
   body {
@@ -50,5 +53,13 @@ body {
     color: #000000 !important;
     box-shadow: none !important;
     border-color: #d4d4d8 !important;
+  }
+
+  .cetak-kertas {
+    width: 100% !important;
+    max-width: none !important;
+    margin: 0 !important;
+    border-width: 0 !important;
+    border-radius: 0 !important;
   }
 }

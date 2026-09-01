@@ -2,8 +2,18 @@ import type { Kegiatan } from "@/types/kegiatan";
 import type { Pendaftaran } from "@/types/pendaftaran";
 import type { ItemSertifikat } from "@/types/sertifikat";
 
+export type StatusKelayakan = "layak" | "belum_layak" | "ditentukan_admin";
+
 export interface HasilKelayakan {
+  /**
+   * Dipertahankan supaya pemanggil yang sudah ada (jalur penerbitan) tidak
+   * berubah perilakunya — TETAP false untuk 'manual_admin', persis seperti
+   * sebelum field `status` ada. Untuk tampilan, pakai `status`, bukan ini:
+   * `layak: false` pada 'manual_admin' bukan berarti peserta gagal, hanya
+   * berarti sistem tidak menilai kelayakan secara otomatis.
+   */
   layak: boolean;
+  status: StatusKelayakan;
   alasan: string;
   nilaiAkhir: number;
   items: ItemSertifikat[];
@@ -50,6 +60,7 @@ export function evaluasiKelayakan(
   if (kegiatan.syaratSertifikat.jenis === "manual_admin") {
     return {
       layak: false,
+      status: "ditentukan_admin",
       alasan: "Syarat sertifikat kegiatan ini adalah penerbitan manual oleh admin.",
       nilaiAkhir,
       items,
@@ -60,6 +71,7 @@ export function evaluasiKelayakan(
   if (belumLulus.length > 0) {
     return {
       layak: false,
+      status: "belum_layak",
       alasan: `Belum lulus modul: ${belumLulus.map((item) => item.judul).join(", ")}.`,
       nilaiAkhir,
       items,
@@ -68,6 +80,7 @@ export function evaluasiKelayakan(
 
   return {
     layak: true,
+    status: "layak",
     alasan:
       items.length > 0
         ? "Semua modul evaluasi wajib sudah lulus."

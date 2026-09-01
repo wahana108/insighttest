@@ -1196,3 +1196,74 @@ JANGAN commit. Laporkan hasilnya.
 6. Buka `/sertifikat/[id]` milik orang lain sebagai peserta biasa → ditolak.
 7. Isi logo dan penandatangan di admin, muat ulang sertifikat → keduanya muncul.
    Kosongkan lagi → sertifikat tetap sah tanpa keduanya.
+
+**Pelajaran cetak (31 Agu 2026)**: `@page { size: landscape }` hanya *mengusulkan*
+orientasi. Microsoft Print to PDF — tujuan cetak bawaan Windows — mengabaikannya dan
+memutar hasilnya, meski pratinjau Chrome sudah benar. Karena peserta mencetak di
+komputer dan driver yang tidak kita kendalikan, sertifikat memakai **A4 potret**:
+orientasi bawaan di mana pun, tidak pernah perlu diputar siapa pun.
+
+### Slice 4.3 — Penerbitan massal & pembekuan penandatangan
+
+```text
+Baca docs/arsitektur.md: §10 (penerbitan massal berpratinjau), KA-6 (snapshot).
+evaluasiKelayakan() sudah ada di src/lib/sertifikat-syarat.ts — pakai itu, jangan
+menulis ulang logikanya.
+
+Kerjakan HANYA Slice 4.3.
+
+0. Perbaikan cetak: isi sertifikat sekarang menumpuk di separuh atas halaman.
+   Buat kartu cetak MENGISI tinggi halaman: flex kolom dengan pembagian ruang,
+   sehingga blok atas (SERTIFIKAT, nama, kegiatan, nilai, tabel modul) di bagian
+   atas, dan blok bawah (kiri QR+kode+serial+tautan, kanan tanggal+tanda tangan+
+   nama/jabatan) terdorong ke BAWAH halaman, footer di baris paling akhir.
+   Berlaku saat cetak; tampilan layar boleh tetap seperti sekarang.
+
+1. BEKUKAN PENANDATANGAN. Saat sertifikat diterbitkan, salin penandatanganNama dan
+   penandatanganJabatan dari template kegiatan ke dalam dokumen sertifikat.
+   Alasannya: nama penandatangan bukan branding, melainkan pernyataan seseorang.
+   Kalau pejabatnya berganti, mencetak ulang sertifikat lama tidak boleh menampilkan
+   orang yang tidak terlibat, dan cetakan ulang tidak boleh berbeda dari lembar yang
+   sudah dipegang peserta.
+   logoUrl, kopUrl, dan tandaTanganUrl TETAP diambil hidup — itu memang branding.
+   Sertifikat lama yang belum punya field ini: mundur ke template hidup.
+
+2. GET /api/admin/pendaftaran?kegiatanId=... — hanya admin/superadmin.
+   Kembalikan daftar peserta terdaftar: nama, email, institusi, nomor urut,
+   status, hasil per modul, hasil evaluasiKelayakan (layak + alasan), dan
+   apakah sertifikatnya sudah terbit beserta serialnya.
+
+3. POST /api/sertifikat/terbitkan-massal — body { kegiatanId, uids: string[] }.
+   Hanya admin/superadmin. Terbitkan untuk tiap uid memakai jalur penerbitan yang
+   SUDAH ADA (jangan menduplikasi logikanya). Kembalikan hasil per uid:
+   berhasil dengan serial, atau gagal dengan alasan.
+   BATAS PENTING: tolak permintaan berisi lebih dari 25 uid. Menerbitkan ratusan
+   sertifikat dalam satu permintaan akan melewati batas waktu fungsi serverless.
+
+4. /admin/kegiatan/[id]/peserta
+   - Tabel peserta dengan kolom kelayakan dan status sertifikat.
+   - Kotak centang per baris; baris yang sudah punya sertifikat otomatis tidak
+     tercentang dan tidak bisa dipilih.
+   - Tombol "Terbitkan terpilih" yang mengirim dalam POTONGAN 25 uid berurutan,
+     menampilkan kemajuan ("menerbitkan 25 dari 120…") dan merangkum hasilnya
+     per peserta setelah selesai.
+   - Ini pratinjau yang dimaksud §10: admin melihat siapa yang memenuhi syarat,
+     mencoret yang perlu dicoret, lalu menerbitkan.
+
+5. Pencabutan: tombol "Cabut" per baris yang sudah bersertifikat, memanggil
+   POST /api/sertifikat/cabut { kegiatanId, uid, alasan }. Hanya admin/superadmin.
+   Mengubah status jadi 'dicabut' — JANGAN menghapus dokumennya, jejaknya harus
+   tetap ada dan halaman verifikasi publik harus menyatakan TIDAK BERLAKU.
+
+6. firestore.rules tidak perlu berubah — semua lewat Admin SDK.
+   Kalau menurutmu ada yang kurang, LAPORKAN saja.
+
+Jalankan npx tsc --noEmit dan npm run build sampai bersih. JANGAN commit.
+```
+
+**Cara memeriksa**: daftarkan tiga peserta uji, satu di antaranya belum lulus.
+Buka halaman peserta → yang belum lulus ditandai tidak layak dan tidak bisa dicentang.
+Terbitkan dua sisanya sekaligus → dua serial berurutan. Cabut salah satunya → buka
+`/s/{kode}` di incognito → harus menyatakan **TIDAK BERLAKU**. Terakhir, isi
+penandatangan di template, terbitkan sertifikat baru, lalu **ubah nama penandatangannya**
+— sertifikat yang sudah terbit harus tetap menampilkan nama lama.
