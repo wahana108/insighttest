@@ -42,6 +42,9 @@ export default function AdminPesertaPage({
   const [mencabut, setMencabut] = useState(false);
   const [errorCabut, setErrorCabut] = useState<string | null>(null);
 
+  const [menerbitkanSatuUid, setMenerbitkanSatuUid] = useState<string | null>(null);
+  const [errorTerbitSatu, setErrorTerbitSatu] = useState<string | null>(null);
+
   const muatData = useCallback(() => {
     setLoading(true);
     setError(null);
@@ -65,7 +68,13 @@ export default function AdminPesertaPage({
     muatData();
   }, [muatData]);
 
-  const dapatDipilih = useMemo(() => items.filter((item) => !item.sertifikat), [items]);
+  // Bisa dipilih/diterbitkan kalau belum punya sertifikat SAMA SEKALI, atau
+  // sertifikatnya sudah dicabut (penerbitan ulang). Hanya status 'berlaku'
+  // yang mengunci baris — pencabutan harus bisa dibatalkan.
+  const dapatDipilih = useMemo(
+    () => items.filter((item) => item.sertifikat?.status !== "berlaku"),
+    [items]
+  );
 
   function toggleSelect(uid: string) {
     setSelected((prev) => {
@@ -122,6 +131,27 @@ export default function AdminPesertaPage({
     } finally {
       setMenerbitkan(false);
       setProgres(null);
+    }
+  }
+
+  async function handleTerbitkanSatu(uid: string) {
+    setErrorTerbitSatu(null);
+    setMenerbitkanSatuUid(uid);
+    try {
+      const res = await fetchWithAuth("/api/sertifikat/terbitkan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kegiatanId, uid }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Gagal menerbitkan.");
+      }
+      muatData();
+    } catch (err) {
+      setErrorTerbitSatu(err instanceof Error ? err.message : "Gagal menerbitkan sertifikat.");
+    } finally {
+      setMenerbitkanSatuUid(null);
     }
   }
 
@@ -250,6 +280,8 @@ export default function AdminPesertaPage({
         </div>
       )}
 
+      {errorTerbitSatu && <p className="text-sm text-red-600">{errorTerbitSatu}</p>}
+
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
@@ -298,7 +330,7 @@ export default function AdminPesertaPage({
               </tr>
             )}
             {items.map((item) => {
-              const sudahBersertifikat = Boolean(item.sertifikat);
+              const terkunci = item.sertifikat?.status === "berlaku";
               return (
                 <tr
                   key={item.uid}
@@ -309,7 +341,7 @@ export default function AdminPesertaPage({
                       type="checkbox"
                       checked={selected.has(item.uid)}
                       onChange={() => toggleSelect(item.uid)}
-                      disabled={sudahBersertifikat}
+                      disabled={terkunci}
                     />
                   </td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.nomorUrut}</td>
@@ -360,7 +392,7 @@ export default function AdminPesertaPage({
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {item.sertifikat && item.sertifikat.status === "berlaku" && (
+                    {terkunci ? (
                       <button
                         type="button"
                         onClick={() =>
@@ -369,6 +401,19 @@ export default function AdminPesertaPage({
                         className="text-sm font-medium text-red-600 hover:underline"
                       >
                         Cabut
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => handleTerbitkanSatu(item.uid)}
+                        disabled={menerbitkanSatuUid === item.uid || menerbitkan}
+                        className="text-sm font-medium text-black hover:underline disabled:opacity-50 dark:text-zinc-50"
+                      >
+                        {menerbitkanSatuUid === item.uid
+                          ? "Menerbitkan..."
+                          : item.sertifikat?.status === "dicabut"
+                            ? "Terbitkan ulang"
+                            : "Terbit"}
                       </button>
                     )}
                   </td>

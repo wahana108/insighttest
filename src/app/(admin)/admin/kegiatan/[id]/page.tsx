@@ -20,6 +20,7 @@ import {
   type ModulWriteInput,
 } from "@/lib/services/modul";
 import { formatTopikLabel } from "@/lib/services/topik";
+import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import type {
   JenisSyaratSertifikat,
   ModePemilihanSoal,
@@ -86,6 +87,73 @@ function ringkasanSumberSoal(modul: ModulKegiatan, topikLabel: Map<string, strin
   return `${pemilihanSoal.jumlah ?? 0} soal acak dari ${topik}`;
 }
 
+/**
+ * Satu field URL gambar template sertifikat (logo/kop/tanda tangan) —
+ * dipakai tiga kali, jadi diekstrak supaya validasi + pratinjau tidak
+ * ditulis ulang tiga kali. periksaUrlGambar() cuma memeriksa bentuk URL-nya
+ * (protokol, host, query, ekstensi) — img onError di bawah ini memeriksa
+ * hal yang tidak bisa diketahui dari teks URL saja: apakah tautannya
+ * benar-benar bisa dimuat sekarang.
+ */
+function FieldUrlGambar({
+  id,
+  label,
+  value,
+  onChange,
+  gambarGagal,
+  onGambarStatus,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  gambarGagal: boolean;
+  onGambarStatus: (berhasil: boolean) => void;
+}) {
+  const hasil = periksaUrlGambar(value);
+  return (
+    <div>
+      <label
+        htmlFor={id}
+        className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+      >
+        {label}
+      </label>
+      <div className="mt-1 flex items-start gap-2">
+        <input
+          id={id}
+          type="url"
+          placeholder="https://..."
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+        {value.trim() && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={value}
+            alt=""
+            className="h-10 w-10 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-700"
+            onError={() => onGambarStatus(false)}
+            onLoad={() => onGambarStatus(true)}
+          />
+        )}
+      </div>
+      {!hasil.valid && hasil.alasan && (
+        <p className="mt-1 text-xs text-red-600">{hasil.alasan}</p>
+      )}
+      {hasil.valid && hasil.alasan && (
+        <p className="mt-1 text-xs text-amber-600">{hasil.alasan}</p>
+      )}
+      {gambarGagal && (
+        <p className="mt-1 text-xs text-red-600">
+          Gambar tidak bisa dimuat — periksa tautannya
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AdminKegiatanDetailPage({
   params,
 }: {
@@ -116,6 +184,11 @@ export default function AdminKegiatanDetailPage({
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
   const [savingKegiatan, setSavingKegiatan] = useState(false);
+  const [gambarGagal, setGambarGagal] = useState<{ logo: boolean; kop: boolean; ttd: boolean }>({
+    logo: false,
+    kop: false,
+    ttd: false,
+  });
 
   const editingKegiatanForm =
     kegiatanForm ??
@@ -140,6 +213,23 @@ export default function AdminKegiatanDetailPage({
       return;
     }
     setKegiatanError(null);
+
+    // Pagar di sisi klien — pagar sesungguhnya ada di server saat
+    // penerbitan (src/lib/api/sertifikat-server.ts), tapi mencegahnya di
+    // sini supaya admin tahu masalahnya sebelum sertifikat pernah terbit.
+    const ladangUrl: [string, string][] = [
+      ["URL logo", editingKegiatanForm.templateSertifikat.logoUrl],
+      ["URL kop/header", editingKegiatanForm.templateSertifikat.kopUrl],
+      ["URL gambar tanda tangan", editingKegiatanForm.templateSertifikat.tandaTanganUrl],
+    ];
+    for (const [label, nilai] of ladangUrl) {
+      const hasil = periksaUrlGambar(nilai);
+      if (!hasil.valid) {
+        setKegiatanError(`${label}: ${hasil.alasan}`);
+        return;
+      }
+    }
+
     setSavingKegiatan(true);
     try {
       const input: KegiatanWriteInput = {
@@ -537,54 +627,42 @@ export default function AdminKegiatanDetailPage({
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <label
-                    htmlFor="tpl-logo"
-                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                  >
-                    URL logo
-                  </label>
-                  <input
-                    id="tpl-logo"
-                    type="url"
-                    placeholder="https://..."
-                    value={editingKegiatanForm.templateSertifikat.logoUrl}
-                    onChange={(event) =>
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        templateSertifikat: {
-                          ...editingKegiatanForm.templateSertifikat,
-                          logoUrl: event.target.value,
-                        },
-                      })
-                    }
-                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
-                </div>
-                <div>
-                  <label
-                    htmlFor="tpl-kop"
-                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                  >
-                    URL kop/header
-                  </label>
-                  <input
-                    id="tpl-kop"
-                    type="url"
-                    placeholder="https://..."
-                    value={editingKegiatanForm.templateSertifikat.kopUrl}
-                    onChange={(event) =>
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        templateSertifikat: {
-                          ...editingKegiatanForm.templateSertifikat,
-                          kopUrl: event.target.value,
-                        },
-                      })
-                    }
-                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
-                </div>
+                <FieldUrlGambar
+                  id="tpl-logo"
+                  label="URL logo"
+                  value={editingKegiatanForm.templateSertifikat.logoUrl}
+                  onChange={(nilai) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      templateSertifikat: {
+                        ...editingKegiatanForm.templateSertifikat,
+                        logoUrl: nilai,
+                      },
+                    })
+                  }
+                  gambarGagal={gambarGagal.logo}
+                  onGambarStatus={(berhasil) =>
+                    setGambarGagal((g) => ({ ...g, logo: !berhasil }))
+                  }
+                />
+                <FieldUrlGambar
+                  id="tpl-kop"
+                  label="URL kop/header"
+                  value={editingKegiatanForm.templateSertifikat.kopUrl}
+                  onChange={(nilai) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      templateSertifikat: {
+                        ...editingKegiatanForm.templateSertifikat,
+                        kopUrl: nilai,
+                      },
+                    })
+                  }
+                  gambarGagal={gambarGagal.kop}
+                  onGambarStatus={(berhasil) =>
+                    setGambarGagal((g) => ({ ...g, kop: !berhasil }))
+                  }
+                />
                 <div>
                   <label
                     htmlFor="tpl-nama"
@@ -632,27 +710,23 @@ export default function AdminKegiatanDetailPage({
                   />
                 </div>
                 <div className="sm:col-span-2">
-                  <label
-                    htmlFor="tpl-ttd"
-                    className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                  >
-                    URL gambar tanda tangan
-                  </label>
-                  <input
+                  <FieldUrlGambar
                     id="tpl-ttd"
-                    type="url"
-                    placeholder="https://..."
+                    label="URL gambar tanda tangan"
                     value={editingKegiatanForm.templateSertifikat.tandaTanganUrl}
-                    onChange={(event) =>
+                    onChange={(nilai) =>
                       setKegiatanForm({
                         ...editingKegiatanForm,
                         templateSertifikat: {
                           ...editingKegiatanForm.templateSertifikat,
-                          tandaTanganUrl: event.target.value,
+                          tandaTanganUrl: nilai,
                         },
                       })
                     }
-                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    gambarGagal={gambarGagal.ttd}
+                    onGambarStatus={(berhasil) =>
+                      setGambarGagal((g) => ({ ...g, ttd: !berhasil }))
+                    }
                   />
                 </div>
                 <div className="sm:col-span-2">

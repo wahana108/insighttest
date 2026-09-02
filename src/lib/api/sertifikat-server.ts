@@ -1,9 +1,17 @@
 import { randomInt } from "node:crypto";
+import { Timestamp } from "firebase-admin/firestore";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
+import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import type { JenisSyaratSertifikat, KategoriModul } from "@/types/kegiatan";
 import type { HasilModul, ModulSnapshotItem } from "@/types/pendaftaran";
-import type { ItemSertifikat, Sertifikat, SertifikatDetail, StatusSertifikat } from "@/types/sertifikat";
+import type {
+  ItemSertifikat,
+  RiwayatSertifikat,
+  Sertifikat,
+  SertifikatDetail,
+  StatusSertifikat,
+} from "@/types/sertifikat";
 
 export class SertifikatRouteError extends Error {
   status: number;
@@ -210,9 +218,16 @@ export async function terbitkanSertifikatUntuk(
     throw new SertifikatRouteError(404, "Pendaftaran tidak ditemukan.");
   }
 
-  if (sertifikatSnap.exists && sertifikatSnap.data()?.status === "berlaku") {
-    return { id: sertifikatSnap.id, ...(sertifikatSnap.data() as Omit<Sertifikat, "id">) };
+  const sertifikatDataLama = sertifikatSnap.exists ? sertifikatSnap.data() : undefined;
+  if (sertifikatDataLama?.status === "berlaku") {
+    return { id: sertifikatSnap.id, ...(sertifikatDataLama as Omit<Sertifikat, "id">) };
   }
+  // Sertifikat lama berstatus 'dicabut' — ini penerbitan ULANG, bukan
+  // penerbitan baru. serial/nomorUrut/kodeVerifikasi dipertahankan di
+  // bawah; namaLengkap/judulKegiatan/items/penandatangan diambil ulang
+  // (snapshot baru) supaya penerbitan ulang memperbaiki apa pun yang salah
+  // pada terbitan sebelumnya.
+  const sedangTerbitUlang = sertifikatDataLama?.status === "dicabut";
 
   const kegiatanData = kegiatanSnap.data() ?? {};
   const kode = typeof kegiatanData.kode === "string" ? kegiatanData.kode : "";
@@ -246,6 +261,19 @@ export async function terbitkanSertifikatUntuk(
   const tandaTanganUrl =
     typeof templateRaw.tandaTanganUrl === "string" ? templateRaw.tandaTanganUrl : "";
 
+  // Pagar terakhir — sertifikat tidak boleh membekukan tautan yang akan
+  // mati. Form di /admin/kegiatan/[id] sudah memvalidasi ini juga, tapi
+  // template kegiatan bisa saja diubah lewat jalur lain (atau formnya
+  // diterobos), jadi diperiksa ulang di sini sebelum tandaTanganUrl
+  // dibekukan ke dokumen sertifikat.
+  const validasiTandaTangan = periksaUrlGambar(tandaTanganUrl);
+  if (!validasiTandaTangan.valid) {
+    throw new SertifikatRouteError(
+      400,
+      `URL gambar tanda tangan pada template kegiatan tidak valid: ${validasiTandaTangan.alasan}`
+    );
+  }
+
   const pendaftaranData = pendaftaranSnap.data() ?? {};
   const modulSnapshot = mapModulSnapshotUntukKelayakan(pendaftaranData.modulSnapshot);
   const hasilModul = mapHasilModulUntukKelayakan(pendaftaranData.hasilModul);
@@ -271,12 +299,40 @@ export async function terbitkanSertifikatUntuk(
     }
   }
 
-  const tahun = new Date(daftarPada).getFullYear();
-  const serial = `${kode}/${tahun}/${String(nomorUrut).padStart(4, "0")}`;
-  const kodeVerifikasi = await buatKodeVerifikasiUnik(db);
-  const now = new Date().toISOString();
+  // §10 (docs/arsitektur.md): nomorUrut dialokasikan saat pendaftaran, jadi
+  // serial ikut stabil dari situ. Untuk penerbitan ulang, serial DAN
+  // kodeVerifikasi dipertahankan persis dari dokumen lama — nomor urut
+  // membuat orang yang sama di kegiatan yang sama tetap memegang serial
+  // yang sama, dan kode verifikasi yang sudah pernah disebar (mis. lewat
+  // QR yang sudah dicetak) tidak boleh berubah arti.
+  const serialLama =
+    sertifikatDataLama && typeof sertifikatDataLama.serial === "string"
+      ? sertifikatDataLama.serial
+      : "";
+  const kodeVerifikasiLama =
+    sertifikatDataLama && typeof sertifikatDataLama.kodeVerifikasi === "string"
+      ? sertifikatDataLama.kodeVerifikasi
+      : "";
 
-  const record: Omit<Sertifikat, "id"> = {
+  let serial: string;
+  let kodeVerifikasi: string;
+  if (sedangTerbitUlang && serialLama && kodeVerifikasiLama) {
+    serial = serialLama;
+    kodeVerifikasi = kodeVerifikasiLama;
+  } else {
+    const tahun = new Date(daftarPada).getFullYear();
+    serial = `${kode}/${tahun}/${String(nomorUrut).padStart(4, "0")}`;
+    kodeVerifikasi = await buatKodeVerifikasiUnik(db);
+  }
+
+  const now = new Date().toISOString();
+  const entriRiwayat: RiwayatSertifikat = {
+    aksi: "terbit",
+    pada: Timestamp.now(),
+    olehUid: actingUid,
+  };
+
+  const record: Omit<Sertifikat, "id" | "riwayat"> = {
     kegiatanId,
     uid: targetUid,
     serial,
@@ -296,18 +352,34 @@ export async function terbitkanSertifikatUntuk(
     alasanPencabutan: null,
   };
 
+  let riwayatBaru: RiwayatSertifikat[] = [];
   await db.runTransaction(async (tx) => {
     const recheck = await tx.get(sertifikatRef);
-    if (recheck.exists && recheck.data()?.status === "berlaku") {
+    const dataRecheck = recheck.exists ? recheck.data() : undefined;
+    if (dataRecheck?.status === "berlaku") {
       throw new SertifikatRouteError(409, "Sertifikat ini baru saja diterbitkan.");
     }
-    tx.set(sertifikatRef, record);
-    // §10 (docs/arsitektur.md): nomorUrut sudah dialokasikan saat
-    // pendaftaran — tidak ada penghitung yang dinaikkan di sini.
+    // SENGAJA TIDAK memakai FieldValue.arrayUnion di sini. Field transform
+    // dievaluasi terhadap dokumen HASIL set() ini — dan set() non-merge
+    // menghapus field apa pun yang tidak disertakan secara eksplisit
+    // (termasuk riwayat lama) SEBELUM transform dijalankan. Jadi arrayUnion
+    // di dalam tx.set() non-merge selalu menyatu dengan array kosong, bukan
+    // riwayat yang sudah ada — dibuktikan lewat emulator Firestore. Karena
+    // ini sudah di dalam transaksi (recheck di atas membaca versi terbaru),
+    // tidak ada balapan yang perlu ditangani transform: riwayat lama diambil
+    // dari recheck dan array baru disusun eksplisit sebagai nilai biasa.
+    const riwayatLamaMentah = dataRecheck ? dataRecheck.riwayat : undefined;
+    const riwayatLama = Array.isArray(riwayatLamaMentah) ? riwayatLamaMentah : [];
+    riwayatBaru = [...riwayatLama, entriRiwayat];
+    tx.set(sertifikatRef, { ...record, riwayat: riwayatBaru });
     if (kelayakan.layak) {
       tx.update(pendaftaranRef, { status: "selesai" });
     }
   });
 
-  return { id: sertifikatRef.id, ...record };
+  return {
+    id: sertifikatRef.id,
+    ...record,
+    riwayat: riwayatBaru,
+  };
 }

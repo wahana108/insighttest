@@ -1,6 +1,8 @@
+import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { SertifikatRouteError } from "@/lib/api/sertifikat-server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import type { RiwayatSertifikat } from "@/types/sertifikat";
 
 /**
  * Mengubah status jadi 'dicabut' — TIDAK PERNAH menghapus dokumennya.
@@ -44,11 +46,17 @@ export async function POST(request: Request) {
     }
 
     const now = new Date().toISOString();
+    const entriRiwayat: RiwayatSertifikat = {
+      aksi: "cabut",
+      pada: Timestamp.now(),
+      olehUid: user.uid,
+    };
     await sertifikatRef.update({
       status: "dicabut",
       dicabutPada: now,
       dicabutOleh: user.uid,
       alasanPencabutan: alasan,
+      riwayat: FieldValue.arrayUnion(entriRiwayat),
     });
 
     return Response.json({ ok: true });

@@ -1,3 +1,5 @@
+import type { Timestamp } from "firebase-admin/firestore";
+
 export type StatusSertifikat = "berlaku" | "dicabut";
 
 export interface ItemSertifikat {
@@ -5,6 +7,19 @@ export interface ItemSertifikat {
   judul: string;
   skor: number;
   lulus: boolean;
+}
+
+/**
+ * Jejak audit — ditambah dengan FieldValue.arrayUnion() di setiap
+ * penerbitan (termasuk penerbitan ulang) dan pencabutan, tidak pernah
+ * ditimpa. TIDAK PERNAH dikirim ke klien mana pun (lihat SertifikatDetail
+ * dan SertifikatPublik di bawah — keduanya sengaja tidak membawa field
+ * ini), termasuk halaman verifikasi publik /s/[kode].
+ */
+export interface RiwayatSertifikat {
+  aksi: "terbit" | "cabut";
+  pada: Timestamp;
+  olehUid: string;
 }
 
 /**
@@ -40,6 +55,7 @@ export interface Sertifikat {
   dicabutPada: string | null;
   dicabutOleh: string | null;
   alasanPencabutan: string | null;
+  riwayat: RiwayatSertifikat[];
 }
 
 export type SertifikatRingkas = Pick<
