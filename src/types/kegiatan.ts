@@ -73,10 +73,32 @@ export interface KonfigurasiEvaluasi {
   acakUrutanSoal: boolean;
 }
 
+export type TipeReferensi = "youtube" | "tautan" | "teks";
+
 /**
- * Hanya kategori 'evaluasi' yang punya UI di slice ini. 'referensi' dan
- * 'atestasi' sudah masuk tipe (§2, docs/arsitektur.md) supaya tidak perlu
- * migrasi nanti, tapi field konfigurasinya menyusul saat UI-nya dibangun.
+ * sumber berarti beda per tipe: URL video untuk 'youtube', URL tujuan untuk
+ * 'tautan', isi teksnya sendiri untuk 'teks'. Untuk 'youtube', sumber
+ * menyimpan URL ASLI yang dimasukkan admin (salah satu dari tiga bentuk
+ * yang diterima) — ID video dihitung ulang saat render (lihat
+ * src/lib/youtube.ts), tidak disimpan terpisah, supaya tidak ada dua sumber
+ * kebenaran yang bisa saling tidak sinkron.
+ */
+export interface KonfigurasiReferensi {
+  tipe: TipeReferensi;
+  sumber: string;
+  deskripsi: string;
+}
+
+/**
+ * Kategori 'referensi' dan 'evaluasi' punya UI mulai slice ini. 'atestasi'
+ * sudah masuk tipe (§2, docs/arsitektur.md) supaya tidak perlu migrasi
+ * nanti, tapi field konfigurasinya menyusul saat UI-nya dibangun.
+ *
+ * Modul referensi TIDAK PERNAH punya skor — evaluasiKelayakan() (lihat
+ * src/lib/sertifikat-syarat.ts) hanya menghitung modul berkategori
+ * 'evaluasi', jadi modul referensi otomatis tidak masuk perhitungan nilai
+ * maupun daftar item di sertifikat (ARSITEKTUR §9: modul yang tidak diuji
+ * tidak boleh tercetak di sertifikat).
  */
 export interface ModulKegiatan {
   id: string;
@@ -85,6 +107,7 @@ export interface ModulKegiatan {
   urutan: number;
   wajib: boolean;
   evaluasi: KonfigurasiEvaluasi | null;
+  referensi: KonfigurasiReferensi | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

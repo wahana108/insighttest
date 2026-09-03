@@ -9,6 +9,7 @@ import { formatDateTime } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
+import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   AttemptDetailResponse,
   JawabanAttempt,
@@ -16,6 +17,71 @@ import type {
   SoalUntukAttempt,
   SubmitAttemptResponse,
 } from "@/types/attempt";
+import type { ModulKegiatan } from "@/types/kegiatan";
+
+/**
+ * Modul referensi tidak punya skor/attempt (lihat komentar di
+ * ModulKegiatan, src/types/kegiatan.ts) — cuma menampilkan konten. Dipisah
+ * dari komponen utama supaya alur mulai/mengerjakan/hasil di bawah tetap
+ * hanya menangani kategori evaluasi.
+ */
+function ModulReferensi({ modul, kegiatanId }: { modul: ModulKegiatan; kegiatanId: string }) {
+  const referensi = modul.referensi;
+  if (!referensi) {
+    return null;
+  }
+  const videoId = referensi.tipe === "youtube" ? ekstrakYoutubeId(referensi.sumber) : null;
+
+  return (
+    <div className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+      <h1 className="text-lg font-semibold text-black dark:text-zinc-50">{modul.judul}</h1>
+      {referensi.deskripsi && (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">{referensi.deskripsi}</p>
+      )}
+
+      {referensi.tipe === "youtube" &&
+        (videoId ? (
+          <div className="mx-auto aspect-video w-full max-w-[390px] overflow-hidden rounded-lg bg-black">
+            <iframe
+              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+              title={modul.judul}
+              className="h-full w-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            />
+          </div>
+        ) : (
+          <p className="text-sm text-red-600">
+            Video tidak bisa ditampilkan — tautannya tidak valid.
+          </p>
+        ))}
+
+      {referensi.tipe === "tautan" && (
+        <a
+          href={referensi.sumber}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block w-full rounded bg-black px-4 py-3 text-center text-sm font-medium text-white dark:bg-white dark:text-black"
+        >
+          Buka tautan
+        </a>
+      )}
+
+      {referensi.tipe === "teks" && (
+        <p className="whitespace-pre-wrap text-sm text-zinc-700 dark:text-zinc-300">
+          {referensi.sumber}
+        </p>
+      )}
+
+      <Link
+        href={`/kegiatan/${kegiatanId}`}
+        className="block w-full rounded border border-zinc-300 px-4 py-3 text-center text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        Kembali ke kegiatan
+      </Link>
+    </div>
+  );
+}
 
 type Layar = "mulai" | "mengerjakan" | "hasil";
 
@@ -209,7 +275,7 @@ export default function ModulAttemptPage({
     );
   }
 
-  if (!kegiatan || !modul || modul.kategori !== "evaluasi" || !modul.evaluasi) {
+  if (!kegiatan || !modul) {
     return (
       <div className="mx-auto min-h-screen max-w-md space-y-4 bg-zinc-50 px-4 py-10 dark:bg-black">
         <p className="text-sm text-zinc-500">Modul tidak ditemukan.</p>
@@ -229,6 +295,31 @@ export default function ModulAttemptPage({
         <p className="text-sm text-zinc-500">
           Anda belum terdaftar di kegiatan ini.
         </p>
+        <Link
+          href={`/kegiatan/${kegiatanId}`}
+          className="text-sm font-medium text-black underline dark:text-zinc-50"
+        >
+          ← Kembali ke kegiatan
+        </Link>
+      </div>
+    );
+  }
+
+  if (modul.kategori === "referensi") {
+    return (
+      <div className="mx-auto min-h-screen max-w-md space-y-5 bg-zinc-50 px-4 py-6 dark:bg-black">
+        <Link href={`/kegiatan/${kegiatanId}`} className="text-sm text-zinc-500 hover:underline">
+          ← Kembali ke {kegiatan.judul}
+        </Link>
+        <ModulReferensi modul={modul} kegiatanId={kegiatanId} />
+      </div>
+    );
+  }
+
+  if (modul.kategori !== "evaluasi" || !modul.evaluasi) {
+    return (
+      <div className="mx-auto min-h-screen max-w-md space-y-4 bg-zinc-50 px-4 py-10 dark:bg-black">
+        <p className="text-sm text-zinc-500">Modul tidak ditemukan.</p>
         <Link
           href={`/kegiatan/${kegiatanId}`}
           className="text-sm font-medium text-black underline dark:text-zinc-50"

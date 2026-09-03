@@ -21,12 +21,26 @@ import {
 } from "@/lib/services/modul";
 import { formatTopikLabel } from "@/lib/services/topik";
 import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
+import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   JenisSyaratSertifikat,
+  KategoriModul,
   ModePemilihanSoal,
   ModulKegiatan,
   TemplateSertifikat,
+  TipeReferensi,
 } from "@/types/kegiatan";
+
+const KATEGORI_MODUL_OPTIONS: { value: KategoriModul; label: string }[] = [
+  { value: "evaluasi", label: "Evaluasi" },
+  { value: "referensi", label: "Referensi" },
+];
+
+const TIPE_REFERENSI_OPTIONS: { value: TipeReferensi; label: string }[] = [
+  { value: "youtube", label: "Video YouTube" },
+  { value: "tautan", label: "Tautan keluar" },
+  { value: "teks", label: "Teks" },
+];
 
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
@@ -45,6 +59,7 @@ interface KegiatanFormState {
 
 interface ModulFormState {
   judul: string;
+  kategori: KategoriModul;
   urutan: string;
   wajib: boolean;
   nilaiMinimum: string;
@@ -55,11 +70,15 @@ interface ModulFormState {
   topikKode: string;
   jumlah: string;
   soalIds: string[];
+  referensiTipe: TipeReferensi;
+  referensiSumber: string;
+  referensiDeskripsi: string;
 }
 
 function emptyModulForm(): ModulFormState {
   return {
     judul: "",
+    kategori: "evaluasi",
     urutan: "0",
     wajib: true,
     nilaiMinimum: "70",
@@ -70,10 +89,17 @@ function emptyModulForm(): ModulFormState {
     topikKode: "",
     jumlah: "10",
     soalIds: [],
+    referensiTipe: "youtube",
+    referensiSumber: "",
+    referensiDeskripsi: "",
   };
 }
 
-function ringkasanSumberSoal(modul: ModulKegiatan, topikLabel: Map<string, string>): string {
+function ringkasanModul(modul: ModulKegiatan, topikLabel: Map<string, string>): string {
+  if (modul.kategori === "referensi") {
+    const label = TIPE_REFERENSI_OPTIONS.find((opt) => opt.value === modul.referensi?.tipe)?.label;
+    return `Referensi — ${label ?? "?"}`;
+  }
   if (!modul.evaluasi) {
     return "-";
   }
@@ -284,6 +310,7 @@ export default function AdminKegiatanDetailPage({
     setEditingModulId(modul.id);
     setModulForm({
       judul: modul.judul,
+      kategori: modul.kategori === "referensi" ? "referensi" : "evaluasi",
       urutan: String(modul.urutan),
       wajib: modul.wajib,
       nilaiMinimum: String(modul.evaluasi?.nilaiMinimum ?? 70),
@@ -295,6 +322,9 @@ export default function AdminKegiatanDetailPage({
       topikKode: modul.evaluasi?.pemilihanSoal.topikKode ?? "",
       jumlah: String(modul.evaluasi?.pemilihanSoal.jumlah ?? 10),
       soalIds: modul.evaluasi?.pemilihanSoal.soalIds ?? [],
+      referensiTipe: modul.referensi?.tipe ?? "youtube",
+      referensiSumber: modul.referensi?.sumber ?? "",
+      referensiDeskripsi: modul.referensi?.deskripsi ?? "",
     });
   }
 
@@ -315,24 +345,41 @@ export default function AdminKegiatanDetailPage({
     setModulError(null);
     setSavingModul(true);
     try {
-      const input: ModulWriteInput = {
-        judul: modulForm.judul,
-        kategori: "evaluasi",
-        urutan: Number(modulForm.urutan) || 0,
-        wajib: modulForm.wajib,
-        evaluasi: {
-          pemilihanSoal: {
-            mode: modulForm.mode,
-            soalIds: modulForm.mode === "tetap" ? modulForm.soalIds : [],
-            topikKode: modulForm.mode === "acak" ? modulForm.topikKode || null : null,
-            jumlah: modulForm.mode === "acak" ? Number(modulForm.jumlah) || null : null,
-          },
-          nilaiMinimum: Number(modulForm.nilaiMinimum) || 0,
-          maksPercobaan: Number(modulForm.maksPercobaan) || 1,
-          batasWaktuMenit: modulForm.batasWaktuMenit ? Number(modulForm.batasWaktuMenit) : null,
-          acakUrutanSoal: modulForm.acakUrutanSoal,
-        },
-      };
+      const input: ModulWriteInput =
+        modulForm.kategori === "referensi"
+          ? {
+              judul: modulForm.judul,
+              kategori: "referensi",
+              urutan: Number(modulForm.urutan) || 0,
+              wajib: modulForm.wajib,
+              evaluasi: null,
+              referensi: {
+                tipe: modulForm.referensiTipe,
+                sumber: modulForm.referensiSumber,
+                deskripsi: modulForm.referensiDeskripsi,
+              },
+            }
+          : {
+              judul: modulForm.judul,
+              kategori: "evaluasi",
+              urutan: Number(modulForm.urutan) || 0,
+              wajib: modulForm.wajib,
+              evaluasi: {
+                pemilihanSoal: {
+                  mode: modulForm.mode,
+                  soalIds: modulForm.mode === "tetap" ? modulForm.soalIds : [],
+                  topikKode: modulForm.mode === "acak" ? modulForm.topikKode || null : null,
+                  jumlah: modulForm.mode === "acak" ? Number(modulForm.jumlah) || null : null,
+                },
+                nilaiMinimum: Number(modulForm.nilaiMinimum) || 0,
+                maksPercobaan: Number(modulForm.maksPercobaan) || 1,
+                batasWaktuMenit: modulForm.batasWaktuMenit
+                  ? Number(modulForm.batasWaktuMenit)
+                  : null,
+                acakUrutanSoal: modulForm.acakUrutanSoal,
+              },
+              referensi: null,
+            };
 
       if (editingModulId) {
         await updateModul(id, editingModulId, input, user.uid);
@@ -783,10 +830,10 @@ export default function AdminKegiatanDetailPage({
 
       <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">
-          {editingModulId ? "Sunting modul evaluasi" : "Tambah modul evaluasi"}
+          {editingModulId ? "Sunting modul" : "Tambah modul"}
         </h2>
         <form onSubmit={handleSubmitModul} className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-[1fr_120px]">
+          <div className="grid gap-4 sm:grid-cols-[1fr_140px_120px]">
             <div>
               <label
                 htmlFor="mod-judul"
@@ -804,6 +851,31 @@ export default function AdminKegiatanDetailPage({
                 }
                 className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
+            </div>
+            <div>
+              <label
+                htmlFor="mod-kategori"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Kategori
+              </label>
+              <select
+                id="mod-kategori"
+                value={modulForm.kategori}
+                onChange={(event) =>
+                  setModulForm((f) => ({
+                    ...f,
+                    kategori: event.target.value as KategoriModul,
+                  }))
+                }
+                className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+              >
+                {KATEGORI_MODUL_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
             </div>
             <div>
               <label
@@ -836,6 +908,108 @@ export default function AdminKegiatanDetailPage({
             Modul wajib
           </label>
 
+          {modulForm.kategori === "referensi" && (
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Konten referensi
+              </p>
+              <div>
+                <label
+                  htmlFor="mod-ref-tipe"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Tipe
+                </label>
+                <select
+                  id="mod-ref-tipe"
+                  value={modulForm.referensiTipe}
+                  onChange={(event) =>
+                    setModulForm((f) => ({
+                      ...f,
+                      referensiTipe: event.target.value as TipeReferensi,
+                    }))
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                >
+                  {TIPE_REFERENSI_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="mod-ref-sumber"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  {modulForm.referensiTipe === "youtube"
+                    ? "URL video YouTube"
+                    : modulForm.referensiTipe === "tautan"
+                      ? "URL tujuan"
+                      : "Isi teks"}
+                </label>
+                {modulForm.referensiTipe === "teks" ? (
+                  <textarea
+                    id="mod-ref-sumber"
+                    rows={5}
+                    required
+                    value={modulForm.referensiSumber}
+                    onChange={(event) =>
+                      setModulForm((f) => ({ ...f, referensiSumber: event.target.value }))
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                ) : (
+                  <input
+                    id="mod-ref-sumber"
+                    type="url"
+                    required
+                    placeholder={
+                      modulForm.referensiTipe === "youtube"
+                        ? "https://youtu.be/... atau https://www.youtube.com/watch?v=..."
+                        : "https://..."
+                    }
+                    value={modulForm.referensiSumber}
+                    onChange={(event) =>
+                      setModulForm((f) => ({ ...f, referensiSumber: event.target.value }))
+                    }
+                    className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  />
+                )}
+                {modulForm.referensiTipe === "youtube" &&
+                  modulForm.referensiSumber.trim() &&
+                  !ekstrakYoutubeId(modulForm.referensiSumber.trim()) && (
+                    <p className="mt-1 text-xs text-red-600">
+                      URL tidak dikenali — gunakan salah satu bentuk: youtu.be/{"{id}"},
+                      youtube.com/watch?v={"{id}"}, atau youtube.com/embed/{"{id}"}.
+                    </p>
+                  )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="mod-ref-deskripsi"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Deskripsi (opsional)
+                </label>
+                <textarea
+                  id="mod-ref-deskripsi"
+                  rows={2}
+                  value={modulForm.referensiDeskripsi}
+                  onChange={(event) =>
+                    setModulForm((f) => ({ ...f, referensiDeskripsi: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
+            </div>
+          )}
+
+          {modulForm.kategori === "evaluasi" && (
+          <>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
               <label
@@ -1029,6 +1203,8 @@ export default function AdminKegiatanDetailPage({
               </div>
             )}
           </div>
+          </>
+          )}
 
           {modulError && <p className="text-sm text-red-600">{modulError}</p>}
 
@@ -1103,7 +1279,7 @@ export default function AdminKegiatanDetailPage({
                     {modul.evaluasi?.nilaiMinimum ?? "-"}
                   </td>
                   <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
-                    {ringkasanSumberSoal(modul, topikLabel)}
+                    {ringkasanModul(modul, topikLabel)}
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex justify-end gap-3">

@@ -259,6 +259,14 @@ export default function KegiatanDetailPage({
                       Kerjakan
                     </Link>
                   )}
+                  {modul.kategori === "referensi" && (
+                    <Link
+                      href={`/kegiatan/${id}/modul/${modul.modulId}`}
+                      className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                    >
+                      Lihat
+                    </Link>
+                  )}
                 </li>
               );
             })}

@@ -10,11 +10,14 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   KategoriModul,
   KonfigurasiEvaluasi,
+  KonfigurasiReferensi,
   ModulKegiatan,
   PemilihanSoal,
+  TipeReferensi,
 } from "@/types/kegiatan";
 
 export class ModulError extends Error {
@@ -34,6 +37,10 @@ function modulRef(kegiatanId: string, modulId: string) {
 
 function isKategoriModul(value: unknown): value is KategoriModul {
   return value === "referensi" || value === "atestasi" || value === "evaluasi";
+}
+
+function isTipeReferensi(value: unknown): value is TipeReferensi {
+  return value === "youtube" || value === "tautan" || value === "teks";
 }
 
 function mapPemilihanSoal(value: unknown): PemilihanSoal {
@@ -62,6 +69,21 @@ function mapEvaluasi(value: unknown): KonfigurasiEvaluasi | null {
   };
 }
 
+function mapReferensi(value: unknown): KonfigurasiReferensi | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const data = value as Record<string, unknown>;
+  if (!isTipeReferensi(data.tipe)) {
+    return null;
+  }
+  return {
+    tipe: data.tipe,
+    sumber: typeof data.sumber === "string" ? data.sumber : "",
+    deskripsi: typeof data.deskripsi === "string" ? data.deskripsi : "",
+  };
+}
+
 export function mapModul(id: string, data: DocumentData): ModulKegiatan {
   return {
     id,
@@ -70,6 +92,7 @@ export function mapModul(id: string, data: DocumentData): ModulKegiatan {
     urutan: typeof data.urutan === "number" ? data.urutan : 0,
     wajib: typeof data.wajib === "boolean" ? data.wajib : true,
     evaluasi: mapEvaluasi(data.evaluasi),
+    referensi: mapReferensi(data.referensi),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
@@ -83,6 +106,7 @@ export interface ModulWriteInput {
   urutan: number;
   wajib: boolean;
   evaluasi: KonfigurasiEvaluasi | null;
+  referensi: KonfigurasiReferensi | null;
 }
 
 async function hitungSoalAktifDiTopik(topikKode: string): Promise<number> {
@@ -97,17 +121,46 @@ async function hitungSoalAktifDiTopik(topikKode: string): Promise<number> {
 }
 
 /**
- * Di slice ini hanya kategori 'evaluasi' yang punya UI dan aturan validasi
- * — 'referensi'/'atestasi' sudah masuk tipe tapi ditolak di sini sampai
+ * Kategori 'evaluasi' dan 'referensi' punya UI dan aturan validasi mulai
+ * slice ini — 'atestasi' sudah masuk tipe tapi tetap ditolak di sini sampai
  * UI-nya ada (docs/arsitektur.md §2).
  */
 export async function validasiModul(input: ModulWriteInput): Promise<void> {
   if (!input.judul.trim()) {
     throw new ModulError("Judul modul wajib diisi.");
   }
-  if (input.kategori !== "evaluasi") {
-    throw new ModulError("Kategori referensi dan atestasi belum didukung di slice ini.");
+  if (input.kategori === "atestasi") {
+    throw new ModulError("Kategori atestasi belum didukung di slice ini.");
   }
+
+  if (input.kategori === "referensi") {
+    if (!input.referensi) {
+      throw new ModulError("Konfigurasi referensi wajib diisi untuk modul kategori referensi.");
+    }
+    const { tipe, sumber } = input.referensi;
+    if (!sumber.trim()) {
+      throw new ModulError("Sumber wajib diisi untuk modul referensi.");
+    }
+    if (tipe === "youtube" && !ekstrakYoutubeId(sumber.trim())) {
+      throw new ModulError(
+        "URL YouTube tidak dikenali — gunakan salah satu bentuk: youtu.be/{id}, " +
+          "youtube.com/watch?v={id}, atau youtube.com/embed/{id}."
+      );
+    }
+    if (tipe === "tautan") {
+      let url: URL;
+      try {
+        url = new URL(sumber.trim());
+      } catch {
+        throw new ModulError("Sumber untuk tipe tautan harus berupa URL yang valid.");
+      }
+      if (url.protocol !== "http:" && url.protocol !== "https:") {
+        throw new ModulError("Sumber untuk tipe tautan harus berupa URL http/https.");
+      }
+    }
+    return;
+  }
+
   if (!input.evaluasi) {
     throw new ModulError("Konfigurasi evaluasi wajib diisi untuk modul kategori evaluasi.");
   }
@@ -164,6 +217,7 @@ export async function createModul(
     urutan: input.urutan,
     wajib: input.wajib,
     evaluasi: input.evaluasi,
+    referensi: input.referensi,
     createdAt: now,
     createdBy: actorId,
     updatedAt: now,
@@ -186,6 +240,7 @@ export async function updateModul(
     urutan: input.urutan,
     wajib: input.wajib,
     evaluasi: input.evaluasi,
+    referensi: input.referensi,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });
