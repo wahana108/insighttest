@@ -74,6 +74,8 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
   return {
     jenis: isJenisSyarat(data.jenis) ? data.jenis : "manual_admin",
     nilaiMinimum: typeof data.nilaiMinimum === "number" ? data.nilaiMinimum : 0,
+    wajibBukaReferensi:
+      typeof data.wajibBukaReferensi === "boolean" ? data.wajibBukaReferensi : false,
   };
 }
 

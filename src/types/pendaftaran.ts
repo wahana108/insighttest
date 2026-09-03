@@ -39,9 +39,23 @@ export interface Pendaftaran {
   daftarPada: string;
   /** Kunci = modulId. Kosong sampai peserta menyelesaikan attempt pertamanya di modul itu. */
   hasilModul: Record<string, HasilModul>;
+  /**
+   * modulId modul referensi yang sudah dibuka peserta — ditulis HANYA oleh
+   * POST /api/modul/dibuka (server), sekali per modulId (FieldValue.arrayUnion,
+   * jadi idempoten). Dipakai evaluasiKelayakan() saat
+   * syaratSertifikat.wajibBukaReferensi true.
+   */
+  referensiDibuka: string[];
 }
 
 export type PendaftaranRingkas = Pick<
   Pendaftaran,
-  "id" | "kegiatanId" | "nomorUrut" | "status" | "daftarPada" | "hasilModul" | "modulSnapshot"
+  | "id"
+  | "kegiatanId"
+  | "nomorUrut"
+  | "status"
+  | "daftarPada"
+  | "hasilModul"
+  | "modulSnapshot"
+  | "referensiDibuka"
 >;

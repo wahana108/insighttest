@@ -119,6 +119,26 @@ export default function ModulAttemptPage({
     [pendaftaranSaya, kegiatanId]
   );
 
+  // Menandai modul referensi ini "sudah dibuka" — sekali saat modulnya
+  // terbuka, dan hanya kalau modulId belum ada di pendaftaran.referensiDibuka.
+  // ARSITEKTUR §5: kuota tulis harian Firestore terbatas, jadi ini TIDAK
+  // dipanggil ulang di setiap render begitu sudah tercatat.
+  useEffect(() => {
+    if (!modul || modul.kategori !== "referensi" || !pendaftaran) {
+      return;
+    }
+    if (pendaftaran.referensiDibuka.includes(modulId)) {
+      return;
+    }
+    fetchWithAuth("/api/modul/dibuka", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kegiatanId, modulId }),
+    }).catch(() => {
+      // Diam-diam gagal — bukan penghalang untuk melihat konten referensinya.
+    });
+  }, [modul, pendaftaran, kegiatanId, modulId]);
+
   const [layar, setLayar] = useState<Layar>("mulai");
   const [attemptId, setAttemptId] = useState<string | null>(null);
   const [kadaluarsaPada, setKadaluarsaPada] = useState<string | null>(null);

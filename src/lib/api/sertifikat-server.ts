@@ -155,6 +155,12 @@ function mapModulSnapshotUntukKelayakan(value: unknown): ModulSnapshotItem[] {
     }));
 }
 
+function mapReferensiDibukaUntukKelayakan(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 function mapHasilModulUntukKelayakan(value: unknown): Record<string, HasilModul> {
   if (typeof value !== "object" || value === null) {
     return {};
@@ -246,6 +252,8 @@ export async function terbitkanSertifikatUntuk(
     ? syaratRaw.jenis
     : "manual_admin";
   const nilaiMinimumSyarat = typeof syaratRaw.nilaiMinimum === "number" ? syaratRaw.nilaiMinimum : 0;
+  const wajibBukaReferensiSyarat =
+    typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
 
   // Penandatangan (nama, jabatan, DAN gambar tanda tangannya) DIBEKUKAN di
   // sertifikat — itu pernyataan seseorang, bukan branding. logo/kop TETAP
@@ -277,6 +285,7 @@ export async function terbitkanSertifikatUntuk(
   const pendaftaranData = pendaftaranSnap.data() ?? {};
   const modulSnapshot = mapModulSnapshotUntukKelayakan(pendaftaranData.modulSnapshot);
   const hasilModul = mapHasilModulUntukKelayakan(pendaftaranData.hasilModul);
+  const referensiDibuka = mapReferensiDibukaUntukKelayakan(pendaftaranData.referensiDibuka);
   const namaLengkap =
     typeof pendaftaranData.namaLengkap === "string" ? pendaftaranData.namaLengkap : "";
   const nomorUrut = typeof pendaftaranData.nomorUrut === "number" ? pendaftaranData.nomorUrut : 0;
@@ -286,8 +295,14 @@ export async function terbitkanSertifikatUntuk(
       : new Date().toISOString();
 
   const kelayakan = evaluasiKelayakan(
-    { modulSnapshot, hasilModul },
-    { syaratSertifikat: { jenis: jenisSyarat, nilaiMinimum: nilaiMinimumSyarat } }
+    { modulSnapshot, hasilModul, referensiDibuka },
+    {
+      syaratSertifikat: {
+        jenis: jenisSyarat,
+        nilaiMinimum: nilaiMinimumSyarat,
+        wajibBukaReferensi: wajibBukaReferensiSyarat,
+      },
+    }
   );
 
   if (isSelfIssue) {

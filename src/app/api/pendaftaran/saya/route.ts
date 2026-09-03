@@ -31,6 +31,12 @@ function mapModulSnapshot(value: unknown): ModulSnapshotItem[] {
     }));
 }
 
+function mapReferensiDibuka(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 function mapHasilModul(value: unknown): Record<string, HasilModul> {
   if (typeof value !== "object" || value === null) {
     return {};
@@ -69,6 +75,7 @@ export async function GET(request: Request) {
         daftarPada: typeof data.daftarPada === "string" ? data.daftarPada : "",
         hasilModul: mapHasilModul(data.hasilModul),
         modulSnapshot: mapModulSnapshot(data.modulSnapshot),
+        referensiDibuka: mapReferensiDibuka(data.referensiDibuka),
       };
     });
 

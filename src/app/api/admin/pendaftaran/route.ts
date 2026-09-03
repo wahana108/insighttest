@@ -47,6 +47,12 @@ function mapModulSnapshot(value: unknown): ModulSnapshotItem[] {
     }));
 }
 
+function mapReferensiDibuka(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 function mapHasilModul(value: unknown): Record<string, HasilModul> {
   if (typeof value !== "object" || value === null) {
     return {};
@@ -105,6 +111,8 @@ export async function GET(request: Request) {
       ? syaratRaw.jenis
       : "manual_admin";
     const nilaiMinimumSyarat = typeof syaratRaw.nilaiMinimum === "number" ? syaratRaw.nilaiMinimum : 0;
+    const wajibBukaReferensiSyarat =
+      typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
 
     const sertifikatByUid = new Map<string, { id: string; serial: string; status: StatusSertifikat }>();
     sertifikatSnap.docs.forEach((doc) => {
@@ -125,9 +133,16 @@ export async function GET(request: Request) {
       const uid = typeof data.uid === "string" ? data.uid : "";
       const modulSnapshot = mapModulSnapshot(data.modulSnapshot);
       const hasilModul = mapHasilModul(data.hasilModul);
+      const referensiDibuka = mapReferensiDibuka(data.referensiDibuka);
       const kelayakan = evaluasiKelayakan(
-        { modulSnapshot, hasilModul },
-        { syaratSertifikat: { jenis: jenisSyarat, nilaiMinimum: nilaiMinimumSyarat } }
+        { modulSnapshot, hasilModul, referensiDibuka },
+        {
+          syaratSertifikat: {
+            jenis: jenisSyarat,
+            nilaiMinimum: nilaiMinimumSyarat,
+            wajibBukaReferensi: wajibBukaReferensiSyarat,
+          },
+        }
       );
       return {
         uid,

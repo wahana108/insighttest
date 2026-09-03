@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "uji": "npx tsx scripts/uji-kelayakan.ts"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

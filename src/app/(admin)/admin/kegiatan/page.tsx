@@ -33,6 +33,7 @@ interface FormState {
   ditutupJam: string;
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
+  syaratWajibBukaReferensi: boolean;
   templateSertifikat: TemplateSertifikat;
 }
 
@@ -47,6 +48,7 @@ function emptyForm(): FormState {
     ditutupJam: "",
     syaratJenis: "manual_admin",
     syaratNilaiMinimum: "70",
+    syaratWajibBukaReferensi: false,
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
   };
 }
@@ -105,6 +107,9 @@ export default function AdminKegiatanPage() {
       ditutupJam: isoToTimeValue(kegiatan.ditutupPada),
       syaratJenis: kegiatan.syaratSertifikat.jenis,
       syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
+      // wajibBukaReferensi disunting di /admin/kegiatan/[id], bukan di sini
+      // — dioper apa adanya, sama seperti templateSertifikat di bawah.
+      syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
       // Blok "Template sertifikat" disunting di /admin/kegiatan/[id], bukan
       // di sini — dioper apa adanya supaya "Simpan perubahan" di halaman
       // ini tidak menimpanya jadi kosong.
@@ -129,6 +134,7 @@ export default function AdminKegiatanPage() {
         syaratSertifikat: {
           jenis: form.syaratJenis,
           nilaiMinimum: Number(form.syaratNilaiMinimum) || 0,
+          wajibBukaReferensi: form.syaratWajibBukaReferensi,
         },
         templateSertifikat: form.templateSertifikat,
       };

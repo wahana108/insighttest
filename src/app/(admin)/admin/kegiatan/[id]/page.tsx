@@ -54,6 +54,7 @@ interface KegiatanFormState {
   ditutupJam: string;
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
+  syaratWajibBukaReferensi: boolean;
   templateSertifikat: TemplateSertifikat;
 }
 
@@ -206,6 +207,17 @@ export default function AdminKegiatanDetailPage({
     return map;
   }, [topikList]);
 
+  // Dipakai keterangan di bawah centang "wajibBukaReferensi" — angka
+  // sungguhan dari modul kegiatan saat ini, supaya admin tahu persis apa
+  // yang akan digerbangi sebelum mencentangnya (bukan cuma nama fiturnya).
+  const hitunganReferensi = useMemo(() => {
+    const referensi = modulList.filter((modul) => modul.kategori === "referensi");
+    return {
+      wajib: referensi.filter((modul) => modul.wajib).length,
+      opsional: referensi.filter((modul) => !modul.wajib).length,
+    };
+  }, [modulList]);
+
   // Kegiatan
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
@@ -229,6 +241,7 @@ export default function AdminKegiatanDetailPage({
           ditutupJam: isoToTimeValue(kegiatan.ditutupPada),
           syaratJenis: kegiatan.syaratSertifikat.jenis,
           syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
+          syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
           templateSertifikat: kegiatan.templateSertifikat,
         }
       : null);
@@ -273,6 +286,7 @@ export default function AdminKegiatanDetailPage({
         syaratSertifikat: {
           jenis: editingKegiatanForm.syaratJenis,
           nilaiMinimum: Number(editingKegiatanForm.syaratNilaiMinimum) || 0,
+          wajibBukaReferensi: editingKegiatanForm.syaratWajibBukaReferensi,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
       };
@@ -661,6 +675,31 @@ export default function AdminKegiatanDetailPage({
                   />
                 </div>
               )}
+              <div className="sm:col-span-2">
+                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                  <input
+                    type="checkbox"
+                    checked={editingKegiatanForm.syaratWajibBukaReferensi}
+                    onChange={(event) =>
+                      setKegiatanForm({
+                        ...editingKegiatanForm,
+                        syaratWajibBukaReferensi: event.target.checked,
+                      })
+                    }
+                  />
+                  Peserta harus membuka semua materi referensi yang wajib
+                </label>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Saat ini kegiatan ini punya {hitunganReferensi.wajib} modul referensi wajib dan{" "}
+                  {hitunganReferensi.opsional} opsional.
+                </p>
+                {hitunganReferensi.wajib === 0 && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Centang ini belum berpengaruh — belum ada modul referensi wajib pada kegiatan
+                    ini.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
@@ -897,16 +936,21 @@ export default function AdminKegiatanDetailPage({
             </div>
           </div>
 
-          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            <input
-              type="checkbox"
-              checked={modulForm.wajib}
-              onChange={(event) =>
-                setModulForm((f) => ({ ...f, wajib: event.target.checked }))
-              }
-            />
-            Modul wajib
-          </label>
+          <div>
+            <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+              <input
+                type="checkbox"
+                checked={modulForm.wajib}
+                onChange={(event) =>
+                  setModulForm((f) => ({ ...f, wajib: event.target.checked }))
+                }
+              />
+              Modul ini wajib
+            </label>
+            <p className="mt-1 text-xs text-zinc-500">
+              Modul wajib ikut dihitung dalam kelayakan sertifikat. Modul opsional tidak.
+            </p>
+          </div>
 
           {modulForm.kategori === "referensi" && (
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">

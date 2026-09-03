@@ -361,9 +361,10 @@ export default function AdminPesertaPage({
                       <span className="text-green-600">Layak</span>
                     )}
                     {item.statusKelayakan === "belum_layak" && (
-                      <span className="text-red-600" title={item.alasanKelayakan}>
-                        Belum layak
-                      </span>
+                      <div>
+                        <span className="text-red-600">Belum layak</span>
+                        <p className="text-xs text-zinc-400">{item.alasanKelayakan}</p>
+                      </div>
                     )}
                     {item.statusKelayakan === "ditentukan_admin" && (
                       <div>

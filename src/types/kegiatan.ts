@@ -10,6 +10,14 @@ export type JenisSyaratSertifikat = "nilai_minimum" | "manual_admin";
 export interface SyaratSertifikat {
   jenis: JenisSyaratSertifikat;
   nilaiMinimum: number;
+  /**
+   * default false. Kalau true, evaluasiKelayakan() (src/lib/sertifikat-syarat.ts)
+   * juga mensyaratkan semua modul referensi WAJIB pada modulSnapshot
+   * pendaftaran sudah tercatat dibuka (Pendaftaran.referensiDibuka) sebelum
+   * peserta dianggap layak — lihat komentar di evaluasiKelayakan() untuk
+   * kenapa modulSnapshot, bukan modul kegiatan saat ini, yang dipakai.
+   */
+  wajibBukaReferensi: boolean;
 }
 
 /**

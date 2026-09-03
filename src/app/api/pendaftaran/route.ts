@@ -118,6 +118,7 @@ export async function POST(request: Request) {
         status: "terdaftar",
         daftarPada: now.toISOString(),
         hasilModul: {},
+        referensiDibuka: [],
       });
     });
 

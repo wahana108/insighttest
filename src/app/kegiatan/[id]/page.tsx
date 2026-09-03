@@ -71,6 +71,7 @@ export default function KegiatanDetailPage({
       {
         modulSnapshot: pendaftaranKegiatanIni.modulSnapshot,
         hasilModul: pendaftaranKegiatanIni.hasilModul,
+        referensiDibuka: pendaftaranKegiatanIni.referensiDibuka,
       },
       { syaratSertifikat: kegiatan.syaratSertifikat }
     );
@@ -232,6 +233,9 @@ export default function KegiatanDetailPage({
             )}
             {pendaftaranKegiatanIni.modulSnapshot.map((modul) => {
               const hasil = pendaftaranKegiatanIni.hasilModul[modul.modulId];
+              const sudahDibuka =
+                modul.kategori === "referensi" &&
+                pendaftaranKegiatanIni.referensiDibuka.includes(modul.modulId);
               return (
                 <li
                   key={modul.modulId}
@@ -248,6 +252,13 @@ export default function KegiatanDetailPage({
                         className={`ml-2 text-xs font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
                       >
                         Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
+                      </span>
+                    )}
+                    {modul.kategori === "referensi" && (
+                      <span
+                        className={`ml-2 text-xs font-medium ${sudahDibuka ? "text-green-600" : "text-zinc-400"}`}
+                      >
+                        {sudahDibuka ? "Sudah dibuka" : "Belum dibuka"}
                       </span>
                     )}
                   </div>
