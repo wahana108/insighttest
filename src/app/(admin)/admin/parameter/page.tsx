@@ -46,6 +46,7 @@ export default function AdminParameterPage() {
           namaPlatform: parameter.namaPlatform,
           modePendaftaran: parameter.modePendaftaran,
           pesanBeranda: parameter.pesanBeranda,
+          urlPublik: parameter.urlPublik,
         },
         user.uid
       );
@@ -128,6 +129,31 @@ export default function AdminParameterPage() {
             disabled={!canSave}
             className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
+        </div>
+
+        <div>
+          <label
+            htmlFor="urlPublik"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            URL publik (fallback verifikasi sertifikat)
+          </label>
+          <input
+            id="urlPublik"
+            type="url"
+            placeholder="https://insighttest.example.com"
+            value={parameter.urlPublik}
+            onChange={(event) =>
+              setParameter((prev) => ({ ...prev, urlPublik: event.target.value }))
+            }
+            disabled={!canSave}
+            className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <p className="mt-1 text-xs text-zinc-500">
+            Dipakai untuk alamat verifikasi (QR/teks) di sertifikat HANYA kalau env
+            NEXT_PUBLIC_SITE_URL belum diisi saat deploy. Tidak pernah diambil dari alamat
+            tempat halaman kebetulan dibuka.
+          </p>
         </div>
 
         {!canSave && (

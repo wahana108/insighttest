@@ -8,6 +8,7 @@ export const DEFAULT_SYSTEM_PARAMETER: SystemParameter = {
   namaPlatform: "InsightTest",
   modePendaftaran: "terbuka",
   pesanBeranda: "",
+  urlPublik: "",
   updatedAt: null,
   updatedBy: null,
 };
@@ -26,6 +27,7 @@ function mapSystemParameter(data: DocumentData): SystemParameter {
       ? data.modePendaftaran
       : DEFAULT_SYSTEM_PARAMETER.modePendaftaran,
     pesanBeranda: typeof data.pesanBeranda === "string" ? data.pesanBeranda : "",
+    urlPublik: typeof data.urlPublik === "string" ? data.urlPublik : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
   };
@@ -48,7 +50,7 @@ export async function getSystemParameter(): Promise<SystemParameter> {
 }
 
 export async function updateSystemParameter(
-  next: Pick<SystemParameter, "namaPlatform" | "modePendaftaran" | "pesanBeranda">,
+  next: Pick<SystemParameter, "namaPlatform" | "modePendaftaran" | "pesanBeranda" | "urlPublik">,
   updatedBy: string
 ): Promise<void> {
   await setDoc(doc(db, "parameter", PARAMETER_DOC_ID), {

@@ -7,6 +7,8 @@ import QRCode from "qrcode";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { formatDate } from "@/lib/format-date";
+import { getSystemParameter } from "@/lib/services/system-parameter";
+import { urlVerifikasiSertifikat } from "@/lib/sertifikat-url";
 import type { SertifikatDetail } from "@/types/sertifikat";
 
 export default function SertifikatPage({
@@ -22,6 +24,7 @@ export default function SertifikatPage({
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [urlPublik, setUrlPublik] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -64,12 +67,34 @@ export default function SertifikatPage({
   }, [id, user]);
 
   useEffect(() => {
-    if (!data) {
+    let mounted = true;
+    getSystemParameter().then((param) => {
+      if (mounted) {
+        setUrlPublik(param.urlPublik);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Alamat verifikasi TIDAK PERNAH dari window.location — lihat komentar di
+  // src/lib/sertifikat-url.ts. Sertifikat adalah dokumen beku yang bisa
+  // dibuka bertahun-tahun kemudian; QR-nya harus menunjuk domain kanonik,
+  // bukan alamat tempat halaman ini kebetulan diakses.
+  const verifikasiUrl =
+    data && urlPublik !== null ? urlVerifikasiSertifikat(data.kodeVerifikasi, urlPublik) : null;
+
+  useEffect(() => {
+    if (!verifikasiUrl) {
+      // qrDataUrl sudah default null — verifikasiUrl tidak pernah berubah
+      // dari terisi ke kosong dalam siklus hidup komponen ini (data dan
+      // urlPublik masing-masing cuma dimuat sekali), jadi tidak perlu
+      // setState di sini.
       return;
     }
     let mounted = true;
-    const url = `${window.location.origin}/s/${data.kodeVerifikasi}`;
-    QRCode.toDataURL(url, { margin: 1, width: 240 })
+    QRCode.toDataURL(verifikasiUrl, { margin: 1, width: 240 })
       .then((dataUrl) => {
         if (mounted) {
           setQrDataUrl(dataUrl);
@@ -83,7 +108,7 @@ export default function SertifikatPage({
     return () => {
       mounted = false;
     };
-  }, [data]);
+  }, [verifikasiUrl]);
 
   if (loading || !user || loadingData) {
     return (
@@ -216,9 +241,15 @@ export default function SertifikatPage({
               </div>
             )}
             <div className="ml-auto text-center text-xs">
-              {qrDataUrl && (
+              {qrDataUrl ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img src={qrDataUrl} alt="QR verifikasi" className="mx-auto h-24 w-24" />
+              ) : (
+                urlPublik !== null && (
+                  <p className="max-w-[6rem] text-red-600">
+                    Alamat verifikasi belum dikonfigurasi
+                  </p>
+                )
               )}
               <p className="mt-1 font-mono">{data.kodeVerifikasi}</p>
             </div>

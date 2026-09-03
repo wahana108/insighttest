@@ -6,6 +6,8 @@ import QRCode from "qrcode";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { formatDate } from "@/lib/format-date";
+import { getSystemParameter } from "@/lib/services/system-parameter";
+import { urlVerifikasiSertifikat } from "@/lib/sertifikat-url";
 import type { SertifikatDetail } from "@/types/sertifikat";
 
 export default function SertifikatCetakPage({
@@ -21,7 +23,7 @@ export default function SertifikatCetakPage({
   const [loadingData, setLoadingData] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
-  const [verifikasiUrl, setVerifikasiUrl] = useState("");
+  const [urlPublik, setUrlPublik] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -64,13 +66,34 @@ export default function SertifikatCetakPage({
   }, [kodeVerifikasi, user]);
 
   useEffect(() => {
-    if (!data) {
+    let mounted = true;
+    getSystemParameter().then((param) => {
+      if (mounted) {
+        setUrlPublik(param.urlPublik);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Alamat verifikasi TIDAK PERNAH dari window.location — lihat komentar di
+  // src/lib/sertifikat-url.ts. urlPublik null selama parameter/global belum
+  // selesai dimuat; effect ini menunggunya lewat dependency array supaya
+  // tidak sempat memakai "" (kosong) sebagai basis sebelum data itu tiba.
+  const verifikasiUrl =
+    data && urlPublik !== null ? urlVerifikasiSertifikat(data.kodeVerifikasi, urlPublik) : null;
+
+  useEffect(() => {
+    if (!verifikasiUrl) {
+      // qrDataUrl sudah default null — verifikasiUrl tidak pernah berubah
+      // dari terisi ke kosong dalam siklus hidup komponen ini (data dan
+      // urlPublik masing-masing cuma dimuat sekali), jadi tidak perlu
+      // setState di sini.
       return;
     }
     let mounted = true;
-    const url = `${window.location.origin}/s/${data.kodeVerifikasi}`;
-    setVerifikasiUrl(url);
-    QRCode.toDataURL(url, { margin: 1, width: 220 })
+    QRCode.toDataURL(verifikasiUrl, { margin: 1, width: 220 })
       .then((dataUrl) => {
         if (mounted) {
           setQrDataUrl(dataUrl);
@@ -84,7 +107,7 @@ export default function SertifikatCetakPage({
     return () => {
       mounted = false;
     };
-  }, [data]);
+  }, [verifikasiUrl]);
 
   if (loading || !user || loadingData) {
     return (
@@ -132,6 +155,13 @@ export default function SertifikatCetakPage({
             lagi. Saat mencetak, hilangkan centang &quot;Headers and footers&quot; agar tanggal
             dan alamat halaman tidak ikut tercetak.
           </p>
+          {urlPublik !== null && !verifikasiUrl && (
+            <p className="rounded border border-red-300 bg-red-50 p-2 text-xs text-red-700 dark:border-red-900 dark:bg-red-950 dark:text-red-400">
+              Alamat verifikasi belum dikonfigurasi — atur env NEXT_PUBLIC_SITE_URL saat deploy,
+              atau isi &quot;URL publik&quot; di /admin/parameter. Sertifikat ini akan tercetak
+              tanpa QR/alamat verifikasi sampai salah satunya diisi.
+            </p>
+          )}
         </div>
 
         <div className="cetak-kertas mx-auto w-full rounded-lg border border-zinc-200 bg-white px-8 py-10 text-black shadow-sm print:flex print:min-h-screen print:flex-col print:justify-between print:px-2 print:py-2 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
@@ -202,13 +232,15 @@ export default function SertifikatCetakPage({
           <div className="mt-8 space-y-3 print:mt-0">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1 text-left text-xs">
-                {qrDataUrl && (
+                {qrDataUrl ? (
                   // eslint-disable-next-line @next/next/no-img-element
                   <img src={qrDataUrl} alt="QR verifikasi" className="h-16 w-16" />
+                ) : (
+                  <p className="text-red-600">Alamat verifikasi belum dikonfigurasi</p>
                 )}
                 <p className="font-mono">Kode: {data.kodeVerifikasi}</p>
                 <p className="font-mono">Serial: {data.serial}</p>
-                <p className="break-all text-zinc-500">{verifikasiUrl}</p>
+                {verifikasiUrl && <p className="break-all text-zinc-500">{verifikasiUrl}</p>}
               </div>
               <div className="space-y-1 text-right text-sm">
                 <p className="text-zinc-500">{formatDate(data.terbitPada)}</p>
