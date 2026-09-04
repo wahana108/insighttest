@@ -98,15 +98,44 @@ export interface KonfigurasiReferensi {
 }
 
 /**
- * Kategori 'referensi' dan 'evaluasi' punya UI mulai slice ini. 'atestasi'
- * sudah masuk tipe (§2, docs/arsitektur.md) supaya tidak perlu migrasi
- * nanti, tapi field konfigurasinya menyusul saat UI-nya dibangun.
+ * Diisi HANYA lewat gerbang pendaftaran (src/lib/verifikasi-atestasi-client.ts)
+ * — admin tidak pernah mengetik gameId/gameName/versi sendiri, itu identitas
+ * yang diklaim game lewat pesan CCL_READY, bukan pilihan admin. sumberUrl,
+ * ambangKreditPersen, targetSkor, dan mintaNicknameCcl adalah input admin;
+ * sisanya (gameId, gameName, versi, durasiDetik, originDiizinkan,
+ * diverifikasiPada) hasil verifikasi.
  *
- * Modul referensi TIDAK PERNAH punya skor — evaluasiKelayakan() (lihat
- * src/lib/sertifikat-syarat.ts) hanya menghitung modul berkategori
- * 'evaluasi', jadi modul referensi otomatis tidak masuk perhitungan nilai
- * maupun daftar item di sertifikat (ARSITEKTUR §9: modul yang tidak diuji
- * tidak boleh tercetak di sertifikat).
+ * durasiDetik null berarti game ini tidak pernah melaporkan durasi lewat
+ * laporan keadaan (diamati pada game aksi seperti space-commander/ccl-runner
+ * yang diam sampai dimainkan) — BUKAN kegagalan. Untuk modul begini,
+ * ambangKreditPersen tidak berlaku (tidak ada durasi untuk dihitung
+ * persentasenya); hanya targetSkor yang berarti. Slice 7.2 yang memakai
+ * originDiizinkan untuk memeriksa event.origin saat merekam telemetri
+ * sungguhan — slice ini (7.1) hanya mendaftarkan modulnya.
+ */
+export interface KonfigurasiAtestasi {
+  sumberUrl: string;
+  gameId: string;
+  gameName: string;
+  versi: string;
+  durasiDetik: number | null;
+  ambangKreditPersen: number;
+  targetSkor: number | null;
+  originDiizinkan: string;
+  mintaNicknameCcl: boolean;
+  diverifikasiPada: string;
+}
+
+/**
+ * Ketiga kategori punya UI mulai slice ini (atestasi sejak Slice 7.1).
+ *
+ * Modul referensi DAN atestasi TIDAK PERNAH punya skor yang dihitung
+ * evaluasiKelayakan() (lihat src/lib/sertifikat-syarat.ts) — fungsi itu
+ * hanya menghitung modul berkategori 'evaluasi', jadi keduanya otomatis
+ * tidak masuk perhitungan nilai maupun daftar item di sertifikat
+ * (ARSITEKTUR §9: modul yang tidak diuji tidak boleh tercetak di
+ * sertifikat). Perekaman skor atestasi dan syarat kelulusannya menyusul di
+ * Slice 7.2 — Slice 7.1 hanya pendaftaran modulnya.
  */
 export interface ModulKegiatan {
   id: string;
@@ -116,6 +145,7 @@ export interface ModulKegiatan {
   wajib: boolean;
   evaluasi: KonfigurasiEvaluasi | null;
   referensi: KonfigurasiReferensi | null;
+  atestasi: KonfigurasiAtestasi | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

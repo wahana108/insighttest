@@ -10,9 +10,11 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { periksaUrlAtestasi } from "@/lib/validasi-url-atestasi";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   KategoriModul,
+  KonfigurasiAtestasi,
   KonfigurasiEvaluasi,
   KonfigurasiReferensi,
   ModulKegiatan,
@@ -84,6 +86,28 @@ function mapReferensi(value: unknown): KonfigurasiReferensi | null {
   };
 }
 
+function mapAtestasi(value: unknown): KonfigurasiAtestasi | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const data = value as Record<string, unknown>;
+  return {
+    sumberUrl: typeof data.sumberUrl === "string" ? data.sumberUrl : "",
+    gameId: typeof data.gameId === "string" ? data.gameId : "",
+    gameName: typeof data.gameName === "string" ? data.gameName : "",
+    versi: typeof data.versi === "string" ? data.versi : "",
+    durasiDetik: typeof data.durasiDetik === "number" ? data.durasiDetik : null,
+    ambangKreditPersen:
+      typeof data.ambangKreditPersen === "number" ? data.ambangKreditPersen : 90,
+    targetSkor: typeof data.targetSkor === "number" ? data.targetSkor : null,
+    originDiizinkan: typeof data.originDiizinkan === "string" ? data.originDiizinkan : "",
+    mintaNicknameCcl:
+      typeof data.mintaNicknameCcl === "boolean" ? data.mintaNicknameCcl : false,
+    diverifikasiPada:
+      typeof data.diverifikasiPada === "string" ? data.diverifikasiPada : "",
+  };
+}
+
 export function mapModul(id: string, data: DocumentData): ModulKegiatan {
   return {
     id,
@@ -93,6 +117,7 @@ export function mapModul(id: string, data: DocumentData): ModulKegiatan {
     wajib: typeof data.wajib === "boolean" ? data.wajib : true,
     evaluasi: mapEvaluasi(data.evaluasi),
     referensi: mapReferensi(data.referensi),
+    atestasi: mapAtestasi(data.atestasi),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
@@ -107,6 +132,7 @@ export interface ModulWriteInput {
   wajib: boolean;
   evaluasi: KonfigurasiEvaluasi | null;
   referensi: KonfigurasiReferensi | null;
+  atestasi: KonfigurasiAtestasi | null;
 }
 
 async function hitungSoalAktifDiTopik(topikKode: string): Promise<number> {
@@ -121,16 +147,57 @@ async function hitungSoalAktifDiTopik(topikKode: string): Promise<number> {
 }
 
 /**
- * Kategori 'evaluasi' dan 'referensi' punya UI dan aturan validasi mulai
- * slice ini — 'atestasi' sudah masuk tipe tapi tetap ditolak di sini sampai
- * UI-nya ada (docs/arsitektur.md §2).
+ * Ketiga kategori punya UI dan aturan validasi mulai slice ini.
+ *
+ * atestasi: gameId/gameName/versi/originDiizinkan/diverifikasiPada HANYA
+ * bisa terisi lewat gerbang postMessage di form
+ * (src/lib/verifikasi-atestasi-client.ts) — kalau salah satunya kosong di
+ * sini, gerbang itu belum pernah lolos untuk konfigurasi yang sedang
+ * dicoba disimpan, jadi ditolak. Ini pagar terakhir, bukan pengganti
+ * gerbangnya — validasiModul() tidak menjalankan iframe/postMessage
+ * sendiri (itu perlu DOM, tidak cocok di fungsi murni ini).
  */
 export async function validasiModul(input: ModulWriteInput): Promise<void> {
   if (!input.judul.trim()) {
     throw new ModulError("Judul modul wajib diisi.");
   }
+
   if (input.kategori === "atestasi") {
-    throw new ModulError("Kategori atestasi belum didukung di slice ini.");
+    if (!input.atestasi) {
+      throw new ModulError("Konfigurasi atestasi wajib diisi untuk modul kategori atestasi.");
+    }
+    const {
+      sumberUrl,
+      gameId,
+      originDiizinkan,
+      diverifikasiPada,
+      ambangKreditPersen,
+      targetSkor,
+    } = input.atestasi;
+    if (!sumberUrl.trim()) {
+      throw new ModulError("URL sumber wajib diisi untuk modul atestasi.");
+    }
+    const validasiUrl = periksaUrlAtestasi(sumberUrl);
+    if (!validasiUrl.valid) {
+      throw new ModulError(validasiUrl.alasan ?? "URL sumber tidak valid.");
+    }
+    if (!gameId || !originDiizinkan || !diverifikasiPada) {
+      throw new ModulError(
+        "Modul ini belum lolos gerbang verifikasi game — klik \"Verifikasi & simpan\" dan " +
+          "tunggu CCL_READY sebelum menyimpan."
+      );
+    }
+    if (
+      !Number.isFinite(ambangKreditPersen) ||
+      ambangKreditPersen < 0 ||
+      ambangKreditPersen > 100
+    ) {
+      throw new ModulError("Ambang kredit tonton harus di antara 0 dan 100 persen.");
+    }
+    if (targetSkor !== null && (!Number.isFinite(targetSkor) || targetSkor < 0)) {
+      throw new ModulError("Target skor, kalau diisi, harus angka 0 atau lebih.");
+    }
+    return;
   }
 
   if (input.kategori === "referensi") {
@@ -218,6 +285,7 @@ export async function createModul(
     wajib: input.wajib,
     evaluasi: input.evaluasi,
     referensi: input.referensi,
+    atestasi: input.atestasi,
     createdAt: now,
     createdBy: actorId,
     updatedAt: now,
@@ -241,6 +309,7 @@ export async function updateModul(
     wajib: input.wajib,
     evaluasi: input.evaluasi,
     referensi: input.referensi,
+    atestasi: input.atestasi,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });
