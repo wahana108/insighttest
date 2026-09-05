@@ -217,6 +217,14 @@ export default function SertifikatPage({
             </table>
           )}
 
+          {data.pernyataanAtestasi.length > 0 && (
+            <ul className="space-y-1 text-sm">
+              {data.pernyataanAtestasi.map((kalimat) => (
+                <li key={kalimat}>{kalimat}</li>
+              ))}
+            </ul>
+          )}
+
           {data.template.teksTambahan && (
             <p className="text-sm text-zinc-600 dark:text-zinc-400">{data.template.teksTambahan}</p>
           )}

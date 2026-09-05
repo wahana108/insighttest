@@ -312,7 +312,15 @@ kerangka `hasRole()`/`isAdmin()`/`isSuperAdmin()`, pola service + hook + halaman
 | `kunci_soal/{soalId}` | = soalId | **Server saja** | `allow read, write: if false` |
 | `kegiatan/{id}` | auto | Admin | satu gelombang = satu dokumen; jendela waktu, syarat, template sertifikat |
 | `kegiatan/{id}/modul/{mid}` | auto | Admin | kategori referensi \| atestasi \| evaluasi |
-| `pendaftaran/{kegiatanId}_{uid}` | deterministik | Client (create) + Server (update) | snapshot modul, nomor urut, status |
+| `pendaftaran/{kegiatanId}_{uid}` | deterministik | **Server saja** | snapshot modul, nomor urut, status |
+
+> Pendaftaran diubah jadi **server saja** (29 Agu 2026, saat menyiapkan slice 3.3).
+> Alasannya nomor urut: §10 mengalokasikannya saat pendaftaran agar tidak ada dokumen
+> penghitung yang jadi titik panas saat penerbitan sertifikat. Kalau klien yang mendaftar,
+> ia harus boleh menaikkan penghitung di dokumen `kegiatan` — padahal `kegiatan` hanya
+> boleh ditulis admin. Route Handler menyelesaikannya sekaligus memusatkan pemeriksaan
+> kelayakan (kegiatan terbit, jendela waktu terbuka, belum pernah mendaftar) dan
+> pengambilan snapshot modul di satu tempat yang tidak bisa dilewati.
 | `attempt/{id}` | auto | **Server saja** | `jawaban[]` sebagai array (§5), skor, pernyataan atestasi |
 | `sertifikat/{kegiatanId}_{uid}` | deterministik | **Server saja** | serial, snapshot, item, kode verifikasi |
 | `template_sertifikat/{id}` | auto | Admin | latar, koordinat, penandatangan |
@@ -372,6 +380,18 @@ Kegiatan menyimpan *rujukan* — daftar ID eksplisit, atau "N soal acak dari top
 bukan salinan soal. Ini yang membuat bank soal terpakai ulang lintas gelombang.
 
 **KA-7 — Klien tidak pernah menulis `skor`, `lulus`, atau apa pun di `sertifikat`.**
+
+**KA-8 — Setiap URL gambar yang dibekukan harus publik dan permanen.**
+Ditambahkan 1 Sep 2026 setelah insiden nyata: tanda tangan diambil dari tautan gambar
+hasil tempel di percakapan GitHub (`private-user-images.githubusercontent.com`), yang
+ternyata **bertanda tangan dan kedaluwarsa dalam 300 detik** serta terikat sesi login
+pengunggahnya. Karena KA-6 membekukan blok penandatangan ke dalam dokumen sertifikat,
+tautan semacam itu membuat sertifikat rusak permanen — dan rusaknya di halaman verifikasi
+publik `/s/{kode}`, tempat orang luar memeriksa keaslian.
+`periksaUrlGambar()` menolak tautan bertanda tangan di dua tempat: form template admin
+dan `terbitkanSertifikatUntuk()` di server. Heuristik yang mudah diingat: **URL gambar
+permanen berakhir di `.png`/`.jpg`; kalau ada tanda tanya, curigai.**
+Tempat penyimpanan yang dipakai: repo GitHub publik khusus aset → `raw.githubusercontent.com`.
 
 ---
 
@@ -490,3 +510,119 @@ Target diisi saat mendaftarkan URL game; kalau dikosongkan, hanya pernyataan
 
 1. Nama produk & domain (dibutuhkan untuk nama repo dan nama Firebase project)
 2. Tanggal gelombang nyata pertama yang jadi target pemakaian
+
+### Pengukuran lanjutan — 6 game, dari origin portal (3 Sep 2026)
+
+Utang §6 ("baru 1 dari 12 diuji") dibayar. Kali ini induknya adalah
+**`insighttest-gamma.vercel.app` sungguhan**, bukan `example.com` — konfigurasi
+produksi yang sebenarnya. Semua game disematkan serentak dalam satu halaman.
+
+`games/registry.json` di controller mendaftar **20 entri**; 16 `live`, 4 `dummy`
+(`cnc-zero-hour`, `black`, `black-hawk-down`, `counter-strike` — `file: null`).
+Registry ini juga **sumber daftar game yang bisa dipakai portal**.
+
+| Game | Pesan/15 dtk | `CCL_READY` | Laporan keadaan | `duration_sec` |
+|---|---|---|---|---|
+| `ccl-video-player` (VP1) | 12 | ✅ v1.0 | ✅ 10 field | 2141 |
+| `ccl-video-player-2` (VP2) | 12 | ✅ v1.0 | ✅ 10 field | 1249 |
+| `ccl-vidio-player-3` (VP3) | 14 | ✅ v1.0 | ✅ 10 field | 1806 |
+| `ccl-vidio-player-12` | 14 | ✅ v1.0 | ✅ 10 field | 1546 |
+| `space-commander` | 1 | ✅ v2.0 | **tidak ada** | — |
+| `ccl-runner` | 1 | ✅ v2.1 | **tidak ada** | — |
+
+**VP1–2 dan VP3–12 mengirim protokol yang identik.** Kekhawatiran INTEGRASI.md §3
+soal jalur data berbeda tidak berdampak pada telemetri: keempatnya mengirim sepuluh
+field yang sama persis — `chapter_index, current_time_sec, duration_sec, game_id, hp,
+running, score, source, watch_credit_sec, wave`. Portal tidak perlu cabang per game.
+
+**Temuan baru yang mengubah rancangan:** game non-video (`space-commander`,
+`ccl-runner`) mengirim `CCL_READY` **tetapi tidak pernah mengirim laporan keadaan**
+selama diam. Keduanya menunggu interaksi commander sebelum mulai. Artinya:
+
+> Gerbang pendaftaran modul atestasi (§6 aturan 4) **tidak boleh** menunggu laporan
+> keadaan pertama. Ia harus menerima `CCL_READY` sebagai bukti hidup, lalu memperlakukan
+> `duration_sec` sebagai **opsional**. Kalau `duration_sec` tidak pernah datang, modul
+> tetap boleh didaftarkan — tetapi ambang kredit tonton tidak bisa dipakai untuk game
+> itu, dan admin harus diberi tahu bahwa hanya ambang `score` yang tersedia.
+
+Kalau gerbangnya menuntut laporan keadaan, empat belas game video lolos dan dua game
+aksi ditolak tanpa alasan yang bisa dipahami admin.
+
+`duration_sec` berbeda-beda per game (1249–2141 detik), jadi ia memang harus diambil
+dari telemetri, bukan diisi tangan.
+
+### CCL Video Player vs CCL Game — dua bentuk atestasi (4 Sep 2026)
+
+Dijelaskan langsung oleh perancang CCL. Perbedaannya bukan kosmetik; ia mengubah
+aturan penilaian.
+
+| | CCL Video Player | CCL Game |
+|---|---|---|
+| Batas | berhingga, ada `duration_sec` | **tak berhingga**, sampai game over |
+| Ukuran keterlibatan | kredit tonton / kapasitas → persen | lama bertahan → menit |
+| Sifat `score` | akumulatif, hanya naik | akumulatif, **hanya naik** |
+| Ketuntasan | sampai akhir video | tidak ada; hanya bertahan sampai kalah |
+| Yang dibuktikan | menyimak & memahami sampai tuntas | menjawab cepat dan tepat di bawah tekanan |
+
+**Skor dan poin adalah dua hal berbeda, dan ini pernah saya salah pahami.** *Poin*
+adalah mata uang di dalam permainan: dihasilkan dengan menjawab soal, dibelanjakan untuk
+mengeluarkan perintah. *Skor* adalah pencapaian — ia bertambah saat misi berhasil dan
+**tidak pernah turun**. Telemetri membawa `score`, bukan poin. Jadi aturan §11 "skor yang
+dipakai: tertinggi" tetap benar untuk keduanya.
+
+**Video player memaksa pemahaman, bukan sekadar keterpaparan.** Video tidak bisa
+dipercepat, dan peserta harus menjawab benar minimal dua soal tiap penggal sesi; kalau
+gagal, video mundur ke sesi sebelumnya. Artinya kredit tonton yang mencapai ambang
+**sudah** membuktikan pemahaman. Ini memperkuat §2, yang semula menyebut atestasi
+sebagai pernyataan keterpaparan saja.
+
+Konsekuensi lain: peserta yang dilempar mundur akan melanjutkan di lain waktu, sehingga
+**mengumpulkan kredit lintas sesi adalah perilaku normal** — bukan tanda kecurangan.
+Itu sebabnya pemeriksaan kewajaran harus berbasis **pertambahan**, bukan angka mutlak.
+
+**CCL Game adalah lapisan perintah di atas game apa pun.** Poin dari menjawab soal
+menjadi hak memerintah bot (serang, bertahan, pulih, hindar); soal lebih sulit memberi
+poin lebih besar; kesulitan meningkat sehingga peserta harus terus menjawab benar untuk
+bertahan. Perintah berupa pilihan, bukan kendali gerak — karena itu latensi tidak
+relevan, dan visinya bisa diperluas ke game berat lewat streaming dengan agen AI yang
+mengeksekusi perintah secara otonom.
+
+### Generalisasi: satu rancangan, dua satuan
+
+Keduanya punya **dua variabel yang sama** — lama keterlibatan dan skor yang dihasilkan.
+Yang berbeda hanya satuan variabel pertama. Karena itu tidak perlu rancangan terpisah
+per jenis game, dan **tidak perlu pengkodean setiap kali game CCL baru didaftarkan**:
+
+| `duration_sec` dari gerbang | Satuan ambang keterlibatan |
+|---|---|
+| ada | **persen** — mis. 90% dari kredit tonton |
+| tidak ada | **menit** — mis. minimal 10 menit bertahan |
+
+Gerbang verifikasi slice 7.1 sudah mendeteksi ada-tidaknya `duration_sec`, jadi satuannya
+dipilih otomatis; admin hanya mengisi angkanya. Field: `ambangKeterlibatan { mode:
+'persen' | 'menit', nilai }`.
+
+Satu konsep menyatukan keduanya: **`detikTersaksikan`** — detik yang portal saksikan
+sebagai keterlibatan nyata.
+
+- **Video**: bertambah hanya saat `watch_credit_sec` bertambah. Dijeda → tidak dihitung.
+- **Game**: bertambah hanya saat ada perubahan pada `score`/`wave`/`hp`. Tab dibiarkan
+  terbuka tanpa dimainkan → tidak dihitung.
+
+Dihitung klien dari aliran telemetri, lalu **dibatasi jam server**: tidak boleh bertambah
+lebih cepat dari waktu nyata yang berlalu (toleransi 10%); kelebihannya dipangkas dan
+ditandai, **tidak pernah ditolak** — menolak berarti membuang data yang mungkin sah, dan
+kegagalannya senyap.
+
+Pernyataan akhir tetap tiga tingkat yang sama untuk kedua jenis: keterlibatan belum
+memenuhi ambang → *belum menuntaskan*; cukup tapi skor < target → *telah menuntaskan*;
+cukup dan skor ≥ target → *telah menuntaskan dan memahami*.
+
+Visi yang mendasarinya: CCL adalah **lapisan soal interaktif di atas kegiatan yang sudah
+disukai orang** — menonton, scrolling, bermain — supaya kegiatan itu meninggalkan ilmu.
+Arah berikutnya: video pendek YouTube/TikTok, dan game strategi berat lewat streaming.
+Rancangan atestasi portal harus tetap berlaku tanpa perubahan untuk semua itu.
+
+Belum terukur: apakah CCL Game mengirim laporan keadaan saat benar-benar dimainkan (saat
+diam ia hanya mengirim `CCL_READY`). Terjawab dengan sekali memainkannya di dalam portal
+setelah slice 7.2a.

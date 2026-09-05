@@ -219,6 +219,14 @@ export default function SertifikatCetakPage({
               </table>
             )}
 
+            {data.pernyataanAtestasi.length > 0 && (
+              <ul className="mx-auto max-w-sm space-y-1 text-center text-sm text-zinc-700 dark:text-zinc-300">
+                {data.pernyataanAtestasi.map((kalimat) => (
+                  <li key={kalimat}>{kalimat}</li>
+                ))}
+              </ul>
+            )}
+
             {data.template.teksTambahan && (
               <p className="text-center text-sm text-zinc-600 dark:text-zinc-400">
                 {data.template.teksTambahan}

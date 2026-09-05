@@ -2,9 +2,11 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { use, useEffect, useMemo, useState } from "react";
+import { use, useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
+import { nilaiAtestasi } from "@/lib/atestasi-pernyataan";
+import type { TingkatAtestasi } from "@/lib/atestasi-pernyataan";
 import { formatDateTime } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
@@ -18,6 +20,7 @@ import type {
   SubmitAttemptResponse,
 } from "@/types/attempt";
 import type { ModulKegiatan } from "@/types/kegiatan";
+import type { HasilAtestasi } from "@/types/pendaftaran";
 
 /**
  * Modul referensi tidak punya skor/attempt (lihat komentar di
@@ -83,6 +86,449 @@ function ModulReferensi({ modul, kegiatanId }: { modul: ModulKegiatan; kegiatanI
   );
 }
 
+interface LaporanCcl {
+  gameId: string;
+  hp: number;
+  score: number;
+  watchCreditSec: number;
+  currentTimeSec: number;
+  durationSec: number | null;
+  chapterIndex: number;
+  wave: number;
+}
+
+function laporanDariCcl(rec: Record<string, unknown>): LaporanCcl {
+  return {
+    gameId: typeof rec.game_id === "string" ? rec.game_id : "",
+    hp: typeof rec.hp === "number" ? rec.hp : 0,
+    score: typeof rec.score === "number" ? rec.score : 0,
+    watchCreditSec: typeof rec.watch_credit_sec === "number" ? rec.watch_credit_sec : 0,
+    currentTimeSec: typeof rec.current_time_sec === "number" ? rec.current_time_sec : 0,
+    durationSec: typeof rec.duration_sec === "number" ? rec.duration_sec : null,
+    chapterIndex: typeof rec.chapter_index === "number" ? rec.chapter_index : 0,
+    wave: typeof rec.wave === "number" ? rec.wave : 0,
+  };
+}
+
+function laporanDariHasilTersimpan(hasil: HasilAtestasi): LaporanCcl {
+  return {
+    gameId: hasil.gameId,
+    hp: hasil.hp,
+    score: hasil.score,
+    watchCreditSec: hasil.watchCreditSec,
+    currentTimeSec: hasil.currentTimeSec,
+    durationSec: hasil.durationSec,
+    chapterIndex: hasil.chapterIndex,
+    wave: hasil.chapterIndex + 1,
+  };
+}
+
+function laporanSama(a: LaporanCcl, b: LaporanCcl): boolean {
+  return (
+    a.gameId === b.gameId &&
+    a.hp === b.hp &&
+    a.score === b.score &&
+    a.watchCreditSec === b.watchCreditSec &&
+    a.currentTimeSec === b.currentTimeSec &&
+    a.durationSec === b.durationSec &&
+    a.chapterIndex === b.chapterIndex &&
+    a.wave === b.wave
+  );
+}
+
+// Tabel status dan "kredit tercapai dari detikTersaksikan, bukan
+// watch_credit_sec mentah" (Slice 7.2a) sekarang hidup di satu tempat:
+// nilaiAtestasi() (src/lib/atestasi-pernyataan.ts) — dipakai bersama oleh
+// halaman ini, evaluasiKelayakan(), dan kalimat pernyataan sertifikat
+// (Slice 7.3), supaya "tuntas" berarti persis sama di mana pun ia dicek.
+const LABEL_STATUS_ATESTASI: Record<TingkatAtestasi, string> = {
+  belum: "Belum menuntaskan",
+  menuntaskan: "Telah menuntaskan",
+  memahami: "Telah menuntaskan dan memahami",
+};
+
+/**
+ * Modul atestasi (game CCL) — memuat game di iframe, mendengarkan
+ * telemetrinya, dan menyimpan HANYA laporan terakhir ke server pada tiga
+ * momen (ambang tercapai pertama kali, tab disembunyikan, komponen
+ * dilepas). TIDAK PERNAH menulis per laporan (~1 pesan/detik selama
+ * ratusan–ribuan detik) — itu jebakan kuota tulis harian Firestore
+ * (ARSITEKTUR §5). Lihat src/app/api/atestasi/lapor/route.ts untuk sisi
+ * server.
+ */
+function ModulAtestasi({
+  modul,
+  kegiatanId,
+  modulId,
+  hasilTersimpan,
+}: {
+  modul: ModulKegiatan;
+  kegiatanId: string;
+  modulId: string;
+  hasilTersimpan: HasilAtestasi | undefined;
+}) {
+  const atestasi = modul.atestasi;
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fullscreenWrapperRef = useRef<HTMLDivElement>(null);
+
+  // Nilai awal dihitung SEKALI sebagai variabel biasa (bukan lewat ref
+  // lain) — membaca ref.current di dalam inisialisasi useRef/useState lain
+  // dianggap "akses ref saat render" dan dilarang React Compiler.
+  const laporanAwal = hasilTersimpan ? laporanDariHasilTersimpan(hasilTersimpan) : null;
+  const detikTersaksikanAwal = hasilTersimpan?.detikTersaksikan ?? 0;
+  const ambangSudahTercapaiAwal = atestasi
+    ? nilaiAtestasi(atestasi, {
+        score: laporanAwal?.score ?? 0,
+        detikTersaksikan: detikTersaksikanAwal,
+      }).tingkat !== "belum"
+    : false;
+
+  // Sumber kebenaran untuk keputusan kapan menulis — TIDAK memicu render
+  // (larangan eksplisit spesifikasi: bukan di state yang dirender tiap
+  // pesan ~1/detik).
+  const laporanTerakhirRef = useRef<LaporanCcl | null>(laporanAwal);
+  const terakhirDikirimRef = useRef<LaporanCcl | null>(null);
+  const waktuKirimTerakhirRef = useRef(0);
+  const ambangTercapaiSudahDikirimRef = useRef(ambangSudahTercapaiAwal);
+
+  // Penghitung "portal menyaksikan keterlibatan nyata" — SESI INI SAJA,
+  // selalu mulai dari 0 di setiap mount (server yang menggabungkannya
+  // dengan riwayat, lihat POST /api/atestasi/lapor). Bertambah HANYA
+  // kalau watch_credit_sec/score/wave/hp berbeda dari pesan sebelumnya;
+  // laporan yang identik tidak menambah apa pun.
+  const detikTersaksikanSesiRef = useRef(0);
+  const pesanSebelumnyaRef = useRef<{
+    watchCreditSec: number;
+    score: number;
+    wave: number;
+    hp: number;
+    waktu: number;
+  } | null>(null);
+
+  // HANYA untuk ditampilkan — disinkronkan dari ref di atas lewat interval
+  // yang dijeda (bukan setiap pesan ~1/detik), supaya tidak render tiap
+  // detik selama game berjalan.
+  const [laporanTampil, setLaporanTampil] = useState<LaporanCcl | null>(laporanAwal);
+  const laporanTampilSyncRef = useRef(laporanAwal);
+  const [detikTersaksikanTampil, setDetikTersaksikanTampil] = useState(detikTersaksikanAwal);
+  const detikTersaksikanTampilSyncRef = useRef(detikTersaksikanAwal);
+
+  const [nickname, setNickname] = useState(hasilTersimpan?.nicknameCcl ?? "");
+  const nicknameRef = useRef(nickname);
+  useEffect(() => {
+    nicknameRef.current = nickname;
+  }, [nickname]);
+
+  const [isFullscreen, setIsFullscreen] = useState(false);
+  useEffect(() => {
+    function onFullscreenChange() {
+      setIsFullscreen(document.fullscreenElement === fullscreenWrapperRef.current);
+    }
+    document.addEventListener("fullscreenchange", onFullscreenChange);
+    return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
+  }, []);
+
+  // Dipanggil dari onClick tombol — requestFullscreen() HARUS berasal dari
+  // gestur pengguna langsung (klik ini), tidak boleh dari effect/async
+  // yang tertunda, atau browser menolaknya.
+  function toggleFullscreen() {
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void fullscreenWrapperRef.current?.requestFullscreen();
+    }
+  }
+
+  async function kirimLaporan(opsi: { paksa?: boolean } = {}) {
+    const laporan = laporanTerakhirRef.current;
+    if (!laporan) {
+      // Belum pernah menerima laporan sama sekali — tidak ada yang ditulis.
+      return;
+    }
+    if (terakhirDikirimRef.current && laporanSama(laporan, terakhirDikirimRef.current)) {
+      return;
+    }
+    if (!opsi.paksa && Date.now() - waktuKirimTerakhirRef.current < 60_000) {
+      return;
+    }
+
+    terakhirDikirimRef.current = laporan;
+    waktuKirimTerakhirRef.current = Date.now();
+
+    try {
+      await fetchWithAuth("/api/atestasi/lapor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // keepalive — permintaan ini juga dikirim saat pagehide/unmount,
+        // ketika halaman bisa hilang sebelum fetch biasa sempat selesai.
+        keepalive: true,
+        body: JSON.stringify({
+          kegiatanId,
+          modulId,
+          gameId: laporan.gameId,
+          hp: laporan.hp,
+          score: laporan.score,
+          watchCreditSec: laporan.watchCreditSec,
+          currentTimeSec: laporan.currentTimeSec,
+          durationSec: laporan.durationSec,
+          chapterIndex: laporan.chapterIndex,
+          // Kumulatif SESI INI (bukan sejak-kirim-terakhir) — server yang
+          // menghitung pertambahannya terhadap laporTerakhirPada tersimpan
+          // (§4, Slice 7.2a).
+          detikTersaksikan: detikTersaksikanSesiRef.current,
+          nickname: nicknameRef.current.trim() || undefined,
+        }),
+      });
+    } catch {
+      // Diam-diam gagal — penyimpanan latar belakang di momen kritis (tab
+      // ditutup, dst.), tidak ada UI untuk melapor kegagalan jaringan.
+    }
+  }
+
+  // Dengarkan telemetri — HANYA terima kalau ketiganya benar: origin,
+  // event.source (iframe yang SAMA persis, bukan iframe lain atau skrip
+  // konsol), dan data.source. Bedakan CCL_READY dari laporan keadaan
+  // berdasarkan BENTUK pesan, sama seperti gerbang verifikasi 7.1
+  // (src/lib/verifikasi-atestasi-client.ts) — bukan urutan kedatangan.
+  useEffect(() => {
+    if (!atestasi) {
+      return;
+    }
+    const originDiizinkan = atestasi.originDiizinkan;
+    const ambangKeterlibatan = atestasi.ambangKeterlibatan;
+    const targetSkor = atestasi.targetSkor;
+    const durasiDetikModul = atestasi.durasiDetik;
+
+    function onMessage(event: MessageEvent) {
+      if (event.origin !== originDiizinkan) {
+        return;
+      }
+      if (event.source !== iframeRef.current?.contentWindow) {
+        return;
+      }
+      const data = event.data;
+      if (typeof data !== "object" || data === null) {
+        return;
+      }
+      const rec = data as Record<string, unknown>;
+      if (rec.source !== "CCL_GAME") {
+        return;
+      }
+      if (rec.type === "CCL_READY") {
+        // Sinyal siap, bukan laporan keadaan — tidak ada metrik untuk
+        // direkam di sini (7.1 sudah memakainya saat verifikasi modul).
+        return;
+      }
+      const terlihatSepertiLaporanKeadaan =
+        typeof rec.duration_sec === "number" || rec.type === undefined;
+      if (!terlihatSepertiLaporanKeadaan) {
+        return;
+      }
+
+      const laporan = laporanDariCcl(rec);
+      laporanTerakhirRef.current = laporan;
+
+      // "Tersaksikan" — bertambah HANYA kalau salah satu dari empat field
+      // ini berbeda dari pesan sebelumnya (bukti keterlibatan nyata, bukan
+      // sekadar pesan berkala yang isinya beku).
+      const sekarang = Date.now();
+      const sebelumnya = pesanSebelumnyaRef.current;
+      if (sebelumnya) {
+        const berubah =
+          laporan.watchCreditSec !== sebelumnya.watchCreditSec ||
+          laporan.score !== sebelumnya.score ||
+          laporan.wave !== sebelumnya.wave ||
+          laporan.hp !== sebelumnya.hp;
+        if (berubah) {
+          const elapsedSec = (sekarang - sebelumnya.waktu) / 1000;
+          detikTersaksikanSesiRef.current += Math.max(0, elapsedSec);
+        }
+      }
+      pesanSebelumnyaRef.current = {
+        watchCreditSec: laporan.watchCreditSec,
+        score: laporan.score,
+        wave: laporan.wave,
+        hp: laporan.hp,
+        waktu: sekarang,
+      };
+
+      const detikTersaksikanSekarang = detikTersaksikanAwal + detikTersaksikanSesiRef.current;
+      if (
+        !ambangTercapaiSudahDikirimRef.current &&
+        nilaiAtestasi(
+          { ambangKeterlibatan, targetSkor, durasiDetik: durasiDetikModul },
+          { score: laporan.score, detikTersaksikan: detikTersaksikanSekarang }
+        ).tingkat !== "belum"
+      ) {
+        // (a) Ambang tercapai untuk PERTAMA kalinya — kirim SEGERA (paksa,
+        // lewati batas 60 detik) supaya hasil baik terselamatkan kalau tab
+        // ditutup mendadak sesaat setelah ini. Edge-triggered lewat ref di
+        // atas — tidak pernah ditulis ulang untuk alasan yang sama.
+        ambangTercapaiSudahDikirimRef.current = true;
+        void kirimLaporan({ paksa: true });
+      }
+    }
+
+    window.addEventListener("message", onMessage);
+    return () => {
+      window.removeEventListener("message", onMessage);
+      // (c) Komponen dilepas.
+      void kirimLaporan();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [atestasi?.originDiizinkan]);
+
+  // (b) pagehide atau visibilitychange ke hidden — bisa terpicu berkali-
+  // kali kalau peserta gonta-ganti tab; kirimLaporan() sendiri yang
+  // memagari duplikat (laporan sama persis) dan laju (maks 1x/60 detik).
+  useEffect(() => {
+    function onPageHide() {
+      void kirimLaporan();
+    }
+    function onVisibilityChange() {
+      if (document.visibilityState === "hidden") {
+        void kirimLaporan();
+      }
+    }
+    window.addEventListener("pagehide", onPageHide);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    return () => {
+      window.removeEventListener("pagehide", onPageHide);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Sinkronkan state tampilan dari ref setiap 2 detik, HANYA kalau
+  // berubah — bukan setiap pesan (~1/detik) seperti larangan di
+  // spesifikasi. Peserta tetap melihat progres bergerak, hanya tidak
+  // sehalus per detik.
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const terbaru = laporanTerakhirRef.current;
+      if (
+        terbaru &&
+        (!laporanTampilSyncRef.current || !laporanSama(terbaru, laporanTampilSyncRef.current))
+      ) {
+        laporanTampilSyncRef.current = terbaru;
+        setLaporanTampil(terbaru);
+      }
+      const detikTerbaru = detikTersaksikanAwal + detikTersaksikanSesiRef.current;
+      if (detikTerbaru !== detikTersaksikanTampilSyncRef.current) {
+        detikTersaksikanTampilSyncRef.current = detikTerbaru;
+        setDetikTersaksikanTampil(detikTerbaru);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  if (!atestasi) {
+    return (
+      <div className="space-y-4 rounded-lg border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
+        <p className="text-sm text-red-600">Modul ini belum punya konfigurasi atestasi.</p>
+      </div>
+    );
+  }
+
+  const status = nilaiAtestasi(atestasi, {
+    score: laporanTampil?.score ?? 0,
+    detikTersaksikan: detikTersaksikanTampil,
+  }).tingkat;
+  const durasiDiketahui = atestasi.durasiDetik !== null && atestasi.durasiDetik > 0;
+  const persenKreditMentah = laporanTampil?.hp ?? 0;
+  const persenTersaksikan = durasiDiketahui
+    ? Math.min(100, (detikTersaksikanTampil / (atestasi.durasiDetik as number)) * 100)
+    : 0;
+  const menitTersaksikan = detikTersaksikanTampil / 60;
+
+  return (
+    <div className="space-y-3">
+      <h1 className="text-lg font-semibold text-black dark:text-zinc-50">{modul.judul}</h1>
+
+      <p className="text-xs text-amber-600 sm:hidden">
+        Putar perangkat Anda ke posisi mendatar (landscape) supaya game lebih mudah dibaca.
+      </p>
+
+      {atestasi.mintaNicknameCcl && (
+        <div>
+          <label
+            htmlFor="at-nickname"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Nickname CCL
+          </label>
+          <input
+            id="at-nickname"
+            type="text"
+            value={nickname}
+            onChange={(event) => setNickname(event.target.value)}
+            className="mt-1 w-full max-w-sm rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <p className="mt-1 text-xs text-zinc-500">
+            Dipakai admin untuk mencocokkan hasil Anda dengan papan peringkat CCL.
+          </p>
+        </div>
+      )}
+
+      {/* Wadah ini yang di-fullscreen — bilah status IKUT masuk supaya
+          tetap terlihat saat layar penuh (§2, Slice 7.2a). */}
+      <div ref={fullscreenWrapperRef} className="bg-black">
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
+            {durasiDiketahui ? (
+              <>
+                <span>Kredit tonton (CCL): {Math.round(persenKreditMentah)}%</span>
+                <span>Tersaksikan: {Math.round(persenTersaksikan)}%</span>
+              </>
+            ) : (
+              <span>Tersaksikan: {menitTersaksikan.toFixed(1)} menit</span>
+            )}
+            <span>Skor: {laporanTampil?.score ?? 0}</span>
+            <span
+              className={
+                status === "belum" ? "text-zinc-300" : "font-semibold text-green-400"
+              }
+            >
+              {LABEL_STATUS_ATESTASI[status]}
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={toggleFullscreen}
+            className="shrink-0 rounded border border-zinc-600 px-2 py-1 font-medium text-zinc-100"
+          >
+            {isFullscreen ? "Keluar layar penuh" : "Layar penuh"}
+          </button>
+        </div>
+        <div className="aspect-video max-h-[80vh] w-full overflow-hidden">
+          <iframe
+            ref={iframeRef}
+            src={atestasi.sumberUrl}
+            title={modul.judul}
+            className="h-full w-full"
+            allow="autoplay; fullscreen"
+          />
+        </div>
+      </div>
+
+      {durasiDiketahui && (
+        <p className="text-xs text-zinc-500">
+          Persentase &quot;Tersaksikan&quot; yang dipakai untuk menentukan kelayakan, bukan kredit
+          tonton dari game.
+        </p>
+      )}
+
+      <Link
+        href={`/kegiatan/${kegiatanId}`}
+        className="block w-full max-w-sm rounded border border-zinc-300 px-4 py-3 text-center text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        Kembali ke kegiatan
+      </Link>
+    </div>
+  );
+}
+
 type Layar = "mulai" | "mengerjakan" | "hasil";
 
 export default function ModulAttemptPage({
@@ -136,6 +582,24 @@ export default function ModulAttemptPage({
       body: JSON.stringify({ kegiatanId, modulId }),
     }).catch(() => {
       // Diam-diam gagal — bukan penghalang untuk melihat konten referensinya.
+    });
+  }, [modul, pendaftaran, kegiatanId, modulId]);
+
+  // Mencatat dimulaiPada (waktu server) untuk modul atestasi — SEKALI
+  // setiap kali halaman ini dibuka, dipakai POST /api/atestasi/lapor untuk
+  // memeriksa kewajaran watchCreditSec (§4, Slice 7.2).
+  useEffect(() => {
+    if (!modul || modul.kategori !== "atestasi" || !pendaftaran) {
+      return;
+    }
+    fetchWithAuth("/api/atestasi/mulai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ kegiatanId, modulId }),
+    }).catch(() => {
+      // Diam-diam gagal — peserta tetap bisa memainkan gamenya; laporan
+      // akan ditolak server kalau dimulaiPada betul-betul tidak pernah
+      // tercatat (lihat POST /api/atestasi/lapor), bukan gagal diam-diam.
     });
   }, [modul, pendaftaran, kegiatanId, modulId]);
 
@@ -332,6 +796,25 @@ export default function ModulAttemptPage({
           ← Kembali ke {kegiatan.judul}
         </Link>
         <ModulReferensi modul={modul} kegiatanId={kegiatanId} />
+      </div>
+    );
+  }
+
+  if (modul.kategori === "atestasi") {
+    // Lebar penuh dengan padding minimal — BEDA dari wadah sempit
+    // max-w-md di kategori lain, supaya game (dan teks di dalamnya)
+    // terbaca (§2, Slice 7.2a).
+    return (
+      <div className="mx-auto min-h-screen w-full max-w-4xl space-y-3 bg-zinc-50 px-2 py-3 dark:bg-black">
+        <Link href={`/kegiatan/${kegiatanId}`} className="text-sm text-zinc-500 hover:underline">
+          ← Kembali ke {kegiatan.judul}
+        </Link>
+        <ModulAtestasi
+          modul={modul}
+          kegiatanId={kegiatanId}
+          modulId={modulId}
+          hasilTersimpan={pendaftaran.atestasi[modulId]}
+        />
       </div>
     );
   }

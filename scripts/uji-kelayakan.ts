@@ -4,10 +4,21 @@
  * murni: tanpa Firestore, tanpa browser. Pakai node:assert saja, tidak ada
  * framework tes baru.
  *
+ * Slice 7.4 §3: evaluasiKelayakan() sekarang mengembalikan DUA hal
+ * terpisah — { kelayakan, prasyaratMateri } — bukan satu objek gabungan
+ * seperti sebelumnya. Berkas ini menguji keduanya: kelayakan (murni soal
+ * nilai) dan prasyaratMateri (keadaan referensi/atestasi wajib, SELALU
+ * dihitung terlepas dari kelayakan). Kasus atestasiJadiSyarat dan aturan
+ * penerbitan mode otomatis/manual ada di scripts/uji-atestasi.ts.
+ *
  * Jalankan: npx tsx scripts/uji-kelayakan.ts
  */
 import assert from "node:assert/strict";
-import { evaluasiKelayakan } from "../src/lib/sertifikat-syarat";
+import {
+  deskripsiPrasyaratMateri,
+  evaluasiKelayakan,
+  statusPrasyaratMateri,
+} from "../src/lib/sertifikat-syarat";
 import type { SyaratSertifikat } from "../src/types/kegiatan";
 import type { HasilModul, ModulSnapshotItem } from "../src/types/pendaftaran";
 
@@ -27,11 +38,29 @@ function uji(nama: string, fn: () => void): void {
 }
 
 function modulEvaluasi(modulId: string, wajib = true): ModulSnapshotItem {
-  return { modulId, judul: modulId, kategori: "evaluasi", wajib, nilaiMinimum: 70 };
+  return {
+    modulId,
+    judul: modulId,
+    kategori: "evaluasi",
+    wajib,
+    nilaiMinimum: 70,
+    ambangKeterlibatan: null,
+    targetSkor: null,
+    durasiDetik: null,
+  };
 }
 
 function modulReferensi(modulId: string, wajib = true): ModulSnapshotItem {
-  return { modulId, judul: modulId, kategori: "referensi", wajib, nilaiMinimum: null };
+  return {
+    modulId,
+    judul: modulId,
+    kategori: "referensi",
+    wajib,
+    nilaiMinimum: null,
+    ambangKeterlibatan: null,
+    targetSkor: null,
+    durasiDetik: null,
+  };
 }
 
 function hasil(skorTertinggi: number, lulusFlag: boolean): HasilModul {
@@ -39,96 +68,138 @@ function hasil(skorTertinggi: number, lulusFlag: boolean): HasilModul {
 }
 
 function syarat(override: Partial<SyaratSertifikat> = {}): SyaratSertifikat {
-  return { jenis: "nilai_minimum", nilaiMinimum: 70, wajibBukaReferensi: false, ...override };
+  return {
+    jenis: "nilai_minimum",
+    nilaiMinimum: 70,
+    wajibBukaReferensi: false,
+    atestasiJadiSyarat: false,
+    ...override,
+  };
 }
 
 uji(
-  "wajibBukaReferensi=false, referensi belum dibuka, evaluasi lulus → layak (fitur baru tidak mengubah perilaku lama)",
+  "wajibBukaReferensi=false, referensi belum dibuka, evaluasi lulus → kelayakan layak DAN prasyaratMateri tuntas (fitur baru tidak mengubah perilaku lama)",
   () => {
-    const hasilKelayakan = evaluasiKelayakan(
+    const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
       {
         modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1")],
         hasilModul: { ev1: hasil(100, true) },
         referensiDibuka: [],
+        atestasi: {},
       },
       { syaratSertifikat: syarat({ wajibBukaReferensi: false }) }
     );
     assert.equal(
-      hasilKelayakan.status,
+      kelayakan.status,
       "layak",
-      `Diharapkan status "layak" karena wajibBukaReferensi=false, dapat "${hasilKelayakan.status}" (alasan: ${hasilKelayakan.alasan})`
+      `Diharapkan status "layak", dapat "${kelayakan.status}" (alasan: ${kelayakan.alasan})`
     );
-    assert.equal(hasilKelayakan.layak, true, "Diharapkan layak=true");
+    assert.equal(kelayakan.layak, true, "Diharapkan layak=true");
+    assert.equal(
+      prasyaratMateri.tuntas,
+      true,
+      "wajibBukaReferensi=false berarti referensi tidak pernah menahan prasyaratMateri.tuntas, apa pun isi referensiDibuka"
+    );
+    assert.equal(
+      statusPrasyaratMateri(prasyaratMateri),
+      "belum_tuntas_tidak_menghalangi",
+      `Slice 7.6: referensi wajib NYATANYA belum dibuka walau gerbangnya mati — status harus membedakan ini dari "tuntas" sungguhan, dapat "${statusPrasyaratMateri(prasyaratMateri)}"`
+    );
+    const deskripsi = deskripsiPrasyaratMateri(prasyaratMateri);
+    assert.notEqual(
+      deskripsi,
+      "Semua materi wajib sudah tuntas.",
+      `Slice 7.6: TIDAK BOLEH mengklaim "tuntas" ketika gerbangnya mati tapi modul wajib nyatanya belum — dapat: "${deskripsi}"`
+    );
+    assert.equal(
+      deskripsi,
+      "Gerbang referensi tidak aktif — 1 dari 1 modul referensi wajib belum dibuka, tapi tidak menghalangi penerbitan.",
+      `Diharapkan kalimat keadaan ketiga sesuai contoh Slice 7.6, dapat: "${deskripsi}"`
+    );
   }
 );
 
 uji(
-  "wajibBukaReferensi=true, 2 referensi wajib, referensiDibuka=[] → belum_layak, alasan menyebut angka 2",
+  "wajibBukaReferensi=true, 2 referensi wajib, referensiDibuka=[] → kelayakan TETAP layak (nilai independen dari materi), prasyaratMateri belum tuntas, angka 2",
   () => {
-    const hasilKelayakan = evaluasiKelayakan(
+    const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
       {
         modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1"), modulReferensi("ref2")],
         hasilModul: { ev1: hasil(100, true) },
         referensiDibuka: [],
+        atestasi: {},
       },
       { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
     );
     assert.equal(
-      hasilKelayakan.status,
-      "belum_layak",
-      `Diharapkan status "belum_layak" karena 2 referensi wajib belum dibuka sama sekali, dapat "${hasilKelayakan.status}"`
-    );
-    assert.ok(
-      hasilKelayakan.alasan.includes("2"),
-      `Diharapkan alasan menyebut angka 2 (jumlah referensi wajib yang belum dibuka), dapat: "${hasilKelayakan.alasan}"`
-    );
-  }
-);
-
-uji(
-  "sama, referensiDibuka berisi satu → belum_layak, alasan menyebut angka 1",
-  () => {
-    const hasilKelayakan = evaluasiKelayakan(
-      {
-        modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1"), modulReferensi("ref2")],
-        hasilModul: { ev1: hasil(100, true) },
-        referensiDibuka: ["ref1"],
-      },
-      { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
+      kelayakan.status,
+      "layak",
+      `Slice 7.4: kelayakan HANYA soal nilai — referensi belum dibuka tidak lagi membuatnya belum_layak, dapat "${kelayakan.status}"`
     );
     assert.equal(
-      hasilKelayakan.status,
-      "belum_layak",
-      `Diharapkan status "belum_layak" karena masih 1 dari 2 referensi wajib belum dibuka, dapat "${hasilKelayakan.status}"`
+      prasyaratMateri.tuntas,
+      false,
+      "Diharapkan prasyaratMateri.tuntas=false karena 2 referensi wajib belum dibuka sama sekali"
     );
-    assert.ok(
-      hasilKelayakan.alasan.includes("1"),
-      `Diharapkan alasan menyebut angka 1 (jumlah referensi wajib yang belum dibuka), dapat: "${hasilKelayakan.alasan}"`
+    assert.equal(
+      prasyaratMateri.referensiBelumDibuka,
+      2,
+      `Diharapkan referensiBelumDibuka=2, dapat ${prasyaratMateri.referensiBelumDibuka}`
+    );
+    assert.equal(
+      prasyaratMateri.referensiWajibTotal,
+      2,
+      `Diharapkan referensiWajibTotal=2, dapat ${prasyaratMateri.referensiWajibTotal}`
     );
   }
 );
 
-uji("sama, keduanya dibuka → layak", () => {
-  const hasilKelayakan = evaluasiKelayakan(
+uji("sama, referensiDibuka berisi satu → referensiBelumDibuka=1, prasyaratMateri belum tuntas", () => {
+  const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
+    {
+      modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1"), modulReferensi("ref2")],
+      hasilModul: { ev1: hasil(100, true) },
+      referensiDibuka: ["ref1"],
+      atestasi: {},
+    },
+    { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
+  );
+  assert.equal(kelayakan.status, "layak", `Diharapkan kelayakan "layak", dapat "${kelayakan.status}"`);
+  assert.equal(
+    prasyaratMateri.tuntas,
+    false,
+    "Diharapkan prasyaratMateri.tuntas=false karena masih 1 dari 2 referensi wajib belum dibuka"
+  );
+  assert.equal(
+    prasyaratMateri.referensiBelumDibuka,
+    1,
+    `Diharapkan referensiBelumDibuka=1, dapat ${prasyaratMateri.referensiBelumDibuka}`
+  );
+});
+
+uji("sama, keduanya dibuka → prasyaratMateri tuntas", () => {
+  const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
     {
       modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1"), modulReferensi("ref2")],
       hasilModul: { ev1: hasil(100, true) },
       referensiDibuka: ["ref1", "ref2"],
+      atestasi: {},
     },
     { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
   );
+  assert.equal(kelayakan.status, "layak", `Diharapkan kelayakan "layak", dapat "${kelayakan.status}"`);
+  assert.equal(kelayakan.layak, true, "Diharapkan layak=true");
   assert.equal(
-    hasilKelayakan.status,
-    "layak",
-    `Diharapkan status "layak" setelah kedua referensi wajib tercatat dibuka, dapat "${hasilKelayakan.status}" (alasan: ${hasilKelayakan.alasan})`
+    prasyaratMateri.tuntas,
+    true,
+    `Diharapkan prasyaratMateri.tuntas=true setelah kedua referensi wajib tercatat dibuka, dapat referensiBelumDibuka=${prasyaratMateri.referensiBelumDibuka}`
   );
-  assert.equal(hasilKelayakan.layak, true, "Diharapkan layak=true");
 });
 
 uji(
-  "wajibBukaReferensi=true, referensi ada tapi semuanya opsional, belum dibuka → layak (yang opsional tidak dihitung)",
+  "wajibBukaReferensi=true, referensi ada tapi semuanya opsional, belum dibuka → prasyaratMateri tuntas (yang opsional tidak dihitung)",
   () => {
-    const hasilKelayakan = evaluasiKelayakan(
+    const { prasyaratMateri } = evaluasiKelayakan(
       {
         modulSnapshot: [
           modulEvaluasi("ev1"),
@@ -137,13 +208,19 @@ uji(
         ],
         hasilModul: { ev1: hasil(100, true) },
         referensiDibuka: [],
+        atestasi: {},
       },
       { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
     );
     assert.equal(
-      hasilKelayakan.status,
-      "layak",
-      `Diharapkan status "layak" karena modul referensi yang ada semuanya opsional (wajib=false), dapat "${hasilKelayakan.status}" (alasan: ${hasilKelayakan.alasan})`
+      prasyaratMateri.referensiWajibTotal,
+      0,
+      `Diharapkan referensiWajibTotal=0 karena modul referensi yang ada semuanya opsional (wajib=false), dapat ${prasyaratMateri.referensiWajibTotal}`
+    );
+    assert.equal(
+      prasyaratMateri.tuntas,
+      true,
+      "Diharapkan prasyaratMateri.tuntas=true karena tidak ada referensi WAJIB yang dihitung"
     );
   }
 );
@@ -155,48 +232,60 @@ uji(
       modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1")],
       hasilModul: { ev1: hasil(100, true) },
       referensiDibuka: undefined,
+      atestasi: undefined,
     } as unknown as Parameters<typeof evaluasiKelayakan>[0];
 
-    let hasilKelayakan: ReturnType<typeof evaluasiKelayakan>;
+    let hasilEvaluasi: ReturnType<typeof evaluasiKelayakan>;
     try {
-      hasilKelayakan = evaluasiKelayakan(pendaftaranLegacy, {
+      hasilEvaluasi = evaluasiKelayakan(pendaftaranLegacy, {
         syaratSertifikat: syarat({ wajibBukaReferensi: true }),
       });
     } catch (err) {
       throw new Error(
-        `Diharapkan evaluasiKelayakan() TIDAK melempar error walau referensiDibuka tidak ada pada dokumen (pendaftaran lama, sebelum field ini ada) — tapi melempar: ${
+        `Diharapkan evaluasiKelayakan() TIDAK melempar error walau referensiDibuka/atestasi tidak ada pada dokumen (pendaftaran lama, sebelum field-field ini ada) — tapi melempar: ${
           err instanceof Error ? err.message : String(err)
         }`
       );
     }
 
     assert.equal(
-      hasilKelayakan.status,
-      "belum_layak",
-      `referensiDibuka undefined harus diperlakukan sebagai daftar kosong — dengan 1 referensi wajib yang berarti belum tercatat dibuka, diharapkan status "belum_layak", dapat "${hasilKelayakan.status}"`
+      hasilEvaluasi.prasyaratMateri.tuntas,
+      false,
+      "referensiDibuka undefined harus diperlakukan sebagai daftar kosong — dengan 1 referensi wajib, diharapkan prasyaratMateri.tuntas=false"
+    );
+    assert.equal(
+      hasilEvaluasi.prasyaratMateri.referensiBelumDibuka,
+      1,
+      `Diharapkan referensiBelumDibuka=1, dapat ${hasilEvaluasi.prasyaratMateri.referensiBelumDibuka}`
     );
   }
 );
 
 uji(
-  "wajibBukaReferensi=true, semua referensi dibuka tapi evaluasi belum lulus → tetap belum_layak dengan alasan nilai, bukan alasan referensi",
+  "wajibBukaReferensi=true, semua referensi dibuka tapi evaluasi belum lulus → kelayakan belum_layak dengan alasan nilai; prasyaratMateri tetap tuntas (dua hal independen)",
   () => {
-    const hasilKelayakan = evaluasiKelayakan(
+    const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
       {
         modulSnapshot: [modulEvaluasi("ev1"), modulReferensi("ref1")],
         hasilModul: { ev1: hasil(40, false) },
         referensiDibuka: ["ref1"],
+        atestasi: {},
       },
       { syaratSertifikat: syarat({ wajibBukaReferensi: true }) }
     );
     assert.equal(
-      hasilKelayakan.status,
+      kelayakan.status,
       "belum_layak",
-      `Diharapkan status "belum_layak" karena evaluasi belum lulus, dapat "${hasilKelayakan.status}"`
+      `Diharapkan status "belum_layak" karena evaluasi belum lulus, dapat "${kelayakan.status}"`
     );
     assert.ok(
-      hasilKelayakan.alasan.startsWith("Belum lulus modul:"),
-      `Diharapkan alasan tentang modul yang belum lulus (gerbang evaluasi harus diperiksa SEBELUM gerbang referensi, urutannya tidak boleh tertukar), dapat: "${hasilKelayakan.alasan}"`
+      kelayakan.alasan.startsWith("Belum lulus modul:"),
+      `Diharapkan alasan tentang modul yang belum lulus, dapat: "${kelayakan.alasan}"`
+    );
+    assert.equal(
+      prasyaratMateri.tuntas,
+      true,
+      "referensi sudah dibuka semua — prasyaratMateri.tuntas harus true TERLEPAS dari kelayakan.status (dua hal terpisah, Slice 7.4 §3)"
     );
   }
 );

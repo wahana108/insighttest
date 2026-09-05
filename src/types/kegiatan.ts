@@ -18,6 +18,15 @@ export interface SyaratSertifikat {
    * kenapa modulSnapshot, bukan modul kegiatan saat ini, yang dipakai.
    */
   wajibBukaReferensi: boolean;
+  /**
+   * default false. Kalau true, evaluasiKelayakan() (src/lib/sertifikat-syarat.ts)
+   * ikut menghitung semua modul atestasi WAJIB pada modulSnapshot pendaftaran
+   * ke dalam prasyaratMateri.tuntas — mensyaratkan sudah mencapai minimal
+   * 'menuntaskan' (lihat src/lib/atestasi-pernyataan.ts). Slice 7.4: dihitung
+   * BERSAMAAN dan independen dari wajibBukaReferensi, bukan berurutan —
+   * lihat PrasyaratMateri di sertifikat-syarat.ts.
+   */
+  atestasiJadiSyarat: boolean;
 }
 
 /**
@@ -97,21 +106,40 @@ export interface KonfigurasiReferensi {
   deskripsi: string;
 }
 
+export type ModeAmbangKeterlibatan = "persen" | "menit";
+
+/**
+ * Model umum untuk "berapa banyak keterlibatan yang dianggap cukup" —
+ * satu bentuk dua satuan, dipakai baik untuk video (persen dari durasi)
+ * maupun game aksi tanpa durasi (menit mutlak). Satuannya (mode)
+ * DITENTUKAN OTOMATIS oleh gerbang verifikasi (src/lib/verifikasi-atestasi-client.ts)
+ * berdasarkan apakah game itu melaporkan durasi, BUKAN dipilih admin —
+ * admin hanya boleh mengubah `nilai`. Lihat src/lib/atestasi-pernyataan.ts
+ * untuk cara nilai ini dipakai menilai keterlibatan.
+ */
+export interface AmbangKeterlibatan {
+  mode: ModeAmbangKeterlibatan;
+  nilai: number;
+}
+
 /**
  * Diisi HANYA lewat gerbang pendaftaran (src/lib/verifikasi-atestasi-client.ts)
  * — admin tidak pernah mengetik gameId/gameName/versi sendiri, itu identitas
  * yang diklaim game lewat pesan CCL_READY, bukan pilihan admin. sumberUrl,
- * ambangKreditPersen, targetSkor, dan mintaNicknameCcl adalah input admin;
- * sisanya (gameId, gameName, versi, durasiDetik, originDiizinkan,
- * diverifikasiPada) hasil verifikasi.
+ * ambangKeterlibatan.nilai, targetSkor, dan mintaNicknameCcl adalah input
+ * admin; sisanya (gameId, gameName, versi, durasiDetik, originDiizinkan,
+ * diverifikasiPada, DAN ambangKeterlibatan.mode) hasil verifikasi.
  *
  * durasiDetik null berarti game ini tidak pernah melaporkan durasi lewat
  * laporan keadaan (diamati pada game aksi seperti space-commander/ccl-runner
  * yang diam sampai dimainkan) — BUKAN kegagalan. Untuk modul begini,
- * ambangKreditPersen tidak berlaku (tidak ada durasi untuk dihitung
- * persentasenya); hanya targetSkor yang berarti. Slice 7.2 yang memakai
- * originDiizinkan untuk memeriksa event.origin saat merekam telemetri
- * sungguhan — slice ini (7.1) hanya mendaftarkan modulnya.
+ * ambangKeterlibatan otomatis bermode 'menit' (default nilai 10), bukan
+ * 'persen' — tidak ada durasi untuk dihitung persentasenya. Modul dengan
+ * durasiDetik terisi otomatis bermode 'persen' (default nilai 90). Slice
+ * 7.2 yang memakai originDiizinkan untuk memeriksa event.origin saat
+ * merekam telemetri sungguhan — slice ini (7.1) hanya mendaftarkan
+ * modulnya; Slice 7.3 yang memakai ambangKeterlibatan untuk menilai
+ * pernyataan (src/lib/atestasi-pernyataan.ts).
  */
 export interface KonfigurasiAtestasi {
   sumberUrl: string;
@@ -119,7 +147,17 @@ export interface KonfigurasiAtestasi {
   gameName: string;
   versi: string;
   durasiDetik: number | null;
-  ambangKreditPersen: number;
+  ambangKeterlibatan: AmbangKeterlibatan;
+  /**
+   * Slice 7.5 — dihitung ulang setiap kali dibaca (src/lib/services/modul.ts,
+   * lewat normalkanAmbangKeterlibatan()), TIDAK PERNAH diketik admin. true
+   * berarti ambangKeterlibatan di atas SUDAH DIGANTI dari nilai tersimpan
+   * yang mustahil dievaluasi (mode 'persen' tanpa durasi diketahui) ke
+   * default aman (menit 10) — form admin menampilkan catatan supaya admin
+   * meninjau angkanya. Selalu false lewat jalur simpan (gerbang verifikasi
+   * tidak pernah menulis pasangan mode/durasi yang mustahil sejak awal).
+   */
+  ambangDikoreksi: boolean;
   targetSkor: number | null;
   originDiizinkan: string;
   mintaNicknameCcl: boolean;

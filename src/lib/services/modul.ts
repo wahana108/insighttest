@@ -9,14 +9,17 @@ import {
   where,
   type DocumentData,
 } from "firebase/firestore";
+import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { db } from "@/lib/firebase/client";
 import { periksaUrlAtestasi } from "@/lib/validasi-url-atestasi";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
+  AmbangKeterlibatan,
   KategoriModul,
   KonfigurasiAtestasi,
   KonfigurasiEvaluasi,
   KonfigurasiReferensi,
+  ModeAmbangKeterlibatan,
   ModulKegiatan,
   PemilihanSoal,
   TipeReferensi,
@@ -86,19 +89,60 @@ function mapReferensi(value: unknown): KonfigurasiReferensi | null {
   };
 }
 
+function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
+  return value === "persen" || value === "menit";
+}
+
+/**
+ * Slice 7.3: ambangKreditPersen (angka tunggal) diganti ambangKeterlibatan
+ * (mode + nilai). Modul lama yang masih menyimpan ambangKreditPersen
+ * dipetakan ke { mode: 'persen', nilai: <angka lama> } — jangan sampai
+ * modul lama jadi tak terbaca. Modul yang tidak punya keduanya (harusnya
+ * tidak terjadi untuk atestasi asli, tapi dijaga defensif) jatuh ke
+ * default { mode: 'persen', nilai: 90 }.
+ *
+ * Slice 7.5: nilai MENTAH di sini bisa mustahil dievaluasi (persen tanpa
+ * durasi diketahui — migrasi 7.3 di atas tidak pernah memeriksa durasi).
+ * mapAtestasi() di bawah SELALU memanggil normalkanAmbangKeterlibatan()
+ * pada hasil fungsi ini — jangan pernah memakai return value fungsi ini
+ * langsung tanpa dinormalkan.
+ */
+function mapAmbangKeterlibatan(value: unknown, dataLegacy: Record<string, unknown>): AmbangKeterlibatan {
+  if (typeof value === "object" && value !== null) {
+    const data = value as Record<string, unknown>;
+    if (isModeAmbangKeterlibatan(data.mode) && typeof data.nilai === "number") {
+      return { mode: data.mode, nilai: data.nilai };
+    }
+  }
+  if (typeof dataLegacy.ambangKreditPersen === "number") {
+    return { mode: "persen", nilai: dataLegacy.ambangKreditPersen };
+  }
+  return { mode: "persen", nilai: 90 };
+}
+
 function mapAtestasi(value: unknown): KonfigurasiAtestasi | null {
   if (typeof value !== "object" || value === null) {
     return null;
   }
   const data = value as Record<string, unknown>;
+  const durasiDetik = typeof data.durasiDetik === "number" ? data.durasiDetik : null;
+  // Slice 7.5: ambangKeterlibatan mentah (di atas, bisa persen+durasi tidak
+  // diketahui — bug migrasi 7.3) DINORMALKAN di sini, di titik baca —
+  // supaya modul lama yang tersimpan mustahil dievaluasi otomatis
+  // terkoreksi tanpa migrasi data, dan form admin (yang membaca lewat
+  // getModulList()) melihat satuan yang benar plus tanda perlu ditinjau.
+  const { ambang, dikoreksi } = normalkanAmbangKeterlibatan(
+    mapAmbangKeterlibatan(data.ambangKeterlibatan, data),
+    durasiDetik
+  );
   return {
     sumberUrl: typeof data.sumberUrl === "string" ? data.sumberUrl : "",
     gameId: typeof data.gameId === "string" ? data.gameId : "",
     gameName: typeof data.gameName === "string" ? data.gameName : "",
     versi: typeof data.versi === "string" ? data.versi : "",
-    durasiDetik: typeof data.durasiDetik === "number" ? data.durasiDetik : null,
-    ambangKreditPersen:
-      typeof data.ambangKreditPersen === "number" ? data.ambangKreditPersen : 90,
+    durasiDetik,
+    ambangKeterlibatan: ambang,
+    ambangDikoreksi: dikoreksi,
     targetSkor: typeof data.targetSkor === "number" ? data.targetSkor : null,
     originDiizinkan: typeof data.originDiizinkan === "string" ? data.originDiizinkan : "",
     mintaNicknameCcl:
@@ -171,7 +215,7 @@ export async function validasiModul(input: ModulWriteInput): Promise<void> {
       gameId,
       originDiizinkan,
       diverifikasiPada,
-      ambangKreditPersen,
+      ambangKeterlibatan,
       targetSkor,
     } = input.atestasi;
     if (!sumberUrl.trim()) {
@@ -187,12 +231,14 @@ export async function validasiModul(input: ModulWriteInput): Promise<void> {
           "tunggu CCL_READY sebelum menyimpan."
       );
     }
-    if (
-      !Number.isFinite(ambangKreditPersen) ||
-      ambangKreditPersen < 0 ||
-      ambangKreditPersen > 100
-    ) {
-      throw new ModulError("Ambang kredit tonton harus di antara 0 dan 100 persen.");
+    // mode ditentukan OTOMATIS oleh gerbang verifikasi (lihat komentar di
+    // KonfigurasiAtestasi) — hanya nilai yang divalidasi di sini, dengan
+    // rentang wajar berbeda per satuan.
+    if (!Number.isFinite(ambangKeterlibatan.nilai) || ambangKeterlibatan.nilai < 0) {
+      throw new ModulError("Ambang keterlibatan harus angka 0 atau lebih.");
+    }
+    if (ambangKeterlibatan.mode === "persen" && ambangKeterlibatan.nilai > 100) {
+      throw new ModulError("Ambang keterlibatan bermode persen harus di antara 0 dan 100.");
     }
     if (targetSkor !== null && (!Number.isFinite(targetSkor) || targetSkor < 0)) {
       throw new ModulError("Target skor, kalau diisi, harus angka 0 atau lebih.");

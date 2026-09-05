@@ -4,9 +4,48 @@ import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
+import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
 import type { PesertaAdminRingkas } from "@/types/admin-pendaftaran";
 
 const UKURAN_POTONGAN = 25;
+
+/**
+ * Kalimat ringkas keadaan materi untuk kolom Kelayakan (Slice 7.4 §3).
+ *
+ * Slice 7.6: sebuah kategori ditampilkan kalau (a) syaratnya AKTIF —
+ * relevan bagi keputusan admin apa pun keadaannya — ATAU (b) TIDAK aktif
+ * TAPI ada modul wajib yang nyatanya belum tuntas — supaya keadaan itu
+ * tidak diam-diam hilang dari tampilan hanya karena gerbangnya mati
+ * ("jangan pernah mengklaim tuntas ketika gerbangnya mati"). Kategori
+ * yang tidak aktif dan semuanya sudah tuntas TETAP disembunyikan — tidak
+ * ada yang perlu diketahui admin di situ. Modul yang belum disebut NAMANYA
+ * (bukan cuma jumlah), sama seperti pesan ringkasan di halaman peserta.
+ */
+function deskripsiMateriAdmin(p: PrasyaratMateri): string | null {
+  const bagian: string[] = [];
+
+  if (p.referensiWajibTotal > 0 && (p.wajibBukaReferensi || p.referensiBelumDibuka > 0)) {
+    const belum = p.referensiPerModul.filter((m) => m.wajib && !m.dibuka);
+    if (belum.length === 0) {
+      bagian.push(`Referensi: ${p.referensiWajibTotal} dari ${p.referensiWajibTotal} dibuka`);
+    } else {
+      const gerbang = p.wajibBukaReferensi ? "" : "gerbang tidak aktif — ";
+      bagian.push(`Referensi: ${gerbang}belum dibuka: ${belum.map((m) => m.judul).join(", ")}`);
+    }
+  }
+
+  if (p.atestasiWajibTotal > 0 && (p.atestasiJadiSyarat || p.atestasiBelumTuntas > 0)) {
+    const belum = p.atestasiPerModul.filter((m) => m.wajib && m.tingkat === "belum");
+    if (belum.length === 0) {
+      bagian.push(`Atestasi: ${p.atestasiWajibTotal} dari ${p.atestasiWajibTotal} tuntas`);
+    } else {
+      const gerbang = p.atestasiJadiSyarat ? "" : "gerbang tidak aktif — ";
+      bagian.push(`Atestasi: ${gerbang}belum tuntas: ${belum.map((m) => m.judul).join(", ")}`);
+    }
+  }
+
+  return bagian.length > 0 ? bagian.join(" · ") : null;
+}
 
 interface HasilBarisTerbitkan {
   uid: string;
@@ -331,6 +370,7 @@ export default function AdminPesertaPage({
             )}
             {items.map((item) => {
               const terkunci = item.sertifikat?.status === "berlaku";
+              const materiAdmin = deskripsiMateriAdmin(item.prasyaratMateri);
               return (
                 <tr
                   key={item.uid}
@@ -357,8 +397,17 @@ export default function AdminPesertaPage({
                     lulus
                   </td>
                   <td className="px-3 py-2">
-                    {item.statusKelayakan === "layak" && (
-                      <span className="text-green-600">Layak</span>
+                    {item.statusKelayakan === "layak" && item.bisaTerbit && (
+                      <div>
+                        <span className="text-green-600">Layak</span>
+                        {materiAdmin && <p className="text-xs text-zinc-400">{materiAdmin}</p>}
+                      </div>
+                    )}
+                    {item.statusKelayakan === "layak" && !item.bisaTerbit && (
+                      <div>
+                        <span className="text-amber-600">Nilai OK, materi belum tuntas</span>
+                        {materiAdmin && <p className="text-xs text-zinc-400">{materiAdmin}</p>}
+                      </div>
                     )}
                     {item.statusKelayakan === "belum_layak" && (
                       <div>
@@ -369,7 +418,7 @@ export default function AdminPesertaPage({
                     {item.statusKelayakan === "ditentukan_admin" && (
                       <div>
                         <span className="text-zinc-600 dark:text-zinc-400">
-                          Ditentukan admin
+                          Ditentukan admin{materiAdmin && ` · ${materiAdmin}`}
                         </span>
                         <p className="text-xs text-zinc-400">
                           Kegiatan ini bersyarat manual — nilai di samping sebagai bahan

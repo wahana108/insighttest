@@ -76,6 +76,8 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
     nilaiMinimum: typeof data.nilaiMinimum === "number" ? data.nilaiMinimum : 0,
     wajibBukaReferensi:
       typeof data.wajibBukaReferensi === "boolean" ? data.wajibBukaReferensi : false,
+    atestasiJadiSyarat:
+      typeof data.atestasiJadiSyarat === "boolean" ? data.atestasiJadiSyarat : false,
   };
 }
 

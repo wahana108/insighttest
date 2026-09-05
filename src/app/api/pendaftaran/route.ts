@@ -1,6 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
+import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { getAdminDb } from "@/lib/firebase/admin";
-import type { KategoriModul } from "@/types/kegiatan";
+import type { AmbangKeterlibatan, KategoriModul, ModeAmbangKeterlibatan } from "@/types/kegiatan";
 import type { ModulSnapshotItem } from "@/types/pendaftaran";
 
 class PendaftaranRouteError extends Error {
@@ -15,6 +16,40 @@ class PendaftaranRouteError extends Error {
 
 function isKategoriModul(value: unknown): value is KategoriModul {
   return value === "referensi" || value === "atestasi" || value === "evaluasi";
+}
+
+function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
+  return value === "persen" || value === "menit";
+}
+
+/**
+ * Sama seperti mapAmbangKeterlibatan() di src/lib/services/modul.ts (tidak
+ * bisa dipakai bersama — itu memakai firebase/firestore klien, ini Admin
+ * SDK server) — migrasi ambangKreditPersen lama ke { mode, nilai } baru
+ * (Slice 7.3), supaya modul lama tidak jadi tak terbaca saat pendaftaran
+ * membekukan snapshotnya.
+ *
+ * Slice 7.5: nilai mentah di sini bisa mustahil dievaluasi (persen tanpa
+ * durasi diketahui) — pemanggil WAJIB memanggil normalkanAmbangKeterlibatan()
+ * pada hasilnya sebelum membekukan ke modulSnapshot (lihat pemanggilnya
+ * di bawah). Ini titik bekunya (KA-5): kalau tidak dinormalkan di sini,
+ * peserta yang MENDAFTAR SETELAH modul rusak akan membekukan syarat yang
+ * sama mustahilnya untuk selamanya.
+ */
+function ambangKeterlibatanUntukSnapshot(
+  value: unknown,
+  dataLegacy: Record<string, unknown>
+): AmbangKeterlibatan {
+  if (typeof value === "object" && value !== null) {
+    const data = value as Record<string, unknown>;
+    if (isModeAmbangKeterlibatan(data.mode) && typeof data.nilai === "number") {
+      return { mode: data.mode, nilai: data.nilai };
+    }
+  }
+  if (typeof dataLegacy.ambangKreditPersen === "number") {
+    return { mode: "persen", nilai: dataLegacy.ambangKreditPersen };
+  }
+  return { mode: "persen", nilai: 90 };
 }
 
 /**
@@ -91,6 +126,16 @@ export async function POST(request: Request) {
           typeof data.evaluasi === "object" && data.evaluasi !== null
             ? (data.evaluasi as Record<string, unknown>)
             : null;
+        // Slice 7.3: ambangKeterlibatan/targetSkor/durasiDetik DIBEKUKAN di
+        // sini juga (KA-5) — sama seperti nilaiMinimum evaluasi di atas —
+        // supaya admin mengubah ambang atestasi setelah peserta terdaftar
+        // tidak mengubah kelayakan yang sudah dievaluasi untuk mereka.
+        const atestasi =
+          typeof data.atestasi === "object" && data.atestasi !== null
+            ? (data.atestasi as Record<string, unknown>)
+            : null;
+        const durasiDetik =
+          atestasi && typeof atestasi.durasiDetik === "number" ? atestasi.durasiDetik : null;
         return {
           modulId: modulDoc.id,
           judul: typeof data.judul === "string" ? data.judul : "",
@@ -98,6 +143,15 @@ export async function POST(request: Request) {
           wajib: typeof data.wajib === "boolean" ? data.wajib : true,
           nilaiMinimum:
             evaluasi && typeof evaluasi.nilaiMinimum === "number" ? evaluasi.nilaiMinimum : null,
+          ambangKeterlibatan: atestasi
+            ? normalkanAmbangKeterlibatan(
+                ambangKeterlibatanUntukSnapshot(atestasi.ambangKeterlibatan, atestasi),
+                durasiDetik
+              ).ambang
+            : null,
+          targetSkor:
+            atestasi && typeof atestasi.targetSkor === "number" ? atestasi.targetSkor : null,
+          durasiDetik,
         };
       });
 
@@ -119,6 +173,7 @@ export async function POST(request: Request) {
         daftarPada: now.toISOString(),
         hasilModul: {},
         referensiDibuka: [],
+        atestasi: {},
       });
     });
 

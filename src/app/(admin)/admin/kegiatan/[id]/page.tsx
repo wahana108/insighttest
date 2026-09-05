@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useMemo, useState, type FormEvent } from "react";
+import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import {
   dateAndTimeValuesToIso,
@@ -59,6 +60,7 @@ interface KegiatanFormState {
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
   syaratWajibBukaReferensi: boolean;
+  syaratAtestasiJadiSyarat: boolean;
   templateSertifikat: TemplateSertifikat;
 }
 
@@ -79,7 +81,7 @@ interface ModulFormState {
   referensiSumber: string;
   referensiDeskripsi: string;
   atestasiSumberUrl: string;
-  atestasiAmbangKreditPersen: string;
+  atestasiAmbangNilai: string;
   atestasiTargetSkor: string;
   atestasiMintaNickname: boolean;
 }
@@ -102,7 +104,11 @@ function emptyModulForm(): ModulFormState {
     referensiSumber: "",
     referensiDeskripsi: "",
     atestasiSumberUrl: "",
-    atestasiAmbangKreditPersen: "90",
+    // Kosong sengaja — mode DAN nilai default (persen 90 / menit 10)
+    // ditentukan gerbang verifikasi saat modul baru pertama kali disimpan
+    // (lihat handleSubmitModul). Untuk modul yang sedang disunting,
+    // startEditModul() mengisi nilai yang sudah tersimpan.
+    atestasiAmbangNilai: "",
     atestasiTargetSkor: "",
     atestasiMintaNickname: false,
   };
@@ -238,6 +244,15 @@ export default function AdminKegiatanDetailPage({
     };
   }, [modulList]);
 
+  // Sama seperti hitunganReferensi di atas, untuk centang "atestasiJadiSyarat".
+  const hitunganAtestasi = useMemo(() => {
+    const atestasi = modulList.filter((modul) => modul.kategori === "atestasi");
+    return {
+      wajib: atestasi.filter((modul) => modul.wajib).length,
+      opsional: atestasi.filter((modul) => !modul.wajib).length,
+    };
+  }, [modulList]);
+
   // Kegiatan
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
@@ -262,9 +277,39 @@ export default function AdminKegiatanDetailPage({
           syaratJenis: kegiatan.syaratSertifikat.jenis,
           syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
           syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
+          syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
           templateSertifikat: kegiatan.templateSertifikat,
         }
       : null);
+
+  // Slice 7.4 §2: satu kalimat hidup di atas ketiga kontrol prasyarat,
+  // supaya admin melihat AKIBAT gabungan centang-centangnya tanpa harus
+  // menyimpulkannya sendiri dari tiga kalimat terpisah. Guard "> 0" pada
+  // referensi/atestasi sengaja meniru evaluasiKelayakan()/prasyaratMateri:
+  // syarat yang aktif tapi tidak punya modul wajib sama sekali memang tidak
+  // pernah menggerbang apa pun, jadi tidak disebut di sini juga.
+  const ringkasanPrasyarat = (() => {
+    if (!editingKegiatanForm) {
+      return "";
+    }
+    if (editingKegiatanForm.syaratJenis === "manual_admin") {
+      return "Sertifikat diterbitkan manual oleh admin — tidak ada syarat nilai otomatis.";
+    }
+    const bagian: string[] = [
+      `lulus evaluasi dengan nilai ≥ ${editingKegiatanForm.syaratNilaiMinimum || 0}`,
+    ];
+    if (editingKegiatanForm.syaratWajibBukaReferensi && hitunganReferensi.wajib > 0) {
+      bagian.push(`membuka ${hitunganReferensi.wajib} materi referensi wajib`);
+    }
+    if (editingKegiatanForm.syaratAtestasiJadiSyarat && hitunganAtestasi.wajib > 0) {
+      bagian.push(`menuntaskan ${hitunganAtestasi.wajib} materi atestasi wajib`);
+    }
+    const daftar =
+      bagian.length === 1
+        ? bagian[0]
+        : `${bagian.slice(0, -1).join(", ")}, dan ${bagian[bagian.length - 1]}`;
+    return `Peserta harus: ${daftar}.`;
+  })();
 
   async function handleSubmitKegiatan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -307,6 +352,7 @@ export default function AdminKegiatanDetailPage({
           jenis: editingKegiatanForm.syaratJenis,
           nilaiMinimum: Number(editingKegiatanForm.syaratNilaiMinimum) || 0,
           wajibBukaReferensi: editingKegiatanForm.syaratWajibBukaReferensi,
+          atestasiJadiSyarat: editingKegiatanForm.syaratAtestasiJadiSyarat,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
       };
@@ -373,7 +419,12 @@ export default function AdminKegiatanDetailPage({
       referensiSumber: modul.referensi?.sumber ?? "",
       referensiDeskripsi: modul.referensi?.deskripsi ?? "",
       atestasiSumberUrl: modul.atestasi?.sumberUrl ?? "",
-      atestasiAmbangKreditPersen: String(modul.atestasi?.ambangKreditPersen ?? 90),
+      // Kosong kalau belum pernah diverifikasi — handleSubmitModul yang
+      // mengisi default sesuai mode saat itu terjadi.
+      atestasiAmbangNilai:
+        modul.atestasi?.ambangKeterlibatan.nilai != null
+          ? String(modul.atestasi.ambangKeterlibatan.nilai)
+          : "",
       atestasiTargetSkor:
         modul.atestasi?.targetSkor != null ? String(modul.atestasi.targetSkor) : "",
       atestasiMintaNickname: modul.atestasi?.mintaNicknameCcl ?? false,
@@ -419,13 +470,41 @@ export default function AdminKegiatanDetailPage({
         if (!hasilVerifikasi.ok) {
           throw new Error(hasilVerifikasi.alasan);
         }
+        // Mode DITENTUKAN OTOMATIS dari hasil gerbang — durasiDetik
+        // terisi berarti video (persen), null berarti game aksi (menit).
+        // Admin cuma boleh mengubah nilainya, tidak satuannya (§1, Slice
+        // 7.3). Field nilai kosong (modul baru, belum pernah disunting)
+        // jatuh ke default per mode; kalau sudah terisi (modul lama yang
+        // disunting ulang), nilai admin dipertahankan apa adanya.
+        const modeAmbang = hasilVerifikasi.durasiDetik !== null ? "persen" : "menit";
+        const nilaiAmbangDefault = modeAmbang === "persen" ? 90 : 10;
+        const nilaiAmbang = modulForm.atestasiAmbangNilai.trim()
+          ? Number(modulForm.atestasiAmbangNilai)
+          : nilaiAmbangDefault;
+        // Slice 7.5: dilewatkan ke normalkanAmbangKeterlibatan() sebagai
+        // pagar terakhir — modeAmbang di atas sudah benar dari
+        // durasiDetik, jadi ini seharusnya tidak pernah mengoreksi apa
+        // pun di jalur simpan (ambangDikoreksi selalu false dari sini);
+        // ia HANYA mengoreksi saat DIBACA (services/modul.ts), untuk
+        // modul lama yang tersimpan mustahil dievaluasi. "Jangan pernah
+        // persen tanpa durasi" dijamin di titik yang sama untuk kedua
+        // arah (tulis dan baca), bukan cuma salah satu.
+        const { ambang: ambangKeterlibatan, dikoreksi: ambangDikoreksi } =
+          normalkanAmbangKeterlibatan(
+            {
+              mode: modeAmbang,
+              nilai: Number.isFinite(nilaiAmbang) ? nilaiAmbang : nilaiAmbangDefault,
+            },
+            hasilVerifikasi.durasiDetik
+          );
         atestasiInput = {
           sumberUrl,
           gameId: hasilVerifikasi.gameId,
           gameName: hasilVerifikasi.gameName,
           versi: hasilVerifikasi.versi,
           durasiDetik: hasilVerifikasi.durasiDetik,
-          ambangKreditPersen: Number(modulForm.atestasiAmbangKreditPersen) || 0,
+          ambangKeterlibatan,
+          ambangDikoreksi,
           targetSkor: modulForm.atestasiTargetSkor.trim()
             ? Number(modulForm.atestasiTargetSkor)
             : null,
@@ -713,80 +792,109 @@ export default function AdminKegiatanDetailPage({
                 Kosongkan kalau tidak dibatasi waktu. Kalau diisi, tanggal dan jam harus lengkap.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
               <div>
-                <label
-                  htmlFor="det-syarat"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Syarat sertifikat
-                </label>
-                <select
-                  id="det-syarat"
-                  value={editingKegiatanForm.syaratJenis}
-                  onChange={(event) =>
-                    setKegiatanForm({
-                      ...editingKegiatanForm,
-                      syaratJenis: event.target.value as JenisSyaratSertifikat,
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                >
-                  {SYARAT_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === "nilai_minimum" ? "Nilai minimum" : "Manual oleh admin"}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Prasyarat sebelum sertifikat bisa terbit
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">{ringkasanPrasyarat}</p>
               </div>
-              {editingKegiatanForm.syaratJenis === "nilai_minimum" && (
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
-                    htmlFor="det-nilai-minimum"
+                    htmlFor="det-syarat"
                     className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                   >
-                    Nilai minimum lulus
+                    Syarat sertifikat
                   </label>
-                  <input
-                    id="det-nilai-minimum"
-                    type="number"
-                    min={1}
-                    max={100}
-                    required
-                    value={editingKegiatanForm.syaratNilaiMinimum}
+                  <select
+                    id="det-syarat"
+                    value={editingKegiatanForm.syaratJenis}
                     onChange={(event) =>
                       setKegiatanForm({
                         ...editingKegiatanForm,
-                        syaratNilaiMinimum: event.target.value,
+                        syaratJenis: event.target.value as JenisSyaratSertifikat,
                       })
                     }
                     className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
+                  >
+                    {SYARAT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option === "nilai_minimum" ? "Nilai minimum" : "Manual oleh admin"}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              <div className="sm:col-span-2">
-                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={editingKegiatanForm.syaratWajibBukaReferensi}
-                    onChange={(event) =>
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        syaratWajibBukaReferensi: event.target.checked,
-                      })
-                    }
-                  />
-                  Peserta harus membuka semua materi referensi yang wajib
-                </label>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Saat ini kegiatan ini punya {hitunganReferensi.wajib} modul referensi wajib dan{" "}
-                  {hitunganReferensi.opsional} opsional.
-                </p>
-                {hitunganReferensi.wajib === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    Centang ini belum berpengaruh — belum ada modul referensi wajib pada kegiatan
-                    ini.
-                  </p>
+                {editingKegiatanForm.syaratJenis === "nilai_minimum" && (
+                  <div>
+                    <label
+                      htmlFor="det-nilai-minimum"
+                      className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      Nilai minimum lulus
+                    </label>
+                    <input
+                      id="det-nilai-minimum"
+                      type="number"
+                      min={1}
+                      max={100}
+                      required
+                      value={editingKegiatanForm.syaratNilaiMinimum}
+                      onChange={(event) =>
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          syaratNilaiMinimum: event.target.value,
+                        })
+                      }
+                      className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                  </div>
+                )}
+                {hitunganReferensi.wajib > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={editingKegiatanForm.syaratWajibBukaReferensi}
+                        onChange={(event) =>
+                          setKegiatanForm({
+                            ...editingKegiatanForm,
+                            syaratWajibBukaReferensi: event.target.checked,
+                          })
+                        }
+                      />
+                      Peserta harus membuka semua materi referensi yang wajib
+                    </label>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Saat ini kegiatan ini punya {hitunganReferensi.wajib} modul referensi wajib
+                      {hitunganReferensi.opsional > 0 &&
+                        ` dan ${hitunganReferensi.opsional} opsional`}
+                      .
+                    </p>
+                  </div>
+                )}
+                {hitunganAtestasi.wajib > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={editingKegiatanForm.syaratAtestasiJadiSyarat}
+                        onChange={(event) =>
+                          setKegiatanForm({
+                            ...editingKegiatanForm,
+                            syaratAtestasiJadiSyarat: event.target.checked,
+                          })
+                        }
+                      />
+                      Peserta harus menuntaskan semua materi atestasi yang wajib
+                    </label>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Saat ini kegiatan ini punya {hitunganAtestasi.wajib} modul atestasi wajib
+                      {hitunganAtestasi.opsional > 0 &&
+                        ` dan ${hitunganAtestasi.opsional} opsional`}
+                      .
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1188,28 +1296,43 @@ export default function AdminKegiatanDetailPage({
                   htmlFor="mod-at-ambang"
                   className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                 >
-                  Ambang kredit tonton (persen)
+                  Ambang keterlibatan
+                  {atestasiTersimpan
+                    ? atestasiTersimpan.ambangKeterlibatan.mode === "persen"
+                      ? " (persen)"
+                      : " (menit)"
+                    : ""}
                 </label>
                 <input
                   id="mod-at-ambang"
                   type="number"
                   min={0}
-                  max={100}
+                  max={atestasiTersimpan?.ambangKeterlibatan.mode === "persen" ? 100 : undefined}
                   required
-                  disabled={atestasiTersimpan !== null && atestasiTersimpan.durasiDetik === null}
-                  value={modulForm.atestasiAmbangKreditPersen}
+                  value={modulForm.atestasiAmbangNilai}
                   onChange={(event) =>
                     setModulForm((f) => ({
                       ...f,
-                      atestasiAmbangKreditPersen: event.target.value,
+                      atestasiAmbangNilai: event.target.value,
                     }))
                   }
-                  className="mt-1 w-40 rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  placeholder={
+                    atestasiTersimpan
+                      ? undefined
+                      : "Kosongkan untuk default (90% video atau 10 menit game)"
+                  }
+                  className="mt-1 w-40 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                 />
-                {atestasiTersimpan !== null && atestasiTersimpan.durasiDetik === null && (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Satuannya (persen video / menit game) ditentukan otomatis oleh gerbang
+                  verifikasi berdasarkan apakah game ini melaporkan durasi — Anda hanya mengatur
+                  angkanya.
+                </p>
+                {atestasiTersimpan?.ambangDikoreksi && (
                   <p className="mt-1 text-xs text-amber-600">
-                    Game ini tidak melaporkan durasi — ambang kredit tonton diabaikan untuk modul
-                    ini, hanya target skor yang berlaku.
+                    Ambang modul ini tersimpan mode persen tanpa durasi diketahui — mustahil
+                    dievaluasi apa adanya, jadi dikoreksi otomatis ke 10 menit saat dibaca.
+                    Tinjau angka di atas dan simpan ulang untuk mengonfirmasinya.
                   </p>
                 )}
               </div>
