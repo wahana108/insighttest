@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useMemo, useState, type FormEvent } from "react";
+import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import {
   dateAndTimeValuesToIso,
@@ -20,11 +21,14 @@ import {
   type ModulWriteInput,
 } from "@/lib/services/modul";
 import { formatTopikLabel } from "@/lib/services/topik";
+import { periksaUrlAtestasi } from "@/lib/validasi-url-atestasi";
 import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
+import { verifikasiGameCcl } from "@/lib/verifikasi-atestasi-client";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   JenisSyaratSertifikat,
   KategoriModul,
+  KonfigurasiAtestasi,
   ModePemilihanSoal,
   ModulKegiatan,
   TemplateSertifikat,
@@ -34,6 +38,7 @@ import type {
 const KATEGORI_MODUL_OPTIONS: { value: KategoriModul; label: string }[] = [
   { value: "evaluasi", label: "Evaluasi" },
   { value: "referensi", label: "Referensi" },
+  { value: "atestasi", label: "Atestasi" },
 ];
 
 const TIPE_REFERENSI_OPTIONS: { value: TipeReferensi; label: string }[] = [
@@ -55,6 +60,7 @@ interface KegiatanFormState {
   syaratJenis: JenisSyaratSertifikat;
   syaratNilaiMinimum: string;
   syaratWajibBukaReferensi: boolean;
+  syaratAtestasiJadiSyarat: boolean;
   templateSertifikat: TemplateSertifikat;
 }
 
@@ -74,6 +80,10 @@ interface ModulFormState {
   referensiTipe: TipeReferensi;
   referensiSumber: string;
   referensiDeskripsi: string;
+  atestasiSumberUrl: string;
+  atestasiAmbangNilai: string;
+  atestasiTargetSkor: string;
+  atestasiMintaNickname: boolean;
 }
 
 function emptyModulForm(): ModulFormState {
@@ -93,6 +103,14 @@ function emptyModulForm(): ModulFormState {
     referensiTipe: "youtube",
     referensiSumber: "",
     referensiDeskripsi: "",
+    atestasiSumberUrl: "",
+    // Kosong sengaja — mode DAN nilai default (persen 90 / menit 10)
+    // ditentukan gerbang verifikasi saat modul baru pertama kali disimpan
+    // (lihat handleSubmitModul). Untuk modul yang sedang disunting,
+    // startEditModul() mengisi nilai yang sudah tersimpan.
+    atestasiAmbangNilai: "",
+    atestasiTargetSkor: "",
+    atestasiMintaNickname: false,
   };
 }
 
@@ -100,6 +118,14 @@ function ringkasanModul(modul: ModulKegiatan, topikLabel: Map<string, string>): 
   if (modul.kategori === "referensi") {
     const label = TIPE_REFERENSI_OPTIONS.find((opt) => opt.value === modul.referensi?.tipe)?.label;
     return `Referensi — ${label ?? "?"}`;
+  }
+  if (modul.kategori === "atestasi") {
+    if (!modul.atestasi) {
+      return "-";
+    }
+    const { gameId, gameName, versi, durasiDetik } = modul.atestasi;
+    const durasi = durasiDetik !== null ? `${durasiDetik}dtk` : "tanpa durasi";
+    return `${gameName || gameId} v${versi || "?"} · ${durasi}`;
   }
   if (!modul.evaluasi) {
     return "-";
@@ -218,6 +244,15 @@ export default function AdminKegiatanDetailPage({
     };
   }, [modulList]);
 
+  // Sama seperti hitunganReferensi di atas, untuk centang "atestasiJadiSyarat".
+  const hitunganAtestasi = useMemo(() => {
+    const atestasi = modulList.filter((modul) => modul.kategori === "atestasi");
+    return {
+      wajib: atestasi.filter((modul) => modul.wajib).length,
+      opsional: atestasi.filter((modul) => !modul.wajib).length,
+    };
+  }, [modulList]);
+
   // Kegiatan
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
@@ -242,9 +277,39 @@ export default function AdminKegiatanDetailPage({
           syaratJenis: kegiatan.syaratSertifikat.jenis,
           syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
           syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
+          syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
           templateSertifikat: kegiatan.templateSertifikat,
         }
       : null);
+
+  // Slice 7.4 §2: satu kalimat hidup di atas ketiga kontrol prasyarat,
+  // supaya admin melihat AKIBAT gabungan centang-centangnya tanpa harus
+  // menyimpulkannya sendiri dari tiga kalimat terpisah. Guard "> 0" pada
+  // referensi/atestasi sengaja meniru evaluasiKelayakan()/prasyaratMateri:
+  // syarat yang aktif tapi tidak punya modul wajib sama sekali memang tidak
+  // pernah menggerbang apa pun, jadi tidak disebut di sini juga.
+  const ringkasanPrasyarat = (() => {
+    if (!editingKegiatanForm) {
+      return "";
+    }
+    if (editingKegiatanForm.syaratJenis === "manual_admin") {
+      return "Sertifikat diterbitkan manual oleh admin — tidak ada syarat nilai otomatis.";
+    }
+    const bagian: string[] = [
+      `lulus evaluasi dengan nilai ≥ ${editingKegiatanForm.syaratNilaiMinimum || 0}`,
+    ];
+    if (editingKegiatanForm.syaratWajibBukaReferensi && hitunganReferensi.wajib > 0) {
+      bagian.push(`membuka ${hitunganReferensi.wajib} materi referensi wajib`);
+    }
+    if (editingKegiatanForm.syaratAtestasiJadiSyarat && hitunganAtestasi.wajib > 0) {
+      bagian.push(`menuntaskan ${hitunganAtestasi.wajib} materi atestasi wajib`);
+    }
+    const daftar =
+      bagian.length === 1
+        ? bagian[0]
+        : `${bagian.slice(0, -1).join(", ")}, dan ${bagian[bagian.length - 1]}`;
+    return `Peserta harus: ${daftar}.`;
+  })();
 
   async function handleSubmitKegiatan(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -287,6 +352,7 @@ export default function AdminKegiatanDetailPage({
           jenis: editingKegiatanForm.syaratJenis,
           nilaiMinimum: Number(editingKegiatanForm.syaratNilaiMinimum) || 0,
           wajibBukaReferensi: editingKegiatanForm.syaratWajibBukaReferensi,
+          atestasiJadiSyarat: editingKegiatanForm.syaratAtestasiJadiSyarat,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
       };
@@ -304,6 +370,7 @@ export default function AdminKegiatanDetailPage({
   const [editingModulId, setEditingModulId] = useState<string | null>(null);
   const [modulError, setModulError] = useState<string | null>(null);
   const [savingModul, setSavingModul] = useState(false);
+  const [memverifikasiAtestasi, setMemverifikasiAtestasi] = useState(false);
   const [deletingModulId, setDeletingModulId] = useState<string | null>(null);
 
   const {
@@ -312,6 +379,15 @@ export default function AdminKegiatanDetailPage({
     error: soalUntukPemilihanError,
   } = useSoalList(modulForm.topikKode || undefined);
   const soalAktifTersedia = soalUntukPemilihan.filter((soal) => soal.isActive).length;
+
+  // Konfigurasi atestasi TERSIMPAN milik modul yang sedang disunting (kalau
+  // ada) — dipakai untuk menonaktifkan ambang kredit saat durasiDetik sudah
+  // diketahui null, dan untuk ringkasan hasil verifikasi hanya-baca. Bukan
+  // dari modulForm — form tidak pernah menyimpan hasil verifikasi (lihat
+  // komentar di handleSubmitModul), jadi ini satu-satunya sumbernya.
+  const atestasiTersimpan = editingModulId
+    ? (modulList.find((m) => m.id === editingModulId)?.atestasi ?? null)
+    : null;
 
   function resetModulForm() {
     setModulForm(emptyModulForm());
@@ -324,7 +400,10 @@ export default function AdminKegiatanDetailPage({
     setEditingModulId(modul.id);
     setModulForm({
       judul: modul.judul,
-      kategori: modul.kategori === "referensi" ? "referensi" : "evaluasi",
+      kategori:
+        modul.kategori === "referensi" || modul.kategori === "atestasi"
+          ? modul.kategori
+          : "evaluasi",
       urutan: String(modul.urutan),
       wajib: modul.wajib,
       nilaiMinimum: String(modul.evaluasi?.nilaiMinimum ?? 70),
@@ -339,6 +418,16 @@ export default function AdminKegiatanDetailPage({
       referensiTipe: modul.referensi?.tipe ?? "youtube",
       referensiSumber: modul.referensi?.sumber ?? "",
       referensiDeskripsi: modul.referensi?.deskripsi ?? "",
+      atestasiSumberUrl: modul.atestasi?.sumberUrl ?? "",
+      // Kosong kalau belum pernah diverifikasi — handleSubmitModul yang
+      // mengisi default sesuai mode saat itu terjadi.
+      atestasiAmbangNilai:
+        modul.atestasi?.ambangKeterlibatan.nilai != null
+          ? String(modul.atestasi.ambangKeterlibatan.nilai)
+          : "",
+      atestasiTargetSkor:
+        modul.atestasi?.targetSkor != null ? String(modul.atestasi.targetSkor) : "",
+      atestasiMintaNickname: modul.atestasi?.mintaNicknameCcl ?? false,
     });
   }
 
@@ -359,6 +448,72 @@ export default function AdminKegiatanDetailPage({
     setModulError(null);
     setSavingModul(true);
     try {
+      // Gerbang pendaftaran atestasi — jalan SEKALI lagi setiap kali modul
+      // atestasi disimpan (baik baru maupun sunting), bukan langkah
+      // terpisah yang di-cache: "Saat admin menyimpan modul atestasi,
+      // portal memuat sumberUrl di iframe tersembunyi..." (§3, Slice 7.1).
+      // Ini juga menghindari kebutuhan menyimpan/membatalkan hasil
+      // verifikasi lama saat URL diubah — hasil lama tidak pernah dipakai.
+      let atestasiInput: KonfigurasiAtestasi | null = null;
+      if (modulForm.kategori === "atestasi") {
+        const sumberUrl = modulForm.atestasiSumberUrl.trim();
+        if (!sumberUrl) {
+          throw new Error("URL sumber wajib diisi untuk modul atestasi.");
+        }
+        const validasiUrl = periksaUrlAtestasi(sumberUrl);
+        if (!validasiUrl.valid) {
+          throw new Error(validasiUrl.alasan ?? "URL sumber tidak valid.");
+        }
+        setMemverifikasiAtestasi(true);
+        const hasilVerifikasi = await verifikasiGameCcl(sumberUrl);
+        setMemverifikasiAtestasi(false);
+        if (!hasilVerifikasi.ok) {
+          throw new Error(hasilVerifikasi.alasan);
+        }
+        // Mode DITENTUKAN OTOMATIS dari hasil gerbang — durasiDetik
+        // terisi berarti video (persen), null berarti game aksi (menit).
+        // Admin cuma boleh mengubah nilainya, tidak satuannya (§1, Slice
+        // 7.3). Field nilai kosong (modul baru, belum pernah disunting)
+        // jatuh ke default per mode; kalau sudah terisi (modul lama yang
+        // disunting ulang), nilai admin dipertahankan apa adanya.
+        const modeAmbang = hasilVerifikasi.durasiDetik !== null ? "persen" : "menit";
+        const nilaiAmbangDefault = modeAmbang === "persen" ? 90 : 10;
+        const nilaiAmbang = modulForm.atestasiAmbangNilai.trim()
+          ? Number(modulForm.atestasiAmbangNilai)
+          : nilaiAmbangDefault;
+        // Slice 7.5: dilewatkan ke normalkanAmbangKeterlibatan() sebagai
+        // pagar terakhir — modeAmbang di atas sudah benar dari
+        // durasiDetik, jadi ini seharusnya tidak pernah mengoreksi apa
+        // pun di jalur simpan (ambangDikoreksi selalu false dari sini);
+        // ia HANYA mengoreksi saat DIBACA (services/modul.ts), untuk
+        // modul lama yang tersimpan mustahil dievaluasi. "Jangan pernah
+        // persen tanpa durasi" dijamin di titik yang sama untuk kedua
+        // arah (tulis dan baca), bukan cuma salah satu.
+        const { ambang: ambangKeterlibatan, dikoreksi: ambangDikoreksi } =
+          normalkanAmbangKeterlibatan(
+            {
+              mode: modeAmbang,
+              nilai: Number.isFinite(nilaiAmbang) ? nilaiAmbang : nilaiAmbangDefault,
+            },
+            hasilVerifikasi.durasiDetik
+          );
+        atestasiInput = {
+          sumberUrl,
+          gameId: hasilVerifikasi.gameId,
+          gameName: hasilVerifikasi.gameName,
+          versi: hasilVerifikasi.versi,
+          durasiDetik: hasilVerifikasi.durasiDetik,
+          ambangKeterlibatan,
+          ambangDikoreksi,
+          targetSkor: modulForm.atestasiTargetSkor.trim()
+            ? Number(modulForm.atestasiTargetSkor)
+            : null,
+          originDiizinkan: hasilVerifikasi.originDiizinkan,
+          mintaNicknameCcl: modulForm.atestasiMintaNickname,
+          diverifikasiPada: new Date().toISOString(),
+        };
+      }
+
       const input: ModulWriteInput =
         modulForm.kategori === "referensi"
           ? {
@@ -372,28 +527,40 @@ export default function AdminKegiatanDetailPage({
                 sumber: modulForm.referensiSumber,
                 deskripsi: modulForm.referensiDeskripsi,
               },
+              atestasi: null,
             }
-          : {
-              judul: modulForm.judul,
-              kategori: "evaluasi",
-              urutan: Number(modulForm.urutan) || 0,
-              wajib: modulForm.wajib,
-              evaluasi: {
-                pemilihanSoal: {
-                  mode: modulForm.mode,
-                  soalIds: modulForm.mode === "tetap" ? modulForm.soalIds : [],
-                  topikKode: modulForm.mode === "acak" ? modulForm.topikKode || null : null,
-                  jumlah: modulForm.mode === "acak" ? Number(modulForm.jumlah) || null : null,
+          : modulForm.kategori === "atestasi"
+            ? {
+                judul: modulForm.judul,
+                kategori: "atestasi",
+                urutan: Number(modulForm.urutan) || 0,
+                wajib: modulForm.wajib,
+                evaluasi: null,
+                referensi: null,
+                atestasi: atestasiInput,
+              }
+            : {
+                judul: modulForm.judul,
+                kategori: "evaluasi",
+                urutan: Number(modulForm.urutan) || 0,
+                wajib: modulForm.wajib,
+                evaluasi: {
+                  pemilihanSoal: {
+                    mode: modulForm.mode,
+                    soalIds: modulForm.mode === "tetap" ? modulForm.soalIds : [],
+                    topikKode: modulForm.mode === "acak" ? modulForm.topikKode || null : null,
+                    jumlah: modulForm.mode === "acak" ? Number(modulForm.jumlah) || null : null,
+                  },
+                  nilaiMinimum: Number(modulForm.nilaiMinimum) || 0,
+                  maksPercobaan: Number(modulForm.maksPercobaan) || 1,
+                  batasWaktuMenit: modulForm.batasWaktuMenit
+                    ? Number(modulForm.batasWaktuMenit)
+                    : null,
+                  acakUrutanSoal: modulForm.acakUrutanSoal,
                 },
-                nilaiMinimum: Number(modulForm.nilaiMinimum) || 0,
-                maksPercobaan: Number(modulForm.maksPercobaan) || 1,
-                batasWaktuMenit: modulForm.batasWaktuMenit
-                  ? Number(modulForm.batasWaktuMenit)
-                  : null,
-                acakUrutanSoal: modulForm.acakUrutanSoal,
-              },
-              referensi: null,
-            };
+                referensi: null,
+                atestasi: null,
+              };
 
       if (editingModulId) {
         await updateModul(id, editingModulId, input, user.uid);
@@ -405,6 +572,7 @@ export default function AdminKegiatanDetailPage({
       setModulError(err instanceof Error ? err.message : "Gagal menyimpan modul.");
     } finally {
       setSavingModul(false);
+      setMemverifikasiAtestasi(false);
     }
   }
 
@@ -624,80 +792,109 @@ export default function AdminKegiatanDetailPage({
                 Kosongkan kalau tidak dibatasi waktu. Kalau diisi, tanggal dan jam harus lengkap.
               </p>
             </div>
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
               <div>
-                <label
-                  htmlFor="det-syarat"
-                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-                >
-                  Syarat sertifikat
-                </label>
-                <select
-                  id="det-syarat"
-                  value={editingKegiatanForm.syaratJenis}
-                  onChange={(event) =>
-                    setKegiatanForm({
-                      ...editingKegiatanForm,
-                      syaratJenis: event.target.value as JenisSyaratSertifikat,
-                    })
-                  }
-                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                >
-                  {SYARAT_OPTIONS.map((option) => (
-                    <option key={option} value={option}>
-                      {option === "nilai_minimum" ? "Nilai minimum" : "Manual oleh admin"}
-                    </option>
-                  ))}
-                </select>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Prasyarat sebelum sertifikat bisa terbit
+                </p>
+                <p className="mt-1 text-xs text-zinc-500">{ringkasanPrasyarat}</p>
               </div>
-              {editingKegiatanForm.syaratJenis === "nilai_minimum" && (
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label
-                    htmlFor="det-nilai-minimum"
+                    htmlFor="det-syarat"
                     className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
                   >
-                    Nilai minimum lulus
+                    Syarat sertifikat
                   </label>
-                  <input
-                    id="det-nilai-minimum"
-                    type="number"
-                    min={1}
-                    max={100}
-                    required
-                    value={editingKegiatanForm.syaratNilaiMinimum}
+                  <select
+                    id="det-syarat"
+                    value={editingKegiatanForm.syaratJenis}
                     onChange={(event) =>
                       setKegiatanForm({
                         ...editingKegiatanForm,
-                        syaratNilaiMinimum: event.target.value,
+                        syaratJenis: event.target.value as JenisSyaratSertifikat,
                       })
                     }
                     className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
+                  >
+                    {SYARAT_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option === "nilai_minimum" ? "Nilai minimum" : "Manual oleh admin"}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              )}
-              <div className="sm:col-span-2">
-                <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-                  <input
-                    type="checkbox"
-                    checked={editingKegiatanForm.syaratWajibBukaReferensi}
-                    onChange={(event) =>
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        syaratWajibBukaReferensi: event.target.checked,
-                      })
-                    }
-                  />
-                  Peserta harus membuka semua materi referensi yang wajib
-                </label>
-                <p className="mt-1 text-xs text-zinc-500">
-                  Saat ini kegiatan ini punya {hitunganReferensi.wajib} modul referensi wajib dan{" "}
-                  {hitunganReferensi.opsional} opsional.
-                </p>
-                {hitunganReferensi.wajib === 0 && (
-                  <p className="mt-1 text-xs text-amber-600">
-                    Centang ini belum berpengaruh — belum ada modul referensi wajib pada kegiatan
-                    ini.
-                  </p>
+                {editingKegiatanForm.syaratJenis === "nilai_minimum" && (
+                  <div>
+                    <label
+                      htmlFor="det-nilai-minimum"
+                      className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      Nilai minimum lulus
+                    </label>
+                    <input
+                      id="det-nilai-minimum"
+                      type="number"
+                      min={1}
+                      max={100}
+                      required
+                      value={editingKegiatanForm.syaratNilaiMinimum}
+                      onChange={(event) =>
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          syaratNilaiMinimum: event.target.value,
+                        })
+                      }
+                      className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                  </div>
+                )}
+                {hitunganReferensi.wajib > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={editingKegiatanForm.syaratWajibBukaReferensi}
+                        onChange={(event) =>
+                          setKegiatanForm({
+                            ...editingKegiatanForm,
+                            syaratWajibBukaReferensi: event.target.checked,
+                          })
+                        }
+                      />
+                      Peserta harus membuka semua materi referensi yang wajib
+                    </label>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Saat ini kegiatan ini punya {hitunganReferensi.wajib} modul referensi wajib
+                      {hitunganReferensi.opsional > 0 &&
+                        ` dan ${hitunganReferensi.opsional} opsional`}
+                      .
+                    </p>
+                  </div>
+                )}
+                {hitunganAtestasi.wajib > 0 && (
+                  <div className="sm:col-span-2">
+                    <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                      <input
+                        type="checkbox"
+                        checked={editingKegiatanForm.syaratAtestasiJadiSyarat}
+                        onChange={(event) =>
+                          setKegiatanForm({
+                            ...editingKegiatanForm,
+                            syaratAtestasiJadiSyarat: event.target.checked,
+                          })
+                        }
+                      />
+                      Peserta harus menuntaskan semua materi atestasi yang wajib
+                    </label>
+                    <p className="mt-1 text-xs text-zinc-500">
+                      Saat ini kegiatan ini punya {hitunganAtestasi.wajib} modul atestasi wajib
+                      {hitunganAtestasi.opsional > 0 &&
+                        ` dan ${hitunganAtestasi.opsional} opsional`}
+                      .
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
@@ -1052,6 +1249,168 @@ export default function AdminKegiatanDetailPage({
             </div>
           )}
 
+          {modulForm.kategori === "atestasi" && (
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Konten atestasi (game CCL)
+              </p>
+
+              <div>
+                <label
+                  htmlFor="mod-at-url"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  URL sumber
+                </label>
+                <input
+                  id="mod-at-url"
+                  type="url"
+                  required
+                  placeholder="https://cdn.contoh.com/games/space-commander/index.html"
+                  value={modulForm.atestasiSumberUrl}
+                  onChange={(event) =>
+                    setModulForm((f) => ({ ...f, atestasiSumberUrl: event.target.value }))
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                {modulForm.atestasiSumberUrl.trim() &&
+                  (() => {
+                    const hasil = periksaUrlAtestasi(modulForm.atestasiSumberUrl.trim());
+                    if (hasil.valid && hasil.alasan) {
+                      return <p className="mt-1 text-xs text-amber-600">{hasil.alasan}</p>;
+                    }
+                    if (!hasil.valid) {
+                      return <p className="mt-1 text-xs text-red-600">{hasil.alasan}</p>;
+                    }
+                    return null;
+                  })()}
+                <p className="mt-1 text-xs text-zinc-500">
+                  gameId, nama, versi, dan durasi TIDAK bisa diketik manual — semuanya diisi
+                  otomatis dari game itu sendiri saat modul ini disimpan (portal memuat URL ini di
+                  iframe tersembunyi dan menunggu game melapor).
+                </p>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="mod-at-ambang"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Ambang keterlibatan
+                  {atestasiTersimpan
+                    ? atestasiTersimpan.ambangKeterlibatan.mode === "persen"
+                      ? " (persen)"
+                      : " (menit)"
+                    : ""}
+                </label>
+                <input
+                  id="mod-at-ambang"
+                  type="number"
+                  min={0}
+                  max={atestasiTersimpan?.ambangKeterlibatan.mode === "persen" ? 100 : undefined}
+                  required
+                  value={modulForm.atestasiAmbangNilai}
+                  onChange={(event) =>
+                    setModulForm((f) => ({
+                      ...f,
+                      atestasiAmbangNilai: event.target.value,
+                    }))
+                  }
+                  placeholder={
+                    atestasiTersimpan
+                      ? undefined
+                      : "Kosongkan untuk default (90% video atau 10 menit game)"
+                  }
+                  className="mt-1 w-40 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Satuannya (persen video / menit game) ditentukan otomatis oleh gerbang
+                  verifikasi berdasarkan apakah game ini melaporkan durasi — Anda hanya mengatur
+                  angkanya.
+                </p>
+                {atestasiTersimpan?.ambangDikoreksi && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Ambang modul ini tersimpan mode persen tanpa durasi diketahui — mustahil
+                    dievaluasi apa adanya, jadi dikoreksi otomatis ke 10 menit saat dibaca.
+                    Tinjau angka di atas dan simpan ulang untuk mengonfirmasinya.
+                  </p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="mod-at-target"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Target skor (opsional)
+                </label>
+                <input
+                  id="mod-at-target"
+                  type="number"
+                  min={0}
+                  value={modulForm.atestasiTargetSkor}
+                  onChange={(event) =>
+                    setModulForm((f) => ({ ...f, atestasiTargetSkor: event.target.value }))
+                  }
+                  placeholder="Tanpa target skor"
+                  className="mt-1 w-40 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Mainkan game ini sekali sebelum menetapkan target — kalau target melebihi skor
+                  maksimal yang bisa dicapai, tidak akan ada peserta yang lulus.
+                </p>
+              </div>
+
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={modulForm.atestasiMintaNickname}
+                  onChange={(event) =>
+                    setModulForm((f) => ({ ...f, atestasiMintaNickname: event.target.checked }))
+                  }
+                />
+                Minta peserta mengisi nickname CCL
+              </label>
+
+              {memverifikasiAtestasi && (
+                <p className="text-sm text-zinc-500">
+                  Memverifikasi game — memuat halaman dan menunggu CCL_READY (maks 15 detik
+                  total)...
+                </p>
+              )}
+
+              {atestasiTersimpan && (
+                <div className="rounded border border-zinc-200 bg-zinc-50 p-3 text-xs dark:border-zinc-800 dark:bg-zinc-900">
+                  <p className="font-medium text-zinc-700 dark:text-zinc-300">
+                    Hasil verifikasi terakhir (hanya-baca)
+                  </p>
+                  <dl className="mt-1 space-y-0.5 text-zinc-600 dark:text-zinc-400">
+                    <div className="flex justify-between">
+                      <dt>game_id</dt>
+                      <dd className="font-mono">{atestasiTersimpan.gameId}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Nama</dt>
+                      <dd>{atestasiTersimpan.gameName || "-"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Versi</dt>
+                      <dd>{atestasiTersimpan.versi || "-"}</dd>
+                    </div>
+                    <div className="flex justify-between">
+                      <dt>Durasi</dt>
+                      <dd>
+                        {atestasiTersimpan.durasiDetik !== null
+                          ? `${atestasiTersimpan.durasiDetik} detik`
+                          : "tidak dilaporkan"}
+                      </dd>
+                    </div>
+                  </dl>
+                </div>
+              )}
+            </div>
+          )}
+
           {modulForm.kategori === "evaluasi" && (
           <>
           <div className="grid gap-4 sm:grid-cols-3">
@@ -1258,7 +1617,13 @@ export default function AdminKegiatanDetailPage({
               disabled={savingModul}
               className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
-              {editingModulId ? "Simpan modul" : "Tambah modul"}
+              {memverifikasiAtestasi
+                ? "Memverifikasi..."
+                : savingModul
+                  ? "Menyimpan..."
+                  : editingModulId
+                    ? "Simpan modul"
+                    : "Tambah modul"}
             </button>
             {editingModulId && (
               <button
@@ -1320,7 +1685,9 @@ export default function AdminKegiatanDetailPage({
                     {modul.wajib ? "Ya" : "Tidak"}
                   </td>
                   <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
-                    {modul.evaluasi?.nilaiMinimum ?? "-"}
+                    {modul.kategori === "atestasi"
+                      ? (modul.atestasi?.targetSkor ?? "-")
+                      : (modul.evaluasi?.nilaiMinimum ?? "-")}
                   </td>
                   <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
                     {ringkasanModul(modul, topikLabel)}

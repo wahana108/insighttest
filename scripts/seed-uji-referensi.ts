@@ -23,7 +23,7 @@
  */
 import { loadEnvConfig } from "@next/env";
 import { getAdminDb } from "../src/lib/firebase/admin";
-import type { KategoriModul } from "../src/types/kegiatan";
+import type { AmbangKeterlibatan, KategoriModul, ModeAmbangKeterlibatan } from "../src/types/kegiatan";
 import type { HasilModul, ModulSnapshotItem, Pendaftaran } from "../src/types/pendaftaran";
 
 loadEnvConfig(process.cwd());
@@ -38,6 +38,20 @@ const DUMMY: { sufiks: string; nama: string; cakupan: "kosong" | "satu" | "lengk
 
 function isKategoriModul(value: unknown): value is KategoriModul {
   return value === "referensi" || value === "atestasi" || value === "evaluasi";
+}
+
+function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
+  return value === "persen" || value === "menit";
+}
+
+function mapAmbangKeterlibatan(value: unknown): AmbangKeterlibatan | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const data = value as Record<string, unknown>;
+  return isModeAmbangKeterlibatan(data.mode) && typeof data.nilai === "number"
+    ? { mode: data.mode, nilai: data.nilai }
+    : null;
 }
 
 async function main(): Promise<void> {
@@ -83,6 +97,10 @@ async function main(): Promise<void> {
       typeof data.evaluasi === "object" && data.evaluasi !== null
         ? (data.evaluasi as Record<string, unknown>)
         : null;
+    const atestasi =
+      typeof data.atestasi === "object" && data.atestasi !== null
+        ? (data.atestasi as Record<string, unknown>)
+        : null;
     return {
       modulId: doc.id,
       judul: typeof data.judul === "string" ? data.judul : "",
@@ -90,6 +108,10 @@ async function main(): Promise<void> {
       wajib: typeof data.wajib === "boolean" ? data.wajib : true,
       nilaiMinimum:
         evaluasi && typeof evaluasi.nilaiMinimum === "number" ? evaluasi.nilaiMinimum : null,
+      ambangKeterlibatan: atestasi ? mapAmbangKeterlibatan(atestasi.ambangKeterlibatan) : null,
+      targetSkor: atestasi && typeof atestasi.targetSkor === "number" ? atestasi.targetSkor : null,
+      durasiDetik:
+        atestasi && typeof atestasi.durasiDetik === "number" ? atestasi.durasiDetik : null,
     };
   });
 
@@ -138,6 +160,7 @@ async function main(): Promise<void> {
       daftarPada: now,
       hasilModul,
       referensiDibuka,
+      atestasi: {},
     };
 
     await db.collection("pendaftaran").doc(`${kegiatanId}_${uid}`).set(record);

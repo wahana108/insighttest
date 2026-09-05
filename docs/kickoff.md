@@ -1267,3 +1267,373 @@ Terbitkan dua sisanya sekaligus → dua serial berurutan. Cabut salah satunya �
 `/s/{kode}` di incognito → harus menyatakan **TIDAK BERLAKU**. Terakhir, isi
 penandatangan di template, terbitkan sertifikat baru, lalu **ubah nama penandatangannya**
 — sertifikat yang sudah terbit harus tetap menampilkan nama lama.
+
+**Tahap 4 selesai 1 Sep 2026.** Tujuh sertifikat terbit dengan serial berurutan,
+pencabutan bekerja, dan seluruh blok penandatangan — nama, jabatan, gambar tanda
+tangan — terbukti beku per sertifikat.
+
+**Dua koreksi yang lahir dari pengujian**, keduanya ditemukan pemilik project:
+
+1. Gambar tanda tangan semula dibiarkan hidup dengan alasan "branding". Itu keliru —
+   membekukan nama tapi membiarkan gambarnya berubah menghasilkan sertifikat yang
+   mencantumkan satu orang dengan coretan orang lain. Seluruh blok penandatangan
+   dibekukan bersama; hanya logo dan kop yang tetap hidup.
+2. Label kelayakan menampilkan "Belum layak" merah pada kegiatan bersyarat manual,
+   padahal artinya "sistem sengaja tidak menilai". Status jadi bertiga:
+   `layak` | `belum_layak` | `ditentukan_admin`.
+
+---
+
+## J. Menjalankan gelombang nyata pertama
+
+Alur webinar sudah bisa dijalankan **tanpa menunggu tahap 5 sampai 9**: kegiatan tanpa
+modul evaluasi, syarat sertifikat `manual_admin`, peserta mendaftar dan mengisi namanya
+sendiri, admin mencoret yang tidak hadir lalu menerbitkan sekali klik.
+
+### Yang WAJIB dikerjakan sebelum go-live
+
+**Tambahkan variabel Admin SDK ke Vercel.** Selama ini semuanya diuji di `localhost`,
+di mana `.env.local` terbaca. Di Vercel ketiganya belum ada:
+
+```
+FIREBASE_ADMIN_PROJECT_ID
+FIREBASE_ADMIN_CLIENT_EMAIL
+FIREBASE_ADMIN_PRIVATE_KEY
+```
+
+Tanpa ini, **seluruh Route Handler gagal di produksi** — pendaftaran, pengerjaan soal,
+penilaian, dan penerbitan sertifikat. Situsnya tetap terbuka dan halaman biasa tetap
+tampil, jadi kegagalannya tidak kentara sampai ada yang mencoba mendaftar.
+
+Vercel → Settings → Environment Variables. Private key tetap dibungkus tanda kutip
+dengan `\n` apa adanya, sama persis seperti di `.env.local`. Setelah ditambahkan,
+**deploy ulang** — variabel baru tidak berlaku pada build lama.
+
+### Daftar periksa gelombang pertama
+
+1. Env Admin SDK di Vercel + deploy ulang (di atas)
+2. Uji satu pendaftaran di domain Vercel, bukan localhost
+3. Buat kegiatan sungguhan: kode, judul, deskripsi, jendela waktu
+4. Syarat sertifikat `manual_admin` untuk webinar murni
+5. Isi template: logo, kop, penandatangan (nama, jabatan, tautan tanda tangan)
+6. Modul: kosongkan untuk webinar murni, atau satu modul evaluasi kalau ada kuis
+7. Tentukan mode pendaftaran di `/admin/parameter` — terbuka atau undangan
+8. Terbitkan kegiatan, sebarkan tautan `/kegiatan`
+9. Setelah acara: `/admin/kegiatan/[id]/peserta` → coret yang tidak hadir →
+   Terbitkan terpilih
+10. Peserta mengunduh sendiri dari `/beranda`
+
+### Yang belum ada, dan tidak menghalangi
+
+Kode kehadiran otomatis, formulir tambahan, referensi video, atestasi CCL, ekspor rekap,
+peran panitia, dan poles tampilan. Semuanya berguna; tidak satu pun menghalangi gelombang
+pertama berjalan. Urutkan ulang tahap 5–9 berdasarkan keluhan yang benar-benar muncul,
+bukan tebakan.
+
+---
+
+## K. Produksi Vercel — 401 terpecahkan (1 Sep 2026)
+
+### Gejala
+`/beranda` menampilkan kartu profil dengan benar, tetapi "Kegiatan saya" dan
+"Sertifikat saya" gagal dengan `Token tidak sah atau kedaluwarsa.`
+`GET /api/sertifikat/saya` dan `/api/pendaftaran/saya` → 401. Log Vercel: fungsi
+berjalan 938 ms lalu 401, tanpa satu pun baris console (filter Error = 0).
+
+### Cara mempersempit (dilakukan lewat browser pengguna)
+ID token diambil dari IndexedDB `firebaseLocalStorageDb`, payload JWT dibaca, lalu
+dikirim manual ke `/api/whoami`. Hasil: `aud = insighttest-66524`, belum kedaluwarsa,
+header terkirim, server tetap 401. **Kesimpulan: separuh klien sehat; kegagalan murni
+di Admin SDK sisi server.** Ini memangkas kandidat dari lima jadi dua.
+
+### Penyebab sebenarnya
+`FIREBASE_ADMIN_PRIVATE_KEY` disalin ke Vercel **beserta tanda kutip pembungkusnya**.
+
+Di laptop, `.env.local` dibaca `@next/env` (berbasis dotenv), yang **melucuti tanda
+kutip dan sudah mengubah `\n` jadi baris baru sungguhan** sebelum kode kita jalan —
+sehingga `.replace(/\\n/g, "\n")` di `src/lib/firebase/admin.ts` hanyalah no-op di
+localhost. Vercel tidak melakukan itu: nilainya disimpan huruf per huruf. Akibatnya PEM
+diawali `"`, `cert()` gagal, error tertangkap dan muncul sebagai 401.
+
+**Perbaikan:** hapus tanda kutip di awal dan akhir nilai di Vercel, lalu Redeploy tanpa
+build cache. Nilai yang benar dimulai persis dengan `-----BEGIN` dan berakhir
+`PRIVATE KEY-----`. Isi di antaranya boleh `\n` maupun baris baru sungguhan.
+
+### Pelajaran yang bisa dipakai ulang
+1. **Localhost sehat tidak membuktikan apa pun tentang Vercel.** Diagnostik yang
+   dijalankan CLI di laptop mengukur mesin yang salah; ia membaca `.env.local`, bukan
+   env Vercel. Diagnostik produksi harus berupa route yang benar-benar dideploy.
+2. Cara tercepat memisahkan klien dari server: kirim token manual ke `/api/whoami` dari
+   konsol browser dan periksa `aud` + `exp`-nya.
+3. Route Handler yang menelan error jadi pesan generik menyembunyikan penyebab. Kalau
+   404/401 misterius muncul lagi, `console.error` di blok catch adalah langkah pertama.
+
+---
+
+## L. Slice 5.0 — pagar URL gambar (1 Sep 2026)
+
+Muncul dari insiden: tanda tangan pada sertifikat tidak tampil, console `404`. Tautannya
+berasal dari gambar yang ditempel ke percakapan GitHub —
+`private-user-images.githubusercontent.com/...?jwt=...` dengan `X-Amz-Expires=300`.
+Tautan itu hidup **5 menit** dan terikat sesi login pengunggahnya. Terlihat "berhasil"
+saat diuji karena diuji beberapa detik setelah disalin.
+
+Bahayanya khusus di sini: blok penandatangan **dibekukan** ke dokumen sertifikat
+(KA-6), jadi tautan fana merusak sertifikat selamanya, di halaman verifikasi publik.
+Ini melahirkan **KA-8** di ARSITEKTUR §8.
+
+Yang dibangun:
+- `src/lib/validasi-url-gambar.ts` — `periksaUrlGambar()`, fungsi murni. Menolak: bukan
+  `https://`, host `private-user-images.githubusercontent.com`, query mengandung
+  `jwt`/`X-Amz-Signature`/`X-Amz-Expires`, `github.com` tanpa `/raw/`. Memperingatkan
+  (tidak menolak) kalau path tidak berakhiran ekstensi gambar. String kosong = valid.
+- Komponen `FieldUrlGambar` di `/admin/kegiatan/[id]`: pesan merah untuk penolakan,
+  kuning untuk peringatan, pratinjau `<img>` dengan `onError` terpisah — supaya tautan
+  mati ketahuan sebelum penerbitan, bukan sesudah. Submit diblokir kalau ada yang invalid.
+- Pagar terakhir di `terbitkanSertifikatUntuk()`: `SertifikatRouteError(400, ...)` kalau
+  `tandaTanganUrl` tidak lolos.
+
+### Tempat menyimpan aset
+Repo GitHub **publik** khusus aset (logo, kop, tanda tangan — semuanya memang tercetak
+di sertifikat publik), diunggah lewat **Add file → Upload files**, bukan ditempel ke
+komentar. Tautan diambil dari tombol **Raw**:
+`https://raw.githubusercontent.com/{user}/{repo}/main/logo.png`.
+Alternatif CDN: `https://cdn.jsdelivr.net/gh/{user}/{repo}@main/logo.png`.
+
+### Utang teknis yang ditemukan sambil jalan
+`npm run lint` melaporkan **11 error `react-hooks/set-state-in-effect` pra-ada di 10
+berkas** (`use-kegiatan-list.ts`, `use-soal-list.ts`, `/profil/page.tsx`,
+`/sertifikat/[id]/page.tsx`, dll). Lolos selama ini karena `npm run build` di proyek ini
+tidak menjalankan eslint. Polanya "fetch saat mount lalu setState di dalam useEffect" —
+berfungsi, bukan bug runtime.
+
+**Keputusan: ditunda ke tahap 9**, digabung dengan poles lain. Sampai itu beres, kriteria
+sebelum commit dibaca sebagai **"tidak ada error lint baru"**, bukan "lint bersih" —
+kalau tidak, pagarnya jadi lampu merah permanen yang diabaikan. Tahap 9 menambah dua
+pekerjaan: bereskan 11 error itu, lalu nyalakan eslint di `npm run build` supaya tidak
+menumpuk lagi.
+
+---
+
+## M. Slice 5.0b & 5.0c — penerbitan ulang sertifikat (2 Sep 2026)
+
+### 5.0b — bug: sertifikat yang dicabut tidak bisa diterbitkan ulang
+Kotak centang di `/admin/kegiatan/[id]/peserta` dinonaktifkan untuk **setiap** peserta
+yang punya dokumen sertifikat, tanpa membedakan `berlaku` dari `dicabut`. Padahal itulah
+satu-satunya alasan orang mencabut: memperbaiki sesuatu lalu menerbitkan lagi. Sekali
+salah cetak, peserta itu terkunci selamanya.
+
+Aturan sekarang: centang aktif kalau belum punya sertifikat **atau** statusnya `dicabut`;
+terkunci hanya kalau `berlaku`. Tombol per-baris berbunyi "Terbitkan ulang" untuk yang
+dicabut.
+
+Pada penerbitan ulang: `nomorUrut`, serial, dan `kodeVerifikasi` **dipertahankan** (orang
+yang sama pada kegiatan yang sama tetap memegang serial yang sama; kode yang sudah
+disebar tidak boleh berubah arti). Nama, judul, item+skor, seluruh blok penandatangan,
+dan `diterbitkanPada` **diambil ulang** — itulah yang membuat penerbitan ulang
+memperbaiki terbitan yang salah. Field `riwayat[]` mencatat tiap terbit/cabut.
+
+Pencabutan tidak menyentuh `attempt` atau nilai — tidak perlu menguji ulang peserta.
+
+### 5.0c — jebakan: `arrayUnion` di dalam `set()` non-merge
+
+CLI melaporkan bahwa `FieldValue.arrayUnion` "tetap dievaluasi terhadap `riwayat` lama
+walau field lain ditimpa penuh". **Klaim itu salah**, dan letaknya persis di fitur audit
+yang baru dibangun.
+
+Spesifikasi `Write` Firestore, properti `updateTransforms`:
+> "The transforms to perform **after update**… equivalent to performing update and
+> transform to the same document atomically and in order."
+
+Transform berjalan **sesudah** update, terhadap dokumen hasilnya. `set()` tanpa merge
+adalah penggantian penuh: SDK mengeluarkan sentinel `arrayUnion` dari payload, menulis
+dokumen **tanpa** `riwayat` (menghapus yang lama), baru menjalankan arrayUnion terhadap
+array kosong. Hasilnya `riwayat` terpangkas jadi satu entri **setiap** penerbitan ulang.
+
+Pola yang sama dengan `FieldValue.increment` di dalam `set()` non-merge, yang terkenal
+me-reset penghitung alih-alih menambah.
+
+**Diverifikasi di emulator Firestore** (terbit → cabut → terbit ulang): entri lama hilang.
+Setelah perbaikan: dua entri bertahan utuh dan berurutan.
+
+**Perbaikan:** transaksi sudah membaca dokumen lama untuk memeriksa status; ambil
+`riwayat` dari snapshot itu dan tulis `[...riwayatLama, entriBaru]` sebagai array biasa.
+Di dalam transaksi tidak ada balapan yang perlu diselesaikan transform. Komentar
+ditinggalkan di kode supaya tidak "dirapikan" balik.
+
+`/api/sertifikat/cabut` **tidak** kena — memakai `update()`, yang punya field mask parsial
+sehingga `riwayat` lama tidak terhapus. Di sana `arrayUnion` tetap benar.
+
+### Aturan umum yang bisa dipakai ulang
+> `arrayUnion` dan `increment` aman di `update()` dan `set(..., { merge: true })`.
+> Di `set()` **non-merge** keduanya berangkat dari nol. Kalau sudah di dalam transaksi,
+> baca nilai lama dan susun sendiri — lebih jelas dan tidak punya jebakan.
+
+Riwayat pada tujuh sertifikat uji tidak lengkap akibat bug ini. Dibiarkan — data percobaan.
+
+---
+
+## N. Slice 5.1 — modul referensi (3 Sep 2026)
+
+`kegiatan/{id}/modul/{mid}` kategori `referensi` mendapat `referensi: { tipe, sumber,
+deskripsi }` dengan `tipe: 'youtube' | 'tautan' | 'teks'`. `src/lib/youtube.ts` —
+`ekstrakYoutubeId()` menangani `youtu.be/{id}`, `watch?v={id}`, `/embed/{id}`; dipakai
+di validasi simpan dan di render dari **sumber yang sama**, ID tidak pernah disimpan
+terpisah. Render: `youtube-nocookie.com/embed/{id}` dalam wadah `aspect-video`;
+`tautan` → tombol `target="_blank" rel="noopener noreferrer"`; `teks` → paragraf.
+
+`evaluasiKelayakan()` sudah memfilter `kategori === 'evaluasi'` sebelum menghitung
+`items`/`nilaiAkhir`, jadi modul referensi otomatis tidak pernah masuk sertifikat —
+dikonfirmasi lewat pembacaan kode dan tabel peserta ("1/1 modul lulus" walau ada dua
+modul referensi).
+
+### Dua jam hilang karena satu kebingungan: data dibagi, kode tidak
+
+Modul referensi dibuat lewat `localhost:3000`, lalu diuji sebagai peserta di
+`insighttest-gamma.vercel.app`. Barisnya **muncul** (lengkap dengan label
+"Referensi · Wajib") tetapi tanpa tautan "Lihat", sehingga terlihat seperti bug render.
+
+Sebabnya: localhost dan Vercel memakai **Firestore yang sama** (`insighttest-66524`),
+tetapi Vercel masih menjalankan build lama yang belum mengenal kategori referensi.
+Data langsung tersedia di kedua sisi; kode tidak.
+
+> **Aturan kerja:** fitur yang baru selesai di CLI dan belum di-push **hanya ada di
+> localhost**. Kalau sesuatu "tidak muncul", periksa dulu alamat di address bar
+> sebelum mencari bug. Data dibagi, kode tidak.
+
+Dugaan susulan (konfigurasi referensi tidak tersimpan pada jalur *sunting* modul) diuji
+terpisah — buat modul Evaluasi, sunting jadi Referensi, simpan — dan **tidak terbukti**:
+jalur sunting menyimpan dengan benar.
+
+### Tautan YouTube tidak berubah, ekornya yang berubah
+Tombol Share YouTube menambahkan `?si=...`, kode pelacak berbagi yang berbeda **setiap
+kali disalin**; kadang ikut `&t=` kalau disalin sambil menandai menit. ID videonya
+permanen. Karena ekstraktor hanya mengambil ID, semua bentuk itu diterima — jadi tautan
+yang "terlihat berubah" bukan tanda ada yang salah.
+
+### Belum berlaku
+Centang **"Wajib"** pada modul referensi belum berpengaruh apa pun — tidak ada yang
+memeriksa apakah peserta membukanya. Itu pekerjaan slice 5.2 (`wajibBukaReferensi`).
+Sampai itu ada, label "Wajib" pada referensi adalah niat, bukan aturan.
+
+### Slice 5.1a — alamat verifikasi harus kanonik (3 Sep 2026)
+
+Ditemukan saat memeriksa PDF sertifikat hasil uji: teks dan QR memuat
+`http://localhost:3000/s/{kode}` — alamat diambil dari `window.location.origin`, yaitu
+tempat sertifikat kebetulan dicetak.
+
+Bahayanya bukan localhost, melainkan Vercel: tiap deployment preview punya URL sendiri
+(`insighttest-a1b2c3.vercel.app`) yang mati begitu deployment dihapus. Satu sertifikat
+yang kebetulan dicetak dari preview akan membawa QR mati selamanya — dan matinya baru
+ketahuan saat orang luar memindainya untuk memeriksa keaslian. Ini kelas kesalahan yang
+sama dengan KA-8, hanya obyeknya alamat, bukan gambar.
+
+`src/lib/sertifikat-url.ts` — `urlVerifikasiSertifikat(kode, urlPublik)`, murni, dengan
+urutan: `NEXT_PUBLIC_SITE_URL` → `urlPublik` (field baru di `parameter/global`, bisa
+diubah superadmin tanpa deploy) → `null`. Kalau null, peringatan merah menggantikan QR;
+tidak pernah mencetak alamat kosong diam-diam. Diperbaiki di dua halaman yang punya
+cacat identik: `/sertifikat/cetak/[kodeVerifikasi]` dan `/sertifikat/[id]`.
+
+Diverifikasi: dicetak dari localhost dengan env dikosongkan, yang tercetak tetap alamat
+produksi (jatuh ke `urlPublik`); QR pada sertifikat produksi dipindai dengan ponsel dan
+membuka halaman verifikasi yang benar.
+
+**Catatan Vercel:** variabel `NEXT_PUBLIC_*` harus bertipe **Config**, bukan Secret —
+Vercel memprotes "rahasia yang dipublikasikan", dan protes itu benar. Yang tanpa awalan
+(`FIREBASE_ADMIN_*`) tetap Secret. Cukup dicentang Production; deployment preview yang
+tidak punya env akan jatuh ke `urlPublik`, yang justru perilaku yang diinginkan.
+
+### Slice 5.2 — syarat "harus dibuka" (3 Sep 2026)
+
+`pendaftaran.referensiDibuka: string[]`; ditulis hanya lewat `POST /api/modul/dibuka`
+(verifyRequest → pastikan terdaftar → pastikan modulId ada di `modulSnapshot` dengan
+kategori `referensi` → `update()` + `arrayUnion`, aman karena update punya field mask —
+lihat §M). Halaman modul memanggilnya **sekali**, hanya kalau modulId belum tercatat;
+tidak menulis berulang (ARSITEKTUR §5).
+
+`syaratSertifikat.wajibBukaReferensi: boolean`, default `false` (KA-4). Kalau `true`,
+`evaluasiKelayakan()` menghasilkan `belum_layak` selama masih ada modul referensi
+**wajib** di `modulSnapshot` yang belum dibuka. Yang opsional tidak dihitung. Sumbernya
+`modulSnapshot` milik pendaftaran, bukan modul kegiatan hidup (KA-5) — menambah referensi
+baru tidak membuat peserta lama mendadak belum layak.
+
+### Pengujian pindah dari klik ke skrip
+
+Tujuh langkah klik manual diganti dua alat, dijalankan lewat Claude CLI:
+
+- **`scripts/uji-kelayakan.ts`** (`npm run uji`) — menguji `evaluasiKelayakan()` sebagai
+  fungsi murni dengan `node:assert`, tanpa database dan tanpa browser. Tujuh kasus,
+  termasuk: fitur baru tidak mengubah perilaku lama; referensi opsional tidak dihitung;
+  urutan gerbang tidak tertukar (evaluasi belum lulus → alasan nilai, bukan alasan
+  referensi); dan pendaftaran lama tanpa field `referensiDibuka`.
+- **`scripts/seed-uji-referensi.ts <kegiatanId>`** — menulis tiga pendaftaran `[UJI]`
+  dengan `referensiDibuka` kosong/satu/lengkap, semua berskor lulus, ID deterministik
+  `{kegiatanId}_uji-slice52-*`, `nomorUrut` sentinel 900001+ supaya tidak menaikkan
+  penghitung kegiatan. `--bersihkan` menghapus tepat tiga dokumen itu. Satu kali buka
+  halaman peserta memperlihatkan tiga status berjajar — tidak perlu mendaftar dan
+  mengerjakan soal secara manual.
+
+**Tes itu langsung menemukan cacat nyata:** `evaluasiKelayakan()` memanggil
+`referensiDibuka.includes(...)` tanpa pagar, sehingga akan melempar `TypeError` pada
+pendaftaran yang dibuat sebelum field ini ada. Ketiga pemanggil kebetulan sudah
+memagari — tapi pagar di tiga tempat terpisah adalah pagar yang pemanggil keempat akan
+lupa pasang. Fungsi intinya dibuat defensif.
+
+> **Pelajaran:** logika keputusan yang ditulis sebagai fungsi murni bisa diuji tujuh
+> kasus dalam sekejap, berulang kali, tanpa browser. Sisakan mata untuk hal yang memang
+> hanya bisa dilihat — tampilan, dan lalu lintas jaringan.
+
+### Slice 5.2 & 5.2a — syarat "harus dibuka" (3 Sep 2026) — TAHAP 5 SELESAI
+
+`pendaftaran.referensiDibuka: string[]`; `POST /api/modul/dibuka` (verifyRequest →
+peserta terdaftar → modulId ada di `modulSnapshot` berkategori `referensi` → `update()`
++ `arrayUnion`, aman karena update punya field mask). `SyaratSertifikat.wajibBukaReferensi`
+default `false` (KA-4). Gerbang dipasang **setelah** cek lulus-evaluasi, sehingga alasan
+yang muncul selalu yang paling relevan. Modul referensi **opsional** tidak dihitung.
+
+Commit `ecda82b`, 17 berkas.
+
+#### Pergeseran cara menguji: fungsi murni dulu, mata belakangan
+
+Menguji gerbang ini lewat klik berarti tujuh langkah: daftar, kerjakan soal sampai lulus,
+buka satu referensi, tahan diri tidak membuka yang kedua, periksa, buka, periksa lagi.
+Melelahkan sehingga cenderung dilewati saat aturannya berubah nanti.
+
+`scripts/uji-kelayakan.ts` (`npm run uji`) menguji `evaluasiKelayakan()` sebagai fungsi
+murni — tujuh kasus, tanpa database, tanpa browser, sekejap:
+non-aktif → layak; 2 belum dibuka → belum_layak menyebut 2; 1 → menyebut 1; lengkap →
+layak; semua opsional → layak; `referensiDibuka` **undefined** → tidak melempar;
+referensi lengkap tapi evaluasi belum lulus → alasan nilai, bukan alasan referensi.
+
+**Tes ini langsung membayar dirinya:** kasus keenam menemukan `evaluasiKelayakan()` akan
+melempar `TypeError` pada pendaftaran lama tanpa field `referensiDibuka`. Ketiga
+pemanggil kebetulan sudah memagari — tapi pagar di tiga tempat terpisah adalah pagar yang
+pemanggil keempat pasti lupa. Fungsi intinya kini defensif sendiri.
+
+`scripts/seed-uji-referensi.ts <kegiatanId> [--bersihkan]` membuat tiga pendaftaran dummy
+(referensi kosong/satu/lengkap, semua skor lulus) untuk melihat tiga status berjajar dalam
+satu kali buka halaman. ID deterministik, `nomorUrut` sentinel 900001+ supaya tidak
+memakan nomor urut sungguhan, `--bersihkan` menghapus tepat tiga dokumen itu.
+
+> **Pembagian kerja pengujian.** Fungsi murni menguji **aturannya** (semua keadaan, murah,
+> berulang). Manual menguji **jalurnya** (route handler, snapshot, rules) — seed menulis
+> langsung dengan Admin SDK sehingga tidak pernah menyentuh `POST /api/pendaftaran`, jadi
+> ia tidak bisa membuktikan alur itu utuh. Pakai keduanya untuk pertanyaan yang berbeda.
+
+Pola ini dipakai lagi di tahap berikutnya: aturan kelayakan, perhitungan skor, dan ambang
+atestasi CCL semuanya fungsi murni, digabung lewat `npm run uji`.
+
+#### Dua kata "wajib" yang membingungkan (slice 5.2a)
+
+Ada dua centang berbeda dengan kata yang sama: **"Modul wajib"** pada tiap modul, dan
+**"wajibkan referensi dibuka"** pada syarat kegiatan. Yang pertama tanpa yang kedua tidak
+berpengaruh apa-apa — dan itu memakan waktu saat pengujian, karena tiga baris uji tampil
+"Layak" semua dan terlihat seperti gerbangnya rusak.
+
+Diperbaiki: "Modul ini wajib" + keterangan; "Peserta harus membuka semua materi referensi
+yang wajib" + hitungan hidup *"kegiatan ini punya N modul referensi wajib dan M opsional"*,
+dan peringatan kuning kalau N = 0 bahwa centang itu belum berpengaruh.
+
+> **Pelajaran:** kalau perancangnya sendiri bingung membedakan dua kontrol, pemakai
+> berikutnya pasti lebih bingung. Memperjelas label lebih murah daripada menjelaskannya
+> berulang kali.

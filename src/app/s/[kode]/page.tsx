@@ -20,6 +20,15 @@ function mapItems(value: unknown): ItemSertifikat[] {
     }));
 }
 
+// Kalimat saja ("Telah menuntaskan ... materi interaktif: X.") — tidak
+// pernah membawa skor mentah maupun nickname CCL, jadi aman apa adanya di
+// halaman publik ini (lihat komentar di types/sertifikat.ts).
+function mapPernyataanAtestasi(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 /**
  * firestore.rules menolak baca publik untuk sertifikat/{id} — halaman ini
  * WAJIB lewat Admin SDK di server, bukan Firestore client SDK. TIDAK PERNAH
@@ -48,6 +57,7 @@ async function ambilSertifikatPublik(kode: string): Promise<SertifikatPublik | n
     serial: typeof data.serial === "string" ? data.serial : "",
     nilaiAkhir: typeof data.nilaiAkhir === "number" ? data.nilaiAkhir : 0,
     items: mapItems(data.items),
+    pernyataanAtestasi: mapPernyataanAtestasi(data.pernyataanAtestasi),
     status: isStatusSertifikat(data.status) ? data.status : "berlaku",
     terbitPada: typeof data.terbitPada === "string" ? data.terbitPada : "",
   };
@@ -128,6 +138,14 @@ export default async function VerifikasiSertifikatPage({
               ))}
             </tbody>
           </table>
+        )}
+
+        {sertifikat.pernyataanAtestasi.length > 0 && (
+          <ul className="mt-4 space-y-1 text-left text-sm text-black dark:text-zinc-50">
+            {sertifikat.pernyataanAtestasi.map((kalimat) => (
+              <li key={kalimat}>{kalimat}</li>
+            ))}
+          </ul>
         )}
 
         <p className="mt-4 text-sm font-medium">

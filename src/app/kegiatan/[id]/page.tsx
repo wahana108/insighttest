@@ -11,7 +11,37 @@ import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
 import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
+import { LABEL_TINGKAT_ATESTASI } from "@/lib/atestasi-pernyataan";
 import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
+import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
+
+/**
+ * Kalimat positif untuk peserta — beda dari deskripsiPrasyaratMateri()
+ * (src/lib/sertifikat-syarat.ts), yang negatif-framing untuk pesan
+ * penolakan server. Dipakai HANYA saat nilai sudah memenuhi syarat tapi
+ * materi belum tuntas (Slice 7.4 §3) — supaya peserta tahu nilainya tidak
+ * bermasalah, tinggal materi yang kurang.
+ *
+ * Slice 7.6: menyebut NAMA modul yang belum, bukan cuma jumlahnya — supaya
+ * peserta tahu persis modul mana yang harus dikerjakan, bukan menebak dari
+ * angka ("2 materi atestasi wajib" yang mana?).
+ */
+function deskripsiMateriTersisa(p: PrasyaratMateri): string {
+  const bagian: string[] = [];
+  if (p.wajibBukaReferensi) {
+    const belum = p.referensiPerModul.filter((m) => m.wajib && !m.dibuka);
+    if (belum.length > 0) {
+      bagian.push(`membuka: ${belum.map((m) => m.judul).join(", ")}`);
+    }
+  }
+  if (p.atestasiJadiSyarat) {
+    const belum = p.atestasiPerModul.filter((m) => m.wajib && m.tingkat === "belum");
+    if (belum.length > 0) {
+      bagian.push(`menuntaskan: ${belum.map((m) => m.judul).join(", ")}`);
+    }
+  }
+  return bagian.join("; dan ");
+}
 
 const KATEGORI_LABEL: Record<string, string> = {
   referensi: "Referensi",
@@ -72,6 +102,7 @@ export default function KegiatanDetailPage({
         modulSnapshot: pendaftaranKegiatanIni.modulSnapshot,
         hasilModul: pendaftaranKegiatanIni.hasilModul,
         referensiDibuka: pendaftaranKegiatanIni.referensiDibuka,
+        atestasi: pendaftaranKegiatanIni.atestasi,
       },
       { syaratSertifikat: kegiatan.syaratSertifikat }
     );
@@ -236,6 +267,14 @@ export default function KegiatanDetailPage({
               const sudahDibuka =
                 modul.kategori === "referensi" &&
                 pendaftaranKegiatanIni.referensiDibuka.includes(modul.modulId);
+              // Slice 7.6: tingkat atestasi modul ini sendiri, kata yang
+              // sama dengan pernyataan sertifikat — bukan cuma "Lihat".
+              const statusAtestasi =
+                modul.kategori === "atestasi"
+                  ? kelayakanSertifikat?.prasyaratMateri.atestasiPerModul.find(
+                      (m) => m.modulId === modul.modulId
+                    )
+                  : undefined;
               return (
                 <li
                   key={modul.modulId}
@@ -261,6 +300,13 @@ export default function KegiatanDetailPage({
                         {sudahDibuka ? "Sudah dibuka" : "Belum dibuka"}
                       </span>
                     )}
+                    {statusAtestasi && (
+                      <span
+                        className={`ml-2 text-xs font-medium ${statusAtestasi.tingkat === "belum" ? "text-zinc-400" : "text-green-600"}`}
+                      >
+                        {LABEL_TINGKAT_ATESTASI[statusAtestasi.tingkat]}
+                      </span>
+                    )}
                   </div>
                   {modul.kategori === "evaluasi" && (
                     <Link
@@ -270,7 +316,7 @@ export default function KegiatanDetailPage({
                       Kerjakan
                     </Link>
                   )}
-                  {modul.kategori === "referensi" && (
+                  {(modul.kategori === "referensi" || modul.kategori === "atestasi") && (
                     <Link
                       href={`/kegiatan/${id}/modul/${modul.modulId}`}
                       className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
@@ -385,7 +431,7 @@ export default function KegiatanDetailPage({
             <p className="text-sm text-zinc-500">
               Sertifikat kegiatan ini diterbitkan oleh admin, bukan otomatis.
             </p>
-          ) : kelayakanSertifikat?.layak ? (
+          ) : kelayakanSertifikat?.kelayakan.layak && kelayakanSertifikat.prasyaratMateri.tuntas ? (
             <div className="space-y-3">
               <p className="text-sm text-green-600">Anda layak menerima sertifikat.</p>
               {errorSertifikat && <p className="text-sm text-red-600">{errorSertifikat}</p>}
@@ -398,15 +444,33 @@ export default function KegiatanDetailPage({
                 {menerbitkan ? "Menerbitkan..." : "Terbitkan sertifikat saya"}
               </button>
             </div>
-          ) : (
+          ) : kelayakanSertifikat?.kelayakan.layak ? (
+            // Nilai sudah memenuhi syarat, tapi materi wajib belum tuntas
+            // (Slice 7.4 §3) — pesan ini HARUS berbeda dari "belum layak"
+            // biasa: nilainya tidak bermasalah, cuma materinya yang kurang.
             <div className="space-y-3">
               <p className="text-sm text-zinc-500">
-                {kelayakanSertifikat?.alasan ?? "Belum layak menerima sertifikat."}
+                Nilai Anda sudah memenuhi syarat. Sertifikat akan terbuka setelah Anda{" "}
+                {deskripsiMateriTersisa(kelayakanSertifikat.prasyaratMateri)}.
               </p>
               <button
                 type="button"
                 disabled
-                title={kelayakanSertifikat?.alasan}
+                title="Materi wajib belum tuntas"
+                className="w-full rounded bg-black px-4 py-3 text-sm font-medium text-white opacity-50 dark:bg-white dark:text-black"
+              >
+                Terbitkan sertifikat saya
+              </button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-zinc-500">
+                {kelayakanSertifikat?.kelayakan.alasan ?? "Belum layak menerima sertifikat."}
+              </p>
+              <button
+                type="button"
+                disabled
+                title={kelayakanSertifikat?.kelayakan.alasan}
                 className="w-full rounded bg-black px-4 py-3 text-sm font-medium text-white opacity-50 dark:bg-white dark:text-black"
               >
                 Terbitkan sertifikat saya

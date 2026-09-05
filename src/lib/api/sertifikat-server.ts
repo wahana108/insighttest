@@ -1,9 +1,16 @@
 import { randomInt } from "node:crypto";
 import { Timestamp } from "firebase-admin/firestore";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
-import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
+import { LABEL_TINGKAT_ATESTASI, normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
+import type { HasilUntukNilaiAtestasi, TingkatAtestasi } from "@/lib/atestasi-pernyataan";
+import { evaluasiKelayakan, putuskanPenerbitan } from "@/lib/sertifikat-syarat";
 import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
-import type { JenisSyaratSertifikat, KategoriModul } from "@/types/kegiatan";
+import type {
+  AmbangKeterlibatan,
+  JenisSyaratSertifikat,
+  KategoriModul,
+  ModeAmbangKeterlibatan,
+} from "@/types/kegiatan";
 import type { HasilModul, ModulSnapshotItem } from "@/types/pendaftaran";
 import type {
   ItemSertifikat,
@@ -12,6 +19,7 @@ import type {
   SertifikatDetail,
   StatusSertifikat,
 } from "@/types/sertifikat";
+
 
 export class SertifikatRouteError extends Error {
   status: number;
@@ -71,6 +79,12 @@ export function mapItemsSertifikat(value: unknown): ItemSertifikat[] {
     }));
 }
 
+function mapPernyataanAtestasi(value: unknown): string[] {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+}
+
 /**
  * Menggabungkan snapshot sertifikat (KA-6, dibekukan) dengan template
  * sertifikat LIVE dari dokumen kegiatan saat ini — dipakai bersama oleh
@@ -97,6 +111,7 @@ export function buildSertifikatDetail(
     judulKegiatan: typeof data.judulKegiatan === "string" ? data.judulKegiatan : "",
     nilaiAkhir: typeof data.nilaiAkhir === "number" ? data.nilaiAkhir : 0,
     items: mapItemsSertifikat(data.items),
+    pernyataanAtestasi: mapPernyataanAtestasi(data.pernyataanAtestasi),
     status: isStatusSertifikat(data.status) ? data.status : "berlaku",
     terbitPada: typeof data.terbitPada === "string" ? data.terbitPada : "",
     template: {
@@ -140,25 +155,79 @@ function isKategoriModul(value: unknown): value is KategoriModul {
   return value === "referensi" || value === "atestasi" || value === "evaluasi";
 }
 
+function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
+  return value === "persen" || value === "menit";
+}
+
+function mapAmbangKeterlibatanUntukSnapshot(value: unknown): AmbangKeterlibatan | null {
+  if (typeof value !== "object" || value === null) {
+    return null;
+  }
+  const data = value as Record<string, unknown>;
+  return isModeAmbangKeterlibatan(data.mode) && typeof data.nilai === "number"
+    ? { mode: data.mode, nilai: data.nilai }
+    : null;
+}
+
+/**
+ * Slice 7.5: ambangKeterlibatan mentah pada modulSnapshot beku (KA-5) bisa
+ * mustahil dievaluasi (persen tanpa durasi diketahui — bug migrasi 7.3).
+ * Dinormalkan di sini, di titik baca, jadi peserta lama ikut terkoreksi
+ * tanpa menulis ulang dokumen pendaftaran. nilaiAtestasi() (dipanggil
+ * evaluasiKelayakan() untuk modulSnapshot ini) juga menormalkan sendiri
+ * sebagai pagar terakhir — dua lapis, bukan saling menggantikan.
+ */
 function mapModulSnapshotUntukKelayakan(value: unknown): ModulSnapshotItem[] {
   if (!Array.isArray(value)) {
     return [];
   }
   return value
     .filter((item): item is Record<string, unknown> => typeof item === "object" && item !== null)
-    .map((item) => ({
-      modulId: typeof item.modulId === "string" ? item.modulId : "",
-      judul: typeof item.judul === "string" ? item.judul : "",
-      kategori: isKategoriModul(item.kategori) ? item.kategori : "evaluasi",
-      wajib: typeof item.wajib === "boolean" ? item.wajib : true,
-      nilaiMinimum: typeof item.nilaiMinimum === "number" ? item.nilaiMinimum : null,
-    }));
+    .map((item) => {
+      const durasiDetik = typeof item.durasiDetik === "number" ? item.durasiDetik : null;
+      const ambangMentah = mapAmbangKeterlibatanUntukSnapshot(item.ambangKeterlibatan);
+      return {
+        modulId: typeof item.modulId === "string" ? item.modulId : "",
+        judul: typeof item.judul === "string" ? item.judul : "",
+        kategori: isKategoriModul(item.kategori) ? item.kategori : "evaluasi",
+        wajib: typeof item.wajib === "boolean" ? item.wajib : true,
+        nilaiMinimum: typeof item.nilaiMinimum === "number" ? item.nilaiMinimum : null,
+        ambangKeterlibatan: ambangMentah
+          ? normalkanAmbangKeterlibatan(ambangMentah, durasiDetik).ambang
+          : null,
+        targetSkor: typeof item.targetSkor === "number" ? item.targetSkor : null,
+        durasiDetik,
+      };
+    });
 }
 
 function mapReferensiDibukaUntukKelayakan(value: unknown): string[] {
   return Array.isArray(value)
     ? value.filter((item): item is string => typeof item === "string")
     : [];
+}
+
+/**
+ * Hanya score dan detikTersaksikan — satu-satunya dua field HasilAtestasi
+ * yang dibaca nilaiAtestasi(), dipakai BERSAMA oleh gerbang kelayakan
+ * (evaluasiKelayakan()) dan kalimat pernyataan atestasi di bawah.
+ */
+function mapAtestasiUntukKelayakan(value: unknown): Record<string, HasilUntukNilaiAtestasi> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const hasil: Record<string, HasilUntukNilaiAtestasi> = {};
+  for (const [modulId, entry] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof entry !== "object" || entry === null) {
+      continue;
+    }
+    const data = entry as Record<string, unknown>;
+    hasil[modulId] = {
+      score: typeof data.score === "number" ? data.score : 0,
+      detikTersaksikan: typeof data.detikTersaksikan === "number" ? data.detikTersaksikan : 0,
+    };
+  }
+  return hasil;
 }
 
 function mapHasilModulUntukKelayakan(value: unknown): Record<string, HasilModul> {
@@ -254,6 +323,8 @@ export async function terbitkanSertifikatUntuk(
   const nilaiMinimumSyarat = typeof syaratRaw.nilaiMinimum === "number" ? syaratRaw.nilaiMinimum : 0;
   const wajibBukaReferensiSyarat =
     typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
+  const atestasiJadiSyaratSyarat =
+    typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
 
   // Penandatangan (nama, jabatan, DAN gambar tanda tangannya) DIBEKUKAN di
   // sertifikat — itu pernyataan seseorang, bukan branding. logo/kop TETAP
@@ -286,6 +357,7 @@ export async function terbitkanSertifikatUntuk(
   const modulSnapshot = mapModulSnapshotUntukKelayakan(pendaftaranData.modulSnapshot);
   const hasilModul = mapHasilModulUntukKelayakan(pendaftaranData.hasilModul);
   const referensiDibuka = mapReferensiDibukaUntukKelayakan(pendaftaranData.referensiDibuka);
+  const atestasiHasil = mapAtestasiUntukKelayakan(pendaftaranData.atestasi);
   const namaLengkap =
     typeof pendaftaranData.namaLengkap === "string" ? pendaftaranData.namaLengkap : "";
   const nomorUrut = typeof pendaftaranData.nomorUrut === "number" ? pendaftaranData.nomorUrut : 0;
@@ -294,16 +366,48 @@ export async function terbitkanSertifikatUntuk(
       ? pendaftaranData.daftarPada
       : new Date().toISOString();
 
-  const kelayakan = evaluasiKelayakan(
-    { modulSnapshot, hasilModul, referensiDibuka },
+  const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
+    { modulSnapshot, hasilModul, referensiDibuka, atestasi: atestasiHasil },
     {
       syaratSertifikat: {
         jenis: jenisSyarat,
         nilaiMinimum: nilaiMinimumSyarat,
         wajibBukaReferensi: wajibBukaReferensiSyarat,
+        atestasiJadiSyarat: atestasiJadiSyaratSyarat,
       },
     }
   );
+
+  // Pernyataan atestasi — KALIMAT, tidak pernah angka mentah/nickname
+  // (§4, Slice 7.3: aman ditampilkan bahkan di halaman verifikasi
+  // PUBLIK). Dibangun dari prasyaratMateri.atestasiPerModul (satu sumber
+  // kebenaran yang sama dipakai gerbang kelayakan, Slice 7.4) — mencakup
+  // SEMUA modul atestasi di modulSnapshot (wajib maupun opsional) yang
+  // sudah mencapai minimal 'menuntaskan'. Modul yang belum tuntas tidak
+  // dicetak sama sekali (sertifikat mendokumentasikan capaian, bukan yang
+  // belum tercapai).
+  const pernyataanAtestasi: string[] = prasyaratMateri.atestasiPerModul
+    .filter(
+      (modul): modul is { modulId: string; judul: string; wajib: boolean; tingkat: Exclude<TingkatAtestasi, "belum"> } =>
+        modul.tingkat !== "belum"
+    )
+    .map((modul) => `${LABEL_TINGKAT_ATESTASI[modul.tingkat]} materi interaktif: ${modul.judul}.`);
+
+  // Prasyarat materi (referensi/atestasi) menggerbang MODE OTOMATIS untuk
+  // SIAPA PUN yang menerbitkan — admin maupun peserta sendiri. Beda dari
+  // gerbang nilai (kelayakan.layak) di bawah, yang cuma menggerbang
+  // self-issue (§10, docs/arsitektur.md: admin boleh mencoret pratinjau
+  // NILAI). "Sudah membuka/menuntaskan materi wajib" adalah fakta
+  // terverifikasi, bukan penilaian subjektif seperti nilai — kalau
+  // kegiatan mensyaratkannya, tidak ada jalur admin yang melewatinya.
+  // Ditolak DI SINI, bukan cuma disembunyikan di tampilan (Slice 7.4 §3):
+  // tombol yang disembunyikan bukan pagar. putuskanPenerbitan() adalah
+  // SATU sumber kebenaran untuk aturan ini, dipakai juga oleh
+  // scripts/periksa-kelayakan.ts dan scripts/uji-atestasi.ts.
+  if (jenisSyarat === "nilai_minimum" && !prasyaratMateri.tuntas) {
+    const { alasan } = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
+    throw new SertifikatRouteError(400, alasan);
+  }
 
   if (isSelfIssue) {
     if (jenisSyarat !== "nilai_minimum") {
@@ -356,6 +460,7 @@ export async function terbitkanSertifikatUntuk(
     judulKegiatan,
     nilaiAkhir: kelayakan.nilaiAkhir,
     items: kelayakan.items,
+    pernyataanAtestasi,
     status: "berlaku",
     terbitPada: now,
     diterbitkanOleh: actingUid,

@@ -46,6 +46,16 @@ export interface Sertifikat {
   judulKegiatan: string;
   nilaiAkhir: number;
   items: ItemSertifikat[];
+  /**
+   * Kalimat, BUKAN baris tabel dengan angka — tabel `items` di atas tetap
+   * hanya modul evaluasi (ARSITEKTUR §9). Atestasi tidak pernah dirata-
+   * rata ke nilaiAkhir; ia prasyarat, dicetak sebagai pernyataan
+   * ("Telah menuntaskan dan memahami materi interaktif: ..."). DIBEKUKAN
+   * saat terbit (KA-6), sama seperti items — lihat terbitkanSertifikatUntuk().
+   * Aman ditampilkan di halaman publik /s/[kode]: tidak pernah membawa
+   * skor mentah maupun nickname CCL, hanya nama modul dan tingkat capaian.
+   */
+  pernyataanAtestasi: string[];
   status: StatusSertifikat;
   terbitPada: string;
   diterbitkanOleh: string;
@@ -84,6 +94,7 @@ export interface SertifikatDetail {
   judulKegiatan: string;
   nilaiAkhir: number;
   items: ItemSertifikat[];
+  pernyataanAtestasi: string[];
   status: StatusSertifikat;
   terbitPada: string;
   template: {
@@ -99,7 +110,8 @@ export interface SertifikatDetail {
 /**
  * Dipakai halaman publik /s/[kode]. TIDAK PERNAH membawa email, uid, nomor
  * identitas, nomor telepon, atau institusi — lihat komentar di
- * src/app/s/[kode]/page.tsx.
+ * src/app/s/[kode]/page.tsx. pernyataanAtestasi aman di sini (kalimat
+ * saja, tidak ada skor mentah/nickname CCL) — lihat komentar di Sertifikat.
  */
 export interface SertifikatPublik {
   namaLengkap: string;
@@ -107,6 +119,7 @@ export interface SertifikatPublik {
   serial: string;
   nilaiAkhir: number;
   items: ItemSertifikat[];
+  pernyataanAtestasi: string[];
   status: StatusSertifikat;
   terbitPada: string;
 }
