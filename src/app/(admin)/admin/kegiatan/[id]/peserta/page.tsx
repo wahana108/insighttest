@@ -84,9 +84,13 @@ export default function AdminPesertaPage({
   const [menerbitkanSatuUid, setMenerbitkanSatuUid] = useState<string | null>(null);
   const [errorTerbitSatu, setErrorTerbitSatu] = useState<string | null>(null);
 
-  const muatData = useCallback(() => {
-    setLoading(true);
-    setError(null);
+  // muat() cuma menjalankan pengambilan data — tidak menyetel loading/error
+  // di badan sinkronnya, supaya efek mount di bawah bisa memanggilnya
+  // langsung tanpa kena react-hooks/set-state-in-effect. muatData() (dipakai
+  // oleh event handler setelah menerbitkan/mencabut) tetap menyetel ulang
+  // ke "sedang memuat" secara sinkron — itu aman karena dipanggil dari
+  // handler klik, bukan dari badan efek.
+  const muat = useCallback(() => {
     fetchWithAuth(`/api/admin/pendaftaran?kegiatanId=${encodeURIComponent(kegiatanId)}`)
       .then(async (res) => {
         const body = await res.json();
@@ -103,9 +107,24 @@ export default function AdminPesertaPage({
       });
   }, [kegiatanId]);
 
+  const muatData = useCallback(() => {
+    setLoading(true);
+    setError(null);
+    muat();
+  }, [muat]);
+
+  // kegiatanId berubah tanpa remount — kembali ke "sedang memuat" di sini
+  // saat render, bukan di badan efek (lihat use-soal-list.ts).
+  const [kegiatanIdSebelumnya, setKegiatanIdSebelumnya] = useState(kegiatanId);
+  if (kegiatanIdSebelumnya !== kegiatanId) {
+    setKegiatanIdSebelumnya(kegiatanId);
+    setLoading(true);
+    setError(null);
+  }
+
   useEffect(() => {
-    muatData();
-  }, [muatData]);
+    muat();
+  }, [muat]);
 
   // Bisa dipilih/diterbitkan kalau belum punya sertifikat SAMA SEKALI, atau
   // sertifikatnya sudah dicabut (penerbitan ulang). Hanya status 'berlaku'

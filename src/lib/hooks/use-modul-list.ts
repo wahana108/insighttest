@@ -16,18 +16,31 @@ export function useModulList(kegiatanId: string | null): {
   error: string | null;
 } {
   const [items, setItems] = useState<ModulKegiatan[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Nilai awal sudah mencerminkan keadaan yang benar untuk kegiatanId saat
+  // mount pertama — kalau null, tidak ada yang dimuat, jadi loading awal
+  // langsung false (bukan disetel balik lewat efek).
+  const [loading, setLoading] = useState(Boolean(kegiatanId));
   const [error, setError] = useState<string | null>(null);
+
+  // kegiatanId berubah tanpa remount — sesuaikan keadaan di sini saat
+  // render (bukan di badan efek), lihat use-soal-list.ts.
+  const [kegiatanIdSebelumnya, setKegiatanIdSebelumnya] = useState(kegiatanId);
+  if (kegiatanIdSebelumnya !== kegiatanId) {
+    setKegiatanIdSebelumnya(kegiatanId);
+    if (kegiatanId) {
+      setLoading(true);
+      setError(null);
+    } else {
+      setItems([]);
+      setLoading(false);
+      setError(null);
+    }
+  }
 
   useEffect(() => {
     if (!kegiatanId) {
-      setItems([]);
-      setError(null);
-      setLoading(false);
       return;
     }
-    setLoading(true);
-    setError(null);
     const unsubscribe = onSnapshot(
       collection(db, "kegiatan", kegiatanId, "modul"),
       (snapshot) => {

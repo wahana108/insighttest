@@ -28,16 +28,14 @@ export default function ProfilPage() {
     }
   }, [loading, user, router]);
 
-  useEffect(() => {
-    if (profile && !form) {
-      setForm({
-        namaLengkap: profile.namaLengkap,
-        institusi: profile.institusi,
-        nomorIdentitas: profile.nomorIdentitas,
-        noTelepon: profile.noTelepon,
-      });
-    }
-  }, [profile, form]);
+  if (profile && !form) {
+    setForm({
+      namaLengkap: profile.namaLengkap,
+      institusi: profile.institusi,
+      nomorIdentitas: profile.nomorIdentitas,
+      noTelepon: profile.noTelepon,
+    });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

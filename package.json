@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "npm run lint && next build",
     "start": "next start",
     "lint": "eslint",
     "uji": "npx tsx scripts/uji-kelayakan.ts && npx tsx scripts/uji-validasi-url-atestasi.ts && npx tsx scripts/uji-atestasi.ts"

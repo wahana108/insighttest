@@ -18,21 +18,31 @@ export function useSertifikatSaya(): {
 } {
   const { user } = useAuth();
   const [items, setItems] = useState<SertifikatRingkas[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Nilai awal sudah mencerminkan keadaan yang benar untuk user saat mount
+  // pertama — kalau belum masuk, tidak ada yang dimuat.
+  const [loading, setLoading] = useState(Boolean(user));
   const [error, setError] = useState<string | null>(null);
   const [reloadToken, setReloadToken] = useState(0);
 
-  useEffect(() => {
-    if (!user) {
+  // user atau reloadToken berubah tanpa remount — sesuaikan keadaan di sini
+  // saat render (bukan di badan efek), lihat use-soal-list.ts.
+  const [permintaanSebelumnya, setPermintaanSebelumnya] = useState({ user, reloadToken });
+  if (permintaanSebelumnya.user !== user || permintaanSebelumnya.reloadToken !== reloadToken) {
+    setPermintaanSebelumnya({ user, reloadToken });
+    if (user) {
+      setLoading(true);
+      setError(null);
+    } else {
       setItems([]);
       setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (!user) {
       return;
     }
-
     let mounted = true;
-    setLoading(true);
-    setError(null);
-
     fetchWithAuth("/api/sertifikat/saya")
       .then(async (res) => {
         const body = await res.json();
