@@ -32,13 +32,24 @@ export default function SertifikatPage({
     }
   }, [loading, user, router]);
 
+  // id atau user berubah tanpa remount — kembali ke "sedang memuat" di sini
+  // saat render, bukan di badan efek (lihat use-soal-list.ts). Kalau user
+  // belum ada, tidak ada yang perlu disetel — layar "Memuat..." di bawah
+  // sudah tampil karena kondisi !user di gerbang render.
+  const [permintaanSebelumnya, setPermintaanSebelumnya] = useState({ id, user });
+  if (permintaanSebelumnya.id !== id || permintaanSebelumnya.user !== user) {
+    setPermintaanSebelumnya({ id, user });
+    if (user) {
+      setLoadingData(true);
+      setError(null);
+    }
+  }
+
   useEffect(() => {
     if (!user) {
       return;
     }
     let mounted = true;
-    setLoadingData(true);
-    setError(null);
     fetchWithAuth(`/api/sertifikat/${id}`)
       .then(async (res) => {
         const body = await res.json();

@@ -622,16 +622,27 @@ export default function ModulAttemptPage({
     }
   }, [loading, user, router]);
 
+  // attemptIdDariUrl atau user berubah tanpa remount — sesuaikan memuatUlang
+  // di sini saat render, bukan di badan efek (lihat use-soal-list.ts). Error
+  // sengaja tidak disetel ulang di sini — efek aslinya juga tidak pernah
+  // membersihkannya di jalur ini, cuma mengisinya lewat catch().
+  const [pemulihanSebelumnya, setPemulihanSebelumnya] = useState({ attemptIdDariUrl, user });
+  if (
+    pemulihanSebelumnya.attemptIdDariUrl !== attemptIdDariUrl ||
+    pemulihanSebelumnya.user !== user
+  ) {
+    setPemulihanSebelumnya({ attemptIdDariUrl, user });
+    setMemuatUlang(Boolean(attemptIdDariUrl && user));
+  }
+
   // Pemulihan setelah halaman dimuat ulang — attemptId disimpan di URL,
   // bukan di memori, supaya reload tidak kehilangan attempt yang sedang
   // berlangsung. Lihat GET /api/attempt/[id].
   useEffect(() => {
     if (!attemptIdDariUrl || !user) {
-      setMemuatUlang(false);
       return;
     }
     let mounted = true;
-    setMemuatUlang(true);
     fetchWithAuth(`/api/attempt/${attemptIdDariUrl}`)
       .then(async (res) => {
         const body = await res.json();
@@ -675,7 +686,6 @@ export default function ModulAttemptPage({
     return () => {
       mounted = false;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [attemptIdDariUrl, user]);
 
   async function handleMulai() {

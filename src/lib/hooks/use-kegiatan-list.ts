@@ -35,9 +35,16 @@ export function useKegiatanList(options: UseKegiatanListOptions = {}): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // hanyaTerbit berubah tanpa remount — kembali ke "sedang memuat" di sini,
+  // bukan di badan efek (lihat use-soal-list.ts untuk penjelasan pola ini).
+  const [hanyaTerbitSebelumnya, setHanyaTerbitSebelumnya] = useState(hanyaTerbit);
+  if (hanyaTerbitSebelumnya !== hanyaTerbit) {
+    setHanyaTerbitSebelumnya(hanyaTerbit);
     setLoading(true);
     setError(null);
+  }
+
+  useEffect(() => {
     const ref = collection(db, "kegiatan");
     const target = hanyaTerbit ? query(ref, where("isPublished", "==", true)) : ref;
     const unsubscribe = onSnapshot(

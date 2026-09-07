@@ -19,9 +19,19 @@ export function useSoalList(topikKode?: string): {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
+  // topikKode berubah tanpa remount (dipakai lewat filter dropdown) — begitu
+  // terjadi, kembali ke "sedang memuat" di sini (bukan di badan efek di
+  // bawah), lihat https://react.dev/learn/you-might-not-need-an-effect
+  // #adjusting-some-state-when-a-prop-changes. Mount pertama tidak perlu
+  // penyetelan ini karena nilai awal loading sudah true.
+  const [topikKodeSebelumnya, setTopikKodeSebelumnya] = useState(topikKode);
+  if (topikKodeSebelumnya !== topikKode) {
+    setTopikKodeSebelumnya(topikKode);
     setLoading(true);
     setError(null);
+  }
+
+  useEffect(() => {
     const ref = collection(db, "soal");
     const target = topikKode ? query(ref, where("topikKode", "==", topikKode)) : ref;
     const unsubscribe = onSnapshot(
