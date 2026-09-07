@@ -7,7 +7,7 @@
     "build": "npm run lint && next build",
     "start": "next start",
     "lint": "eslint",
-    "uji": "npx tsx scripts/uji-kelayakan.ts && npx tsx scripts/uji-validasi-url-atestasi.ts && npx tsx scripts/uji-atestasi.ts"
+    "uji": "npx tsx scripts/uji-kelayakan.ts && npx tsx scripts/uji-validasi-url-atestasi.ts && npx tsx scripts/uji-atestasi.ts && npx tsx scripts/uji-jawaban-tersimpan.ts"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

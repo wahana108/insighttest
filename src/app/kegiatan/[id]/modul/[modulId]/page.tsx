@@ -7,10 +7,17 @@ import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { nilaiAtestasi } from "@/lib/atestasi-pernyataan";
 import type { TingkatAtestasi } from "@/lib/atestasi-pernyataan";
-import { formatDateTime } from "@/lib/format-date";
+import { formatSisaWaktu } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
+import {
+  bacaJawabanTersimpan,
+  bersihkanJawabanAttemptLain,
+  hapusJawabanTersimpan,
+  pulihkanJawaban,
+  simpanJawabanTersimpan,
+} from "@/lib/jawaban-tersimpan";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   AttemptDetailResponse,
@@ -616,6 +623,18 @@ export default function ModulAttemptPage({
   const [mengirim, setMengirim] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Jam berdetak untuk penghitung mundur (Slice 3.4b, tertunda) — cuma
+  // dijalankan saat benar-benar mengerjakan attempt berbatas waktu, supaya
+  // layar lain tidak me-render ulang tiap detik tanpa alasan.
+  const [sekarang, setSekarang] = useState(() => Date.now());
+  useEffect(() => {
+    if (layar !== "mengerjakan" || !kadaluarsaPada) {
+      return;
+    }
+    const id = setInterval(() => setSekarang(Date.now()), 1000);
+    return () => clearInterval(id);
+  }, [layar, kadaluarsaPada]);
+
   useEffect(() => {
     if (!loading && !user) {
       router.replace("/masuk");
@@ -661,7 +680,16 @@ export default function ModulAttemptPage({
           data.jawaban.forEach((item) => {
             jawabanAwal[item.soalId] = item.opsiId;
           });
-          setJawaban(jawabanAwal);
+          // jawaban dari server selalu kosong untuk attempt yang masih
+          // berlangsung (§5 arsitektur.md — ditulis sekali saat submit).
+          // Pemulihan sebenarnya datang dari localStorage, divalidasi
+          // terhadap soalId attempt ini — lihat jawaban-tersimpan.ts.
+          const soalIds = data.soal.map((butir) => butir.id);
+          const jawabanTersimpan = pulihkanJawaban(
+            bacaJawabanTersimpan(data.attemptId),
+            soalIds
+          );
+          setJawaban({ ...jawabanAwal, ...jawabanTersimpan });
           setLayar("mengerjakan");
         } else {
           setHasil({
@@ -705,7 +733,11 @@ export default function ModulAttemptPage({
       setAttemptId(data.attemptId);
       setKadaluarsaPada(data.kadaluarsaPada);
       setSoal(data.soal);
-      setJawaban({});
+      // Server bisa mengembalikan attempt "berlangsung" yang sudah ada
+      // (bukan selalu yang baru) — coba pulihkan drafnya juga; kalau memang
+      // baru, bacaJawabanTersimpan() cuma mengembalikan null.
+      const soalIds = data.soal.map((butir) => butir.id);
+      setJawaban(pulihkanJawaban(bacaJawabanTersimpan(data.attemptId), soalIds));
       setLayar("mengerjakan");
       router.replace(
         `/kegiatan/${kegiatanId}/modul/${modulId}?attemptId=${data.attemptId}`
@@ -720,6 +752,16 @@ export default function ModulAttemptPage({
   function handlePilihJawaban(soalId: string, opsiId: string) {
     setJawaban((j) => ({ ...j, [soalId]: opsiId }));
   }
+
+  // Autosave — setiap kali jawaban berubah, simpan ke localStorage. Gratis,
+  // tidak menyentuh kuota tulis Firestore sama sekali (lihat komentar di
+  // jawaban-tersimpan.ts).
+  useEffect(() => {
+    if (!attemptId) {
+      return;
+    }
+    simpanJawabanTersimpan(attemptId, jawaban);
+  }, [attemptId, jawaban]);
 
   async function handleKirimFinal() {
     if (!attemptId) {
@@ -744,6 +786,8 @@ export default function ModulAttemptPage({
       setHasil(body as SubmitAttemptResponse);
       setLayar("hasil");
       setMengonfirmasi(false);
+      hapusJawabanTersimpan(attemptId);
+      bersihkanJawabanAttemptLain(attemptId);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengirim jawaban.");
     } finally {
@@ -853,6 +897,18 @@ export default function ModulAttemptPage({
 
   const jumlahTerjawab = Object.keys(jawaban).length;
 
+  // Sisa waktu — cuma berarti kalau attempt ini memang punya kadaluarsaPada
+  // (kebijakan bawaan ARSITEKTUR §11 adalah timer mati). Server MENERIMA
+  // submit yang datang setelah kadaluarsaPada (lihat POST
+  // /api/attempt/[id]/submit) — dinilai seperti biasa dari jawaban yang
+  // dikirim, cuma status attempt-nya tercatat "kadaluarsa" alih-alih
+  // "selesai". Jadi begitu waktu habis, pesannya mendorong SEGERA
+  // mengirim — bukan bilang jawaban akan ditolak (tidak akan).
+  const sisaDetik = kadaluarsaPada
+    ? Math.max(0, Math.round((new Date(kadaluarsaPada).getTime() - sekarang) / 1000))
+    : null;
+  const waktuHabis = sisaDetik !== null && sisaDetik <= 0;
+
   return (
     <div className="mx-auto min-h-screen max-w-md space-y-5 bg-zinc-50 px-4 py-6 dark:bg-black">
       {layar !== "mengerjakan" && (
@@ -911,13 +967,31 @@ export default function ModulAttemptPage({
         <div className="space-y-4 pb-24">
           <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:border-zinc-800 dark:bg-black/95">
             <p className="text-sm font-medium text-black dark:text-zinc-50">{modul.judul}</p>
-            <p className="text-xs text-zinc-500">
-              {kadaluarsaPada
-                ? `Batas waktu: ${formatDateTime(kadaluarsaPada)}`
-                : "Tanpa batas waktu"}{" "}
+            <p
+              className={
+                waktuHabis
+                  ? "text-xs font-medium text-red-600"
+                  : "text-xs text-zinc-500"
+              }
+            >
+              {sisaDetik !== null ? (
+                waktuHabis ? (
+                  "Waktu habis — jawaban tetap dinilai kalau dikirim, segera kirim"
+                ) : (
+                  <>Sisa waktu: {formatSisaWaktu(sisaDetik)}</>
+                )
+              ) : (
+                "Tanpa batas waktu"
+              )}{" "}
               · Terjawab {jumlahTerjawab} dari {soal.length}
             </p>
           </div>
+
+          <p className="text-xs text-zinc-400">
+            Jawaban tersimpan otomatis di perangkat ini dan pulih kalau halaman ini dimuat
+            ulang — tapi hanya di perangkat yang sama; berpindah perangkat memulai dari
+            kosong.
+          </p>
 
           {soal.map((butir, index) => (
             <div

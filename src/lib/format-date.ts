@@ -30,3 +30,11 @@ export function formatDateTime(iso: string): string {
   const jam = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
   return `${tanggal} ${jam}`;
 }
+
+/** "12:05" — mm:ss, dipakai penghitung mundur attempt. Negatif dianggap 0. */
+export function formatSisaWaktu(detik: number): string {
+  const bulat = Math.max(0, Math.round(detik));
+  const menit = Math.floor(bulat / 60);
+  const sisaDetik = bulat % 60;
+  return `${menit}:${String(sisaDetik).padStart(2, "0")}`;
+}
