@@ -145,6 +145,69 @@ export default function AdminPesertaPage({
     [items]
   );
 
+  // Rekap ringkas (Slice 8.3 §1) — dihitung dari `items` yang SUDAH dimuat
+  // di atas, tidak ada pembacaan Firestore tambahan untuk ini.
+  const ringkasan = useMemo(() => {
+    const sudahMengerjakanEvaluasi = items.filter((item) =>
+      Object.values(item.hasilModul).some((hasil) => hasil.percobaan > 0)
+    ).length;
+    const lulusNilai = items.filter((item) => item.statusKelayakan === "layak").length;
+    const materiTuntas = items.filter((item) => item.prasyaratMateri.tuntas).length;
+    const sertifikatTerbit = items.filter((item) => item.sertifikat?.status === "berlaku").length;
+    const sertifikatDicabut = items.filter((item) => item.sertifikat?.status === "dicabut").length;
+    return {
+      totalPendaftar: items.length,
+      sudahMengerjakanEvaluasi,
+      lulusNilai,
+      materiTuntas,
+      sertifikatTerbit,
+      sertifikatDicabut,
+    };
+  }, [items]);
+
+  const [mengunduh, setMengunduh] = useState<"koma" | "titik-koma" | null>(null);
+  const [errorUnduh, setErrorUnduh] = useState<string | null>(null);
+
+  // GET /api/admin/rekap/[kegiatanId] mengembalikan berkas, bukan JSON —
+  // diunduh lewat blob + tautan sementara, bukan window.location, supaya
+  // header Authorization (fetchWithAuth) ikut terkirim.
+  //
+  // DUA tombol, bukan satu dengan tebakan lokal Excel pengguna — mendeteksi
+  // lokal dari browser tidak bisa diandalkan (dan salah tebak membuat
+  // seluruh baris menumpuk di satu kolom, membingungkan), jadi peserta
+  // memilih sendiri lewat percobaan yang mana yang cocok dengan Excel-nya.
+  async function handleUnduhRekap(pemisah: "koma" | "titik-koma") {
+    setErrorUnduh(null);
+    setMengunduh(pemisah);
+    try {
+      const query = pemisah === "koma" ? "?pemisah=koma" : "";
+      const res = await fetchWithAuth(
+        `/api/admin/rekap/${encodeURIComponent(kegiatanId)}${query}`
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => null);
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Gagal mengunduh rekap."
+        );
+      }
+      const blob = await res.blob();
+      const cocok = /filename="([^"]+)"/.exec(res.headers.get("Content-Disposition") ?? "");
+      const namaBerkas = cocok?.[1] ?? `rekap-${kegiatanId}.csv`;
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = namaBerkas;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setErrorUnduh(err instanceof Error ? err.message : "Gagal mengunduh rekap.");
+    } finally {
+      setMengunduh(null);
+    }
+  }
+
   function toggleSelect(uid: string) {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -268,6 +331,84 @@ export default function AdminPesertaPage({
           &quot;Terbitkan terpilih&quot;.
         </p>
       </div>
+
+      {!loading && !error && (
+        <div className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm sm:grid-cols-3 lg:grid-cols-6 dark:border-zinc-800 dark:bg-zinc-950">
+          <div>
+            <p className="text-xs text-zinc-500">Pendaftar</p>
+            <p className="text-lg font-semibold text-black dark:text-zinc-50">
+              {ringkasan.totalPendaftar}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Sudah mengerjakan evaluasi</p>
+            <p className="text-lg font-semibold text-black dark:text-zinc-50">
+              {ringkasan.sudahMengerjakanEvaluasi}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Lulus nilai</p>
+            <p className="text-lg font-semibold text-black dark:text-zinc-50">
+              {ringkasan.lulusNilai}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Materi wajib tuntas</p>
+            <p className="text-lg font-semibold text-black dark:text-zinc-50">
+              {ringkasan.materiTuntas}
+            </p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Sertifikat terbit</p>
+            <p className="text-lg font-semibold text-green-600">{ringkasan.sertifikatTerbit}</p>
+          </div>
+          <div>
+            <p className="text-xs text-zinc-500">Sertifikat dicabut</p>
+            <p className="text-lg font-semibold text-red-600">{ringkasan.sertifikatDicabut}</p>
+          </div>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <p className="text-xs text-zinc-500">
+          Di berkas CSV rekap: sel <strong>kosong</strong> pada kolom modul evaluasi/atestasi
+          berarti modul itu ada tapi belum dikerjakan peserta (dihitung 0 ke nilai akhir);
+          tanda &quot;<strong>-</strong>&quot; berarti modul itu belum ada saat peserta
+          bersangkutan mendaftar (tidak dihitung sama sekali).
+        </p>
+      )}
+
+      {izin.lihatPeserta && (
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => handleUnduhRekap("koma")}
+              disabled={mengunduh !== null}
+              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              {mengunduh === "koma" ? "Mengunduh..." : "Unduh CSV (pemisah koma)"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleUnduhRekap("titik-koma")}
+              disabled={mengunduh !== null}
+              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              {mengunduh === "titik-koma" ? "Mengunduh..." : "Unduh CSV (pemisah titik koma)"}
+            </button>
+            {errorUnduh && <p className="text-sm text-red-600">{errorUnduh}</p>}
+          </div>
+          <p className="text-xs text-zinc-500">
+            Kalau kolomnya menumpuk jadi satu saat dibuka di Excel, coba unduhan yang satunya
+            lagi — pemisah yang cocok berbeda tergantung region Excel Anda.
+          </p>
+          <p className="text-xs text-zinc-500">
+            Berkas ini memuat data pribadi peserta — email, nomor identitas, dan nomor
+            telepon — jadi perlakukan sesuai.
+          </p>
+        </div>
+      )}
 
       {cabutTarget && (
         <div className="space-y-3 rounded-lg border border-red-300 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
