@@ -5,7 +5,11 @@ import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { formatDate } from "@/lib/format-date";
 import { useUserList } from "@/lib/hooks/use-user-list";
-import { updateUserRole, updateUserStatus } from "@/lib/services/user-management";
+import {
+  updateUserBolehBuatSoal,
+  updateUserRole,
+  updateUserStatus,
+} from "@/lib/services/user-management";
 import type { UserRole, UserStatus } from "@/types/user";
 
 const STATUS_OPTIONS: UserStatus[] = ["aktif", "pending", "nonaktif"];
@@ -51,6 +55,18 @@ function AdminPenggunaPageIsi() {
     }
   }
 
+  async function handleBolehBuatSoalChange(uid: string, bolehBuatSoal: boolean) {
+    setError(null);
+    setSavingUid(uid);
+    try {
+      await updateUserBolehBuatSoal(uid, bolehBuatSoal);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengubah kewenangan bank soal.");
+    } finally {
+      setSavingUid(null);
+    }
+  }
+
   return (
     <div className="max-w-4xl space-y-6">
       <div>
@@ -72,27 +88,28 @@ function AdminPenggunaPageIsi() {
               <th className="px-4 py-2 font-medium">Email</th>
               <th className="px-4 py-2 font-medium">Role</th>
               <th className="px-4 py-2 font-medium">Status</th>
+              <th className="px-4 py-2 font-medium">Boleh buat soal</th>
               <th className="px-4 py-2 font-medium">Dibuat</th>
             </tr>
           </thead>
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
                   Memuat...
                 </td>
               </tr>
             )}
             {!loading && listError && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-red-600">
+                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
                   Gagal memuat pengguna: {listError}
                 </td>
               </tr>
             )}
             {!loading && !listError && items.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada pengguna.
                 </td>
               </tr>
@@ -151,6 +168,17 @@ function AdminPenggunaPageIsi() {
                         </option>
                       ))}
                     </select>
+                  </td>
+                  <td className="px-4 py-2">
+                    <input
+                      type="checkbox"
+                      checked={item.bolehBuatSoal}
+                      disabled={busy}
+                      onChange={(event) =>
+                        handleBolehBuatSoalChange(item.uid, event.target.checked)
+                      }
+                      aria-label={`Boleh buat soal untuk ${item.displayName}`}
+                    />
                   </td>
                   <td className="px-4 py-2 text-zinc-500">{formatDate(item.createdAt)}</td>
                 </tr>

@@ -27,3 +27,16 @@ export async function updateUserRole(uid: string, role: UserRole): Promise<void>
     updatedAt: new Date().toISOString(),
   });
 }
+
+/**
+ * Slice 8.2: kewenangan GLOBAL membuat/menyunting soal di bank soal (lihat
+ * src/lib/izin-soal.ts) — ditulis terpisah, sama seperti status/role di
+ * atas, supaya tetap hanya menyentuh field yang diizinkan rules untuk
+ * cabang admin (firestore.rules, match /users/{uid} allow update).
+ */
+export async function updateUserBolehBuatSoal(uid: string, bolehBuatSoal: boolean): Promise<void> {
+  await updateDoc(doc(db, "users", uid), {
+    bolehBuatSoal,
+    updatedAt: new Date().toISOString(),
+  });
+}

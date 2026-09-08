@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
+import { izinSoal } from "@/lib/izin-soal";
 import {
   DEFAULT_SYSTEM_PARAMETER,
   getSystemParameter,
@@ -15,13 +16,15 @@ const ADMIN_ROLES = ["admin", "superadmin", "panitia"];
  * Penjaga di sini HANYA untuk pengalaman pengguna (mengalihkan sebelum
  * konten admin sempat dirender). Penegakan sesungguhnya ada di
  * firestore.rules (isAdmin()/isSuperAdmin()/panitiaBolehSuntingData()) dan
- * di izinPanitia() (src/lib/izin-panitia.ts) yang dipakai Route Handler —
- * menyembunyikan menu di sini bukan pagar.
+ * di izinPanitia()/izinSoal() (src/lib/izin-panitia.ts,
+ * src/lib/izin-soal.ts) yang dipakai Route Handler — menyembunyikan menu
+ * di sini bukan pagar.
  *
  * Slice 8.1: panitia sekarang boleh masuk ke /admin (dulu ditolak sama
  * sekali), tapi hanya melihat Kegiatan di menu — Parameter/Undangan/
- * Pengguna/Topik/Soal tetap admin/superadmin saja (bank soal belum bisa
- * disentuh panitia sama sekali, lihat izinPanitia()/buatSoal).
+ * Pengguna/Topik tetap admin/superadmin saja. Slice 8.2: Soal ikut
+ * ditampilkan untuk panitia yang punya users/{uid}.bolehBuatSoal (lihat
+ * izinSoal()) — kewenangan bank soal global, bukan per kegiatan.
  */
 export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
@@ -68,6 +71,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }
 
   const isAdminOrSuper = profile.role === "admin" || profile.role === "superadmin";
+  const bisaKelolaSoal = izinSoal(profile).bolehBuat;
 
   return (
     <div className="flex min-h-screen flex-1">
@@ -102,13 +106,15 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
               >
                 Topik
               </Link>
-              <Link
-                href="/admin/soal"
-                className="block rounded px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
-              >
-                Soal
-              </Link>
             </>
+          )}
+          {bisaKelolaSoal && (
+            <Link
+              href="/admin/soal"
+              className="block rounded px-3 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+            >
+              Soal
+            </Link>
           )}
           <Link
             href="/admin/kegiatan"

@@ -2,10 +2,12 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
-import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
+import { WajibBolehBuatSoal } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
+import { useUserList } from "@/lib/hooks/use-user-list";
+import { bolehSuntingSoal } from "@/lib/izin-soal";
 import {
   cekDuplikatTeks,
   createSoal,
@@ -54,14 +56,29 @@ function truncate(teks: string, max = 70): string {
 
 export default function AdminSoalPage() {
   return (
-    <WajibAdmin>
+    <WajibBolehBuatSoal>
       <AdminSoalPageIsi />
-    </WajibAdmin>
+    </WajibBolehBuatSoal>
   );
 }
 
+/**
+ * Nama pembuat soal — hanya admin/superadmin yang bisa membaca profil
+ * pengguna LAIN (firestore.rules, users/{uid}), jadi useUserList() (query
+ * tanpa filter) hanya dipasang untuk mereka; dipisah ke komponen sendiri
+ * supaya sesi panitia (yang tidak butuh ini — dia cuma perlu tahu mana
+ * soal miliknya sendiri, sudah ketahuan dari uid-nya sendiri) tidak ikut
+ * memasang listener yang pasti ditolak rules.
+ */
+function NamaPembuat({ uid }: { uid: string }) {
+  const { items } = useUserList();
+  const orang = items.find((item) => item.uid === uid);
+  return <>{orang ? `${orang.displayName} (${orang.email})` : uid}</>;
+}
+
 function AdminSoalPageIsi() {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isAdminOrSuper = profile?.role === "admin" || profile?.role === "superadmin";
   const { items: topikList, error: topikError } = useTopikList();
 
   const [filterTopikKode, setFilterTopikKode] = useState("");
@@ -407,6 +424,7 @@ function AdminSoalPageIsi() {
               <th className="px-4 py-2 font-medium">Topik</th>
               <th className="px-4 py-2 font-medium">Tingkat</th>
               <th className="px-4 py-2 font-medium">Opsi</th>
+              <th className="px-4 py-2 font-medium">Pembuat</th>
               <th className="px-4 py-2 font-medium">Status</th>
               <th className="px-4 py-2 font-medium" />
             </tr>
@@ -414,26 +432,28 @@ function AdminSoalPageIsi() {
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
                   Memuat...
                 </td>
               </tr>
             )}
             {!loading && soalError && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
+                <td colSpan={7} className="px-4 py-6 text-center text-red-600">
                   Gagal memuat soal: {soalError}
                 </td>
               </tr>
             )}
             {!loading && !soalError && items.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada soal.
                 </td>
               </tr>
             )}
-            {items.map((item) => (
+            {items.map((item) => {
+              const bisaSunting = bolehSuntingSoal(profile, item);
+              return (
               <tr
                 key={item.id}
                 className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
@@ -448,6 +468,17 @@ function AdminSoalPageIsi() {
                 <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
                   {item.opsi.length}
                 </td>
+                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
+                  {!item.dibuatOleh ? (
+                    "Admin"
+                  ) : item.dibuatOleh === profile?.uid ? (
+                    "Anda"
+                  ) : isAdminOrSuper ? (
+                    <NamaPembuat uid={item.dibuatOleh} />
+                  ) : (
+                    "Panitia lain"
+                  )}
+                </td>
                 <td className="px-4 py-2">
                   {item.isActive ? (
                     <span className="text-green-600">Aktif</span>
@@ -456,26 +487,31 @@ function AdminSoalPageIsi() {
                   )}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(item)}
-                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
-                    >
-                      Sunting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(item)}
-                      disabled={togglingId === item.id}
-                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      {item.isActive ? "Nonaktifkan" : "Aktifkan"}
-                    </button>
-                  </div>
+                  {bisaSunting ? (
+                    <div className="flex justify-end gap-3">
+                      <button
+                        type="button"
+                        onClick={() => startEdit(item)}
+                        className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                      >
+                        Sunting
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleActive(item)}
+                        disabled={togglingId === item.id}
+                        className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                      >
+                        {item.isActive ? "Nonaktifkan" : "Aktifkan"}
+                      </button>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-zinc-400">Hanya lihat</span>
+                  )}
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>

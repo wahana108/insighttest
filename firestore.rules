@@ -79,6 +79,41 @@ service cloud.firestore {
       ];
     }
 
+    // Slice 8.2 (docs/kickoff.md): kewenangan membuat/menyunting soal GLOBAL
+    // (users/{uid}.bolehBuatSoal) — bukan per kegiatan seperti
+    // panitiaBolehSuntingData() di atas, karena bank soal tidak terikat
+    // kegiatan mana pun (KA-6). REIMPLEMENTASI izinSoal()/bolehSuntingSoal()
+    // (src/lib/izin-soal.ts) di bahasa Rules — kalau salah satu berubah,
+    // ubah yang lain.
+    function bolehBuatSoalUser(uid) {
+      return exists(userPath(uid)) && userData(uid).get('bolehBuatSoal', false) == true;
+    }
+
+    // `data` adalah resource.data (dokumen yang sudah ada) ATAU
+    // request.resource.data (payload yang sedang ditulis) — keduanya map
+    // biasa dengan .get(), jadi satu fungsi ini dipakai untuk create
+    // (memeriksa payload) maupun read/update (memeriksa dokumen tersimpan).
+    //
+    // PENTING — kenapa ini TIDAK PERNAH memakai get() ke koleksi 'soal'
+    // dari dalam match /kunci_soal/{soalId}: soal/{id} dan kunci_soal/{id}
+    // SELALU ditulis bersamaan dalam satu writeBatch (buildSoalWrite(),
+    // src/lib/services/soal.ts). Diverifikasi lewat emulator (Slice 8.2)
+    // bahwa get() ke dokumen LAIN yang ikut ditulis dalam writeBatch yang
+    // SAMA gagal — bukan cuma untuk dokumen baru, tapi juga untuk dokumen
+    // yang sudah ada sebelumnya dan ditulis ulang bersamaan. Kalau rule
+    // kunci_soal memakai get(/soal/$(soalId)), maka SETIAP tulisan
+    // kunci_soal (baik create maupun update, karena buildSoalWrite()
+    // selalu menulis ulang keduanya) akan selalu ditolak. Karena itu
+    // dibuatOleh DISALIN ke dokumen kunci_soal itu sendiri saat ditulis —
+    // fungsi ini memeriksa field pada dokumennya SENDIRI, tidak pernah
+    // lintas dokumen.
+    function panitiaPemilikData(data) {
+      return isSignedIn()
+        && hasRole('panitia')
+        && bolehBuatSoalUser(request.auth.uid)
+        && data.get('dibuatOleh', '') == request.auth.uid;
+    }
+
     function undanganPath(email) {
       return /databases/$(database)/documents/undangan/$(email);
     }
@@ -132,7 +167,9 @@ service cloud.firestore {
       allow create: if isOwner(uid) && canCreateUserProfile(uid);
 
       // Pemilik: profil tampilan + data formulir sertifikat (§11) — TIDAK
-      // PERNAH role/status (KA-7). Admin: hanya status. Superadmin: role
+      // PERNAH role/status/bolehBuatSoal (KA-7). Admin: status DAN
+      // bolehBuatSoal (Slice 8.2 — kewenangan bank soal global, diberikan
+      // admin/superadmin, lihat src/lib/izin-soal.ts). Superadmin: role
       // dan/atau status. Tidak ada jalur yang mencampur milik pemilik dengan
       // milik admin/superadmin dalam satu update.
       allow update: if (
@@ -147,7 +184,7 @@ service cloud.firestore {
           isAdmin()
           && request.resource.data.diff(resource.data)
             .affectedKeys()
-            .hasOnly(['status', 'updatedAt'])
+            .hasOnly(['status', 'bolehBuatSoal', 'updatedAt'])
         ) || (
           isSuperAdmin()
           && request.resource.data.diff(resource.data)
@@ -200,27 +237,51 @@ service cloud.firestore {
     // soal/{id}: bank soal, id dokumen auto (bukan deterministik — bank soal
     // tidak terikat kegiatan, kegiatan hanya merujuk id-nya, KA-6). Opsi di
     // sini TIDAK PERNAH membawa penanda benar/salah, lihat kunci_soal di
-    // bawah — itu pemisahan yang membuat Slice 8.1b aman: panitia BACA soal
-    // (pertanyaan + pilihan, perlu menyusun modul evaluasi lewat
-    // src/lib/services/modul.ts) tapi TIDAK PERNAH kunci_soal (jawaban).
-    // Peserta tetap tidak pernah membaca koleksi ini langsung — di tahap 3
-    // soal dikirim ke peserta lewat Route Handler yang menyaring kunci.
-    // MENULIS tetap admin/superadmin saja — saklar buatSoal (izinPanitia())
-    // sudah tersimpan tapi belum aktif, jangan dinyalakan di sini dulu.
-    // Tidak ada hapus permanen, hanya isActive.
+    // bawah — itu pemisahan yang membuat Slice 8.1b/8.2 aman: panitia BACA
+    // seluruh bank soal (pertanyaan + pilihan, perlu menyusun modul evaluasi
+    // lewat src/lib/services/modul.ts) tapi TIDAK PERNAH kunci_soal
+    // (jawaban). Peserta tetap tidak pernah membaca koleksi ini langsung —
+    // di tahap 3 soal dikirim ke peserta lewat Route Handler yang menyaring
+    // kunci.
+    //
+    // Slice 8.2: MENULIS sekarang berbasis KEPEMILIKAN, bukan cuma peran —
+    // panitia dengan users/{uid}.bolehBuatSoal boleh membuat soal baru
+    // (dengan dibuatOleh == dirinya sendiri) dan menyunting HANYA soal yang
+    // dibuatOleh dirinya. Soal lama tanpa field dibuatOleh sama sekali
+    // (default '' lewat KA-1) tidak pernah cocok dengan uid siapa pun —
+    // diperlakukan sebagai milik admin, cuma admin yang bisa menyuntingnya.
+    // Baris kedua allow update memastikan dibuatOleh TIDAK BISA dialihkan —
+    // pemiliknya tetap, siapa pun yang menyunting field lain. Tidak ada
+    // hapus permanen, hanya isActive.
     match /soal/{id} {
       allow read: if isAdmin() || hasRole('panitia');
-      allow create, update: if isAdmin();
+      allow create: if isAdmin() || panitiaPemilikData(request.resource.data);
+      allow update: if isAdmin() || (
+        panitiaPemilikData(resource.data)
+        && request.resource.data.get('dibuatOleh', '') == resource.data.get('dibuatOleh', '')
+      );
       allow delete: if false;
     }
 
     // kunci_soal/{soalId}: id dokumen = id dokumen soal (deterministik,
     // lihat buildSoalWrite() di src/lib/services/soal.ts) — pasangan 1:1
-    // dengan soal/{id}. Kunci jawaban tidak pernah turun ke peserta atau
-    // panitia dalam bentuk apa pun; hanya admin/superadmin yang mengelola
-    // bank soal boleh membaca atau menulisnya (KA-3, docs/arsitektur.md).
+    // dengan soal/{id}, SELALU ditulis bersamaan dalam satu writeBatch.
+    // Kunci jawaban tidak pernah turun ke peserta dalam bentuk apa pun.
+    //
+    // Slice 8.2: panitia pemilik soal yang bersangkutan (dibuatOleh ==
+    // dirinya, DISALIN ke dokumen kunci_soal ini sendiri — lihat komentar
+    // panjang di panitiaPemilikData() di atas untuk alasannya: get() ke
+    // soal/{id} dari sini tidak bisa dipakai) boleh membaca/menulis
+    // kunci_soal miliknya sendiri. Baris kedua allow update mencegah
+    // dibuatOleh dialihkan, sama seperti soal/{id} di atas.
     match /kunci_soal/{soalId} {
-      allow read, write: if isAdmin();
+      allow read: if isAdmin() || panitiaPemilikData(resource.data);
+      allow create: if isAdmin() || panitiaPemilikData(request.resource.data);
+      allow update: if isAdmin() || (
+        panitiaPemilikData(resource.data)
+        && request.resource.data.get('dibuatOleh', '') == resource.data.get('dibuatOleh', '')
+      );
+      allow delete: if false;
     }
 
     // kegiatan/{id}: satu gelombang = satu dokumen (§4, docs/arsitektur.md).

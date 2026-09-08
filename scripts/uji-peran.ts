@@ -29,7 +29,6 @@ const SEMUA_TRUE: KemampuanPanitia = {
   lihatPeserta: true,
   terbitkanSertifikat: true,
   suntingKegiatan: true,
-  buatSoal: true,
 };
 
 const SEMUA_FALSE: KemampuanPanitia = {
@@ -37,7 +36,6 @@ const SEMUA_FALSE: KemampuanPanitia = {
   lihatPeserta: false,
   terbitkanSertifikat: false,
   suntingKegiatan: false,
-  buatSoal: false,
 };
 
 const KEGIATAN_KOSONG = {};
@@ -55,11 +53,11 @@ uji("superadmin: semua kemampuan true di kegiatan mana pun", () => {
   assert.deepEqual(hasil, SEMUA_TRUE);
 });
 
-uji("panitia ditugaskan, ketiga saklar mati → boleh+lihatPeserta true, sisanya false", () => {
+uji("panitia ditugaskan, kedua saklar mati → boleh+lihatPeserta true, sisanya false", () => {
   const kegiatan = {
     panitiaUids: ["u-panitia"],
     panitiaIzin: {
-      "u-panitia": { terbitkanSertifikat: false, suntingKegiatan: false, buatSoal: false },
+      "u-panitia": { terbitkanSertifikat: false, suntingKegiatan: false },
     },
   };
   const hasil = izinPanitia({ uid: "u-panitia", role: "panitia" }, kegiatan);
@@ -68,7 +66,6 @@ uji("panitia ditugaskan, ketiga saklar mati → boleh+lihatPeserta true, sisanya
     lihatPeserta: true,
     terbitkanSertifikat: false,
     suntingKegiatan: false,
-    buatSoal: false,
   });
 });
 
@@ -76,7 +73,7 @@ uji("panitia ditugaskan dengan terbitkanSertifikat menyala → hanya itu yang tr
   const kegiatan = {
     panitiaUids: ["u-panitia"],
     panitiaIzin: {
-      "u-panitia": { terbitkanSertifikat: true, suntingKegiatan: false, buatSoal: false },
+      "u-panitia": { terbitkanSertifikat: true, suntingKegiatan: false },
     },
   };
   const hasil = izinPanitia({ uid: "u-panitia", role: "panitia" }, kegiatan);
@@ -85,7 +82,6 @@ uji("panitia ditugaskan dengan terbitkanSertifikat menyala → hanya itu yang tr
     lihatPeserta: true,
     terbitkanSertifikat: true,
     suntingKegiatan: false,
-    buatSoal: false,
   });
 });
 
@@ -93,7 +89,7 @@ uji("panitia yang tidak ditugaskan (uid tidak ada di panitiaUids) → semuanya f
   const kegiatan = {
     panitiaUids: ["orang-lain"],
     panitiaIzin: {
-      "orang-lain": { terbitkanSertifikat: true, suntingKegiatan: true, buatSoal: true },
+      "orang-lain": { terbitkanSertifikat: true, suntingKegiatan: true },
     },
   };
   const hasil = izinPanitia({ uid: "u-panitia", role: "panitia" }, kegiatan);
@@ -103,7 +99,7 @@ uji("panitia yang tidak ditugaskan (uid tidak ada di panitiaUids) → semuanya f
 uji("peserta → semuanya false, apa pun isi kegiatannya", () => {
   const kegiatan = {
     panitiaUids: ["u-peserta"],
-    panitiaIzin: { "u-peserta": { terbitkanSertifikat: true, suntingKegiatan: true, buatSoal: true } },
+    panitiaIzin: { "u-peserta": { terbitkanSertifikat: true, suntingKegiatan: true } },
   };
   const hasil = izinPanitia({ uid: "u-peserta", role: "peserta" }, kegiatan);
   assert.deepEqual(hasil, SEMUA_FALSE);
@@ -115,7 +111,7 @@ uji("kegiatan tanpa panitiaUids sama sekali (dokumen lama) → tidak melempar, s
 });
 
 uji(
-  "panitiaUids memuat uid tapi panitiaIzin tidak punya entri untuk uid itu → lihatPeserta true, tiga saklar false",
+  "panitiaUids memuat uid tapi panitiaIzin tidak punya entri untuk uid itu → lihatPeserta true, dua saklar false",
   () => {
     const kegiatan = { panitiaUids: ["u-panitia"], panitiaIzin: {} };
     const hasil = izinPanitia({ uid: "u-panitia", role: "panitia" }, kegiatan);
@@ -124,7 +120,6 @@ uji(
       lihatPeserta: true,
       terbitkanSertifikat: false,
       suntingKegiatan: false,
-      buatSoal: false,
     });
   }
 );
@@ -142,7 +137,7 @@ uji("peran tidak dikenal (bukan salah satu dari 4 role) → semuanya false", () 
   assert.deepEqual(hasil, SEMUA_FALSE);
 });
 
-uji("panitiaIzin bukan objek (rusak/tidak sinkron) → tidak melempar, tiga saklar false", () => {
+uji("panitiaIzin bukan objek (rusak/tidak sinkron) → tidak melempar, dua saklar false", () => {
   const kegiatan = { panitiaUids: ["u-panitia"], panitiaIzin: "bukan-objek" };
   const hasil = izinPanitia({ uid: "u-panitia", role: "panitia" }, kegiatan);
   assert.deepEqual(hasil, {
@@ -150,7 +145,6 @@ uji("panitiaIzin bukan objek (rusak/tidak sinkron) → tidak melempar, tiga sakl
     lihatPeserta: true,
     terbitkanSertifikat: false,
     suntingKegiatan: false,
-    buatSoal: false,
   });
 });
 

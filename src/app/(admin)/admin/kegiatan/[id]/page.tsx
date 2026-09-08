@@ -220,7 +220,6 @@ function FieldUrlGambar({
 const IZIN_KOSONG: PanitiaIzin = {
   terbitkanSertifikat: false,
   suntingKegiatan: false,
-  buatSoal: false,
 };
 
 /**
@@ -318,9 +317,12 @@ function PanitiaKegiatanIni({
         </h2>
         <p className="mt-1 text-xs text-zinc-500">
           Kepercayaan di sini berlaku HANYA untuk kegiatan ini, bukan global — panitia yang sama
-          bisa punya saklar berbeda di kegiatan lain. &quot;Buat soal&quot; sudah bisa dicentang
-          tapi BELUM aktif (menyusul di slice berikutnya) — mencentangnya sekarang belum memberi
-          akses apa pun ke bank soal.
+          bisa punya saklar berbeda di kegiatan lain. Kewenangan membuat/menyunting soal ada di
+          bank soal (bukan per kegiatan) — atur lewat &quot;Boleh buat soal&quot; di{" "}
+          <Link href="/admin/pengguna" className="underline">
+            /admin/pengguna
+          </Link>
+          .
         </p>
       </div>
 
@@ -382,14 +384,6 @@ function PanitiaKegiatanIni({
                   />
                   Sunting kegiatan &amp; modul
                 </label>
-                <label className="flex items-center gap-1.5">
-                  <input
-                    type="checkbox"
-                    checked={draf.buatSoal}
-                    onChange={(event) => ubahDraf(orang.uid, { buatSoal: event.target.checked })}
-                  />
-                  Buat soal (belum aktif)
-                </label>
               </div>
               <button
                 type="button"
@@ -444,17 +438,6 @@ function PanitiaKegiatanIni({
                   }
                 />
                 Sunting kegiatan &amp; modul
-              </label>
-              <label className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
-                <input
-                  type="checkbox"
-                  checked={izin.buatSoal}
-                  disabled={busy}
-                  onChange={(event) =>
-                    handleUbahIzin(uid, { ...izin, buatSoal: event.target.checked })
-                  }
-                />
-                Buat soal (belum aktif)
               </label>
               <button
                 type="button"
@@ -928,8 +911,12 @@ export default function AdminKegiatanDetailPage({
           </span>
           . Tidak bisa: menunjuk panitia lain, mengubah izin sendiri
           {!izin.terbitkanSertifikat && ", menerbitkan/mencabut sertifikat"}
-          {!izin.suntingKegiatan && ", menyunting kegiatan & modul"}, atau membuat/menyunting
-          bank soal.
+          {!izin.suntingKegiatan && ", menyunting kegiatan & modul"}. Kewenangan bank soal bukan
+          urusan kegiatan ini — lihat{" "}
+          <Link href="/admin/soal" className="underline">
+            /admin/soal
+          </Link>
+          .
         </p>
       )}
 

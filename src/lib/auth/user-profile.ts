@@ -34,6 +34,7 @@ export function mapUserProfile(uid: string, data: DocumentData): UserProfile {
     institusi: typeof data.institusi === "string" ? data.institusi : "",
     nomorIdentitas: typeof data.nomorIdentitas === "string" ? data.nomorIdentitas : "",
     noTelepon: typeof data.noTelepon === "string" ? data.noTelepon : "",
+    bolehBuatSoal: data.bolehBuatSoal === true,
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
   };
@@ -52,6 +53,7 @@ function baseProfile(user: User, role: UserRole, status: UserStatus): UserProfil
     institusi: "",
     nomorIdentitas: "",
     noTelepon: "",
+    bolehBuatSoal: false,
     createdAt: now,
     updatedAt: now,
   };

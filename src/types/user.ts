@@ -14,6 +14,16 @@ export interface UserProfile {
   institusi: string;
   nomorIdentitas: string;
   noTelepon: string;
+  /**
+   * Slice 8.2: kewenangan GLOBAL membuat/menyunting soal miliknya sendiri di
+   * bank soal — bukan saklar per kegiatan seperti panitiaIzin (lihat
+   * src/types/kegiatan.ts). Bank soal tidak terikat kegiatan (KA-6), dan
+   * firestore.rules cuma bisa memeriksa satu dokumen (tidak bisa menelusuri
+   * semua kegiatan tempat seseorang jadi panitia), jadi izinnya melekat di
+   * sini, pada profil pengguna, bukan di kegiatan mana pun. default false;
+   * hanya admin/superadmin yang bisa menyalakannya, di /admin/pengguna.
+   */
+  bolehBuatSoal: boolean;
   createdAt: string;
   updatedAt: string;
 }

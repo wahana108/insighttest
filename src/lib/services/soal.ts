@@ -53,6 +53,9 @@ export function mapSoal(id: string, data: DocumentData): Soal {
     tingkat: isTingkat(data.tingkat) ? data.tingkat : "sedang",
     opsi: mapOpsi(data.opsi),
     isActive: typeof data.isActive === "boolean" ? data.isActive : true,
+    // Soal lama tidak punya field ini sama sekali — string kosong, bukan
+    // galat (KA-1). Lihat komentar Soal.dibuatOleh di src/types/soal.ts.
+    dibuatOleh: typeof data.dibuatOleh === "string" ? data.dibuatOleh : "",
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
@@ -117,6 +120,13 @@ export interface BuildSoalWriteContext {
   id?: string;
   createdAt?: string;
   createdBy?: string;
+  /**
+   * Diisi saat menyunting soal yang sudah ada (dari Soal.dibuatOleh yang
+   * sudah tersimpan) — TIDAK PERNAH dari actorId saat menyunting, supaya
+   * kepemilikan tidak bisa dialihkan (Slice 8.2 §2). Kosongkan untuk soal
+   * baru — barulah jatuh ke actorId (pembuatnya).
+   */
+  dibuatOleh?: string;
   isActive?: boolean;
 }
 
@@ -126,6 +136,18 @@ export interface BuildSoalWriteContext {
  * pasangan deterministik (KA-3, docs/arsitektur.md). Tidak melakukan
  * commit; pemanggil yang commit, supaya importer massal (slice 2.3) bisa
  * menumpuk banyak soal dalam satu batch/commit.
+ *
+ * dibuatOleh DITULIS DUA KALI, di 'soal' DAN di 'kunci_soal' (bukan cuma di
+ * 'soal') — sengaja, bukan kelalaian. firestore.rules untuk kunci_soal
+ * butuh tahu siapa pemiliknya TANPA get() lintas dokumen ke 'soal', karena
+ * kedua dokumen ini SELALU ditulis bersamaan dalam satu writeBatch — dan
+ * terverifikasi lewat emulator (Slice 8.2) bahwa get() ke dokumen lain
+ * dalam writeBatch yang sama TIDAK melihat tulisan yang belum ter-commit
+ * itu (berlaku baik untuk dokumen baru maupun dokumen yang sudah ada
+ * sebelumnya), sehingga rule berbasis get() akan SELALU gagal untuk
+ * pasangan ini. Menyalin dibuatOleh ke kunci_soal menghindari itu sama
+ * sekali. Satu fungsi ini satu-satunya penulis keduanya, jadi kedua salinan
+ * tidak pernah bisa tidak sinkron.
  */
 export function buildSoalWrite(
   batch: WriteBatch,
@@ -134,6 +156,7 @@ export function buildSoalWrite(
 ): { id: string; soal: Soal; kunci: KunciSoal } {
   const id = ctx.id ?? doc(collection(db, "soal")).id;
   const now = new Date().toISOString();
+  const dibuatOleh = ctx.dibuatOleh ?? ctx.actorId;
 
   const soal: Soal = {
     id,
@@ -143,6 +166,7 @@ export function buildSoalWrite(
     tingkat: input.tingkat,
     opsi: input.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label.trim() })),
     isActive: ctx.isActive ?? true,
+    dibuatOleh,
     createdAt: ctx.createdAt ?? now,
     createdBy: ctx.createdBy ?? ctx.actorId,
     updatedAt: now,
@@ -155,7 +179,7 @@ export function buildSoalWrite(
   };
 
   batch.set(doc(db, "soal", id), soal);
-  batch.set(doc(db, "kunci_soal", id), kunci);
+  batch.set(doc(db, "kunci_soal", id), { ...kunci, dibuatOleh });
 
   return { id, soal, kunci };
 }
@@ -205,6 +229,9 @@ export async function updateSoal(
     id,
     createdAt: existing.createdAt,
     createdBy: existing.createdBy,
+    // Dipertahankan APA ADANYA — termasuk string kosong untuk soal lama
+    // tanpa pemilik. Menyunting tidak pernah mengklaim kepemilikan.
+    dibuatOleh: existing.dibuatOleh,
     isActive: existing.isActive,
   });
   await batch.commit();
