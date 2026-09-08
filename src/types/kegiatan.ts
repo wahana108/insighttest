@@ -49,17 +49,22 @@ export interface TemplateSertifikat {
 }
 
 /**
- * Tiga saklar kewenangan panitia UNTUK SATU KEGIATAN INI — dipilih admin
+ * Dua saklar kewenangan panitia UNTUK SATU KEGIATAN INI — dipilih admin
  * saat menunjuk (Slice 8.1, docs/arsitektur.md §"peran bertingkat").
  * Kepercayaan ini per orang per acara, bukan global: panitia yang sama
- * bisa punya saklar berbeda di kegiatan lain. `buatSoal` sudah bisa
- * dinyalakan admin tapi belum berfungsi — menyusul Slice 8.2, lihat
- * izinPanitia() di src/lib/izin-panitia.ts.
+ * bisa punya saklar berbeda di kegiatan lain.
+ *
+ * Slice 8.2: `buatSoal` DIPINDAHKAN dari sini ke users/{uid}.bolehBuatSoal
+ * (src/types/user.ts) — bank soal itu global (KA-6, tidak terikat
+ * kegiatan), jadi izin membuatnya juga harus global. firestore.rules cuma
+ * bisa memeriksa satu dokumen sekaligus; ia tidak bisa menelusuri semua
+ * kegiatan tempat seseorang jadi panitia untuk mencari salah satu yang
+ * menyalakan buatSoal, jadi saklar per-kegiatan tidak bisa dipakai untuk
+ * menggerbangi resource global seperti bank soal.
  */
 export interface PanitiaIzin {
   terbitkanSertifikat: boolean;
   suntingKegiatan: boolean;
-  buatSoal: boolean;
 }
 
 export interface Kegiatan {

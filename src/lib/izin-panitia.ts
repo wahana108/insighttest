@@ -12,16 +12,19 @@ import type { UserRole } from "@/types/user";
  * sekali" (admin/superadmin di mana pun; panitia yang ditugaskan di kegiatan
  * ini). `lihatPeserta` selalu ikut `boleh` untuk panitia — bisa melihat
  * peserta adalah minimum mutlak untuk siapa pun yang ditunjuk, tidak ada
- * saklar terpisah untuk itu. Tiga sisanya (terbitkanSertifikat,
- * suntingKegiatan, buatSoal) adalah saklar per orang per kegiatan yang
- * dipilih admin saat menunjuk.
+ * saklar terpisah untuk itu. Dua sisanya (terbitkanSertifikat,
+ * suntingKegiatan) adalah saklar per orang per kegiatan yang dipilih admin
+ * saat menunjuk.
+ *
+ * Slice 8.2: kewenangan membuat/menyunting soal SENGAJA TIDAK ADA di sini —
+ * itu bukan hal per-kegiatan. Lihat izinSoal()/bolehSuntingSoal() di
+ * src/lib/izin-soal.ts, digerbangi users/{uid}.bolehBuatSoal (global).
  */
 export interface KemampuanPanitia {
   boleh: boolean;
   lihatPeserta: boolean;
   terbitkanSertifikat: boolean;
   suntingKegiatan: boolean;
-  buatSoal: boolean;
 }
 
 const TIDAK_PUNYA_IZIN: KemampuanPanitia = {
@@ -29,7 +32,6 @@ const TIDAK_PUNYA_IZIN: KemampuanPanitia = {
   lihatPeserta: false,
   terbitkanSertifikat: false,
   suntingKegiatan: false,
-  buatSoal: false,
 };
 
 const SEMUA_DIIZINKAN: KemampuanPanitia = {
@@ -37,7 +39,6 @@ const SEMUA_DIIZINKAN: KemampuanPanitia = {
   lihatPeserta: true,
   terbitkanSertifikat: true,
   suntingKegiatan: true,
-  buatSoal: true,
 };
 
 /**
@@ -114,6 +115,5 @@ export function izinPanitia(
     lihatPeserta: true,
     terbitkanSertifikat: izin.terbitkanSertifikat === true,
     suntingKegiatan: izin.suntingKegiatan === true,
-    buatSoal: izin.buatSoal === true,
   };
 }

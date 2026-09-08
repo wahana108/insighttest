@@ -121,7 +121,6 @@ function mapPanitiaIzinSatuOrang(value: unknown): PanitiaIzin {
   return {
     terbitkanSertifikat: data.terbitkanSertifikat === true,
     suntingKegiatan: data.suntingKegiatan === true,
-    buatSoal: data.buatSoal === true,
   };
 }
 
