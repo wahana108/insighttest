@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { formatDate } from "@/lib/format-date";
 import { useUserList } from "@/lib/hooks/use-user-list";
@@ -11,6 +12,14 @@ const STATUS_OPTIONS: UserStatus[] = ["aktif", "pending", "nonaktif"];
 const ROLE_OPTIONS: UserRole[] = ["superadmin", "admin", "panitia", "peserta"];
 
 export default function AdminPenggunaPage() {
+  return (
+    <WajibAdmin>
+      <AdminPenggunaPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminPenggunaPageIsi() {
   const { user, profile } = useAuth();
   const { items, loading, error: listError } = useUserList();
   const [error, setError] = useState<string | null>(null);

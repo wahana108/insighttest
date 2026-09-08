@@ -1,5 +1,6 @@
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
+import { ambilIzinKegiatan } from "@/lib/api/izin-panitia-server";
 import { SertifikatRouteError } from "@/lib/api/sertifikat-server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import type { RiwayatSertifikat } from "@/types/sertifikat";
@@ -12,10 +13,6 @@ import type { RiwayatSertifikat } from "@/types/sertifikat";
 export async function POST(request: Request) {
   try {
     const user = await verifyRequest(request);
-    const isAdminRole = user.role === "admin" || user.role === "superadmin";
-    if (!isAdminRole) {
-      throw new SertifikatRouteError(403, "Hanya admin yang boleh mencabut sertifikat.");
-    }
 
     let body: unknown;
     try {
@@ -35,6 +32,14 @@ export async function POST(request: Request) {
     }
 
     const db = getAdminDb();
+
+    // Slice 8.1: admin/superadmin selalu lolos; panitia hanya kalau
+    // izin terbitkanSertifikat menyala untuk KEGIATAN INI — pencabutan
+    // memakai saklar yang sama dengan penerbitan.
+    const izin = await ambilIzinKegiatan(db, kegiatanId, user);
+    if (!izin.terbitkanSertifikat) {
+      throw new SertifikatRouteError(403, "Anda tidak berhak mencabut sertifikat kegiatan ini.");
+    }
     const sertifikatRef = db.collection("sertifikat").doc(`${kegiatanId}_${uid}`);
     const snap = await sertifikatRef.get();
     if (!snap.exists) {

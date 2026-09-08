@@ -1,6 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import type { HasilUntukNilaiAtestasi } from "@/lib/atestasi-pernyataan";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { izinPanitia } from "@/lib/izin-panitia";
 import { evaluasiKelayakan, putuskanPenerbitan } from "@/lib/sertifikat-syarat";
 import type {
   AmbangKeterlibatan,
@@ -122,10 +123,6 @@ function mapHasilModul(value: unknown): Record<string, HasilModul> {
 export async function GET(request: Request) {
   try {
     const user = await verifyRequest(request);
-    const isAdminRole = user.role === "admin" || user.role === "superadmin";
-    if (!isAdminRole) {
-      throw new AdminPendaftaranRouteError(403, "Hanya admin yang boleh membuka ini.");
-    }
 
     const url = new URL(request.url);
     const kegiatanId = url.searchParams.get("kegiatanId");
@@ -144,6 +141,16 @@ export async function GET(request: Request) {
       throw new AdminPendaftaranRouteError(404, "Kegiatan tidak ditemukan.");
     }
     const kegiatanData = kegiatanSnap.data() ?? {};
+
+    // Slice 8.1: admin/superadmin selalu lolos; panitia hanya kalau
+    // ditugaskan di KEGIATAN INI — izinPanitia() adalah satu-satunya
+    // sumber kebenaran, tidak ditulis ulang di sini.
+    if (!izinPanitia(user, kegiatanData).lihatPeserta) {
+      throw new AdminPendaftaranRouteError(
+        403,
+        "Anda tidak berhak melihat peserta kegiatan ini."
+      );
+    }
     const syaratRaw =
       typeof kegiatanData.syaratSertifikat === "object" && kegiatanData.syaratSertifikat !== null
         ? (kegiatanData.syaratSertifikat as Record<string, unknown>)

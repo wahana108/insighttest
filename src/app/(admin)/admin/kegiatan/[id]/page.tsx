@@ -13,7 +13,15 @@ import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
-import { updateKegiatan, type KegiatanWriteInput } from "@/lib/services/kegiatan";
+import { useUserList } from "@/lib/hooks/use-user-list";
+import { izinPanitia } from "@/lib/izin-panitia";
+import {
+  cabutPanitia,
+  tetapkanPanitia,
+  ubahIzinPanitia,
+  updateKegiatan,
+  type KegiatanWriteInput,
+} from "@/lib/services/kegiatan";
 import {
   createModul,
   deleteModul,
@@ -28,9 +36,11 @@ import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   JenisSyaratSertifikat,
   KategoriModul,
+  Kegiatan,
   KonfigurasiAtestasi,
   ModePemilihanSoal,
   ModulKegiatan,
+  PanitiaIzin,
   TemplateSertifikat,
   TipeReferensi,
 } from "@/types/kegiatan";
@@ -207,18 +217,274 @@ function FieldUrlGambar({
   );
 }
 
+const IZIN_KOSONG: PanitiaIzin = {
+  terbitkanSertifikat: false,
+  suntingKegiatan: false,
+  buatSoal: false,
+};
+
+/**
+ * "Panitia kegiatan ini" (Slice 8.1 §8) — HANYA dirender untuk
+ * admin/superadmin oleh pemanggil, tapi penegakan sesungguhnya ada di
+ * firestore.rules (panitiaBolehSuntingData() menolak siapa pun selain
+ * admin/superadmin yang menyentuh panitiaUids/panitiaIzin, lihat komentar
+ * Slice 8.1 §5 di sana) — bukan cuma disembunyikan di sini.
+ *
+ * Cari pengguna lewat useUserList() (query TANPA filter, sudah dipakai
+ * /admin/pengguna) lalu disaring di klien lewat email — tidak perlu Route
+ * Handler baru untuk ini, admin sudah boleh membaca seluruh koleksi users.
+ */
+function PanitiaKegiatanIni({
+  kegiatanId,
+  kegiatan,
+  actorId,
+}: {
+  kegiatanId: string;
+  kegiatan: Kegiatan;
+  actorId: string;
+}) {
+  const { items: userList, loading: loadingUsers, error: userListError } = useUserList();
+  const [cariEmail, setCariEmail] = useState("");
+  const [izinDraf, setIzinDraf] = useState<Record<string, PanitiaIzin>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [savingUid, setSavingUid] = useState<string | null>(null);
+
+  const panitiaUidSet = new Set(kegiatan.panitiaUids);
+  const hasilCari = cariEmail.trim()
+    ? userList
+        .filter(
+          (item) =>
+            !panitiaUidSet.has(item.uid) &&
+            item.email.toLowerCase().includes(cariEmail.trim().toLowerCase())
+        )
+        .slice(0, 5)
+    : [];
+
+  function ambilDraf(uid: string): PanitiaIzin {
+    return izinDraf[uid] ?? IZIN_KOSONG;
+  }
+
+  function ubahDraf(uid: string, patch: Partial<PanitiaIzin>) {
+    setIzinDraf((prev) => ({ ...prev, [uid]: { ...ambilDraf(uid), ...patch } }));
+  }
+
+  async function handleTambah(uid: string) {
+    setError(null);
+    setSavingUid(uid);
+    try {
+      await tetapkanPanitia(kegiatanId, uid, ambilDraf(uid), actorId);
+      setIzinDraf((prev) => {
+        const next = { ...prev };
+        delete next[uid];
+        return next;
+      });
+      setCariEmail("");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menambahkan panitia.");
+    } finally {
+      setSavingUid(null);
+    }
+  }
+
+  async function handleUbahIzin(uid: string, izin: PanitiaIzin) {
+    setError(null);
+    setSavingUid(uid);
+    try {
+      await ubahIzinPanitia(kegiatanId, uid, izin, actorId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengubah izin panitia.");
+    } finally {
+      setSavingUid(null);
+    }
+  }
+
+  async function handleCabut(uid: string) {
+    setError(null);
+    setSavingUid(uid);
+    try {
+      await cabutPanitia(kegiatanId, uid, actorId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mencabut panitia.");
+    } finally {
+      setSavingUid(null);
+    }
+  }
+
+  return (
+    <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
+      <div>
+        <h2 className="text-sm font-semibold text-black dark:text-zinc-50">
+          Panitia kegiatan ini
+        </h2>
+        <p className="mt-1 text-xs text-zinc-500">
+          Kepercayaan di sini berlaku HANYA untuk kegiatan ini, bukan global — panitia yang sama
+          bisa punya saklar berbeda di kegiatan lain. &quot;Buat soal&quot; sudah bisa dicentang
+          tapi BELUM aktif (menyusul di slice berikutnya) — mencentangnya sekarang belum memberi
+          akses apa pun ke bank soal.
+        </p>
+      </div>
+
+      {error && <p className="text-sm text-red-600">{error}</p>}
+      {userListError && (
+        <p className="text-sm text-red-600">Gagal memuat daftar pengguna: {userListError}</p>
+      )}
+
+      <div>
+        <label
+          htmlFor="cari-panitia"
+          className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+        >
+          Cari pengguna lewat email untuk ditambahkan sebagai panitia
+        </label>
+        <input
+          id="cari-panitia"
+          type="text"
+          placeholder="nama@contoh.com"
+          value={cariEmail}
+          onChange={(event) => setCariEmail(event.target.value)}
+          className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+        {cariEmail.trim() && !loadingUsers && hasilCari.length === 0 && (
+          <p className="mt-1 text-xs text-zinc-500">
+            Tidak ada pengguna cocok (atau sudah jadi panitia kegiatan ini).
+          </p>
+        )}
+        {hasilCari.map((orang) => {
+          const draf = ambilDraf(orang.uid);
+          const busy = savingUid === orang.uid;
+          return (
+            <div
+              key={orang.uid}
+              className="mt-2 space-y-2 rounded border border-zinc-200 p-3 dark:border-zinc-800"
+            >
+              <p className="text-sm text-black dark:text-zinc-50">
+                {orang.displayName}{" "}
+                <span className="text-xs text-zinc-500">({orang.email})</span>
+              </p>
+              <div className="flex flex-wrap gap-4 text-xs text-zinc-700 dark:text-zinc-300">
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={draf.terbitkanSertifikat}
+                    onChange={(event) =>
+                      ubahDraf(orang.uid, { terbitkanSertifikat: event.target.checked })
+                    }
+                  />
+                  Terbitkan sertifikat
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={draf.suntingKegiatan}
+                    onChange={(event) =>
+                      ubahDraf(orang.uid, { suntingKegiatan: event.target.checked })
+                    }
+                  />
+                  Sunting kegiatan &amp; modul
+                </label>
+                <label className="flex items-center gap-1.5">
+                  <input
+                    type="checkbox"
+                    checked={draf.buatSoal}
+                    onChange={(event) => ubahDraf(orang.uid, { buatSoal: event.target.checked })}
+                  />
+                  Buat soal (belum aktif)
+                </label>
+              </div>
+              <button
+                type="button"
+                onClick={() => handleTambah(orang.uid)}
+                disabled={busy}
+                className="rounded bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              >
+                {busy ? "Menambahkan..." : "Tambahkan sebagai panitia"}
+              </button>
+            </div>
+          );
+        })}
+      </div>
+
+      <div className="space-y-2">
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+          Panitia saat ini ({kegiatan.panitiaUids.length})
+        </p>
+        {kegiatan.panitiaUids.length === 0 && (
+          <p className="text-xs text-zinc-500">Belum ada panitia ditugaskan di kegiatan ini.</p>
+        )}
+        {kegiatan.panitiaUids.map((uid) => {
+          const orang = userList.find((item) => item.uid === uid);
+          const izin = kegiatan.panitiaIzin[uid] ?? IZIN_KOSONG;
+          const busy = savingUid === uid;
+          return (
+            <div
+              key={uid}
+              className="flex flex-wrap items-center gap-4 rounded border border-zinc-200 p-3 text-xs dark:border-zinc-800"
+            >
+              <p className="min-w-[10rem] text-sm text-black dark:text-zinc-50">
+                {orang ? `${orang.displayName} (${orang.email})` : uid}
+              </p>
+              <label className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={izin.terbitkanSertifikat}
+                  disabled={busy}
+                  onChange={(event) =>
+                    handleUbahIzin(uid, { ...izin, terbitkanSertifikat: event.target.checked })
+                  }
+                />
+                Terbitkan sertifikat
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={izin.suntingKegiatan}
+                  disabled={busy}
+                  onChange={(event) =>
+                    handleUbahIzin(uid, { ...izin, suntingKegiatan: event.target.checked })
+                  }
+                />
+                Sunting kegiatan &amp; modul
+              </label>
+              <label className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={izin.buatSoal}
+                  disabled={busy}
+                  onChange={(event) =>
+                    handleUbahIzin(uid, { ...izin, buatSoal: event.target.checked })
+                  }
+                />
+                Buat soal (belum aktif)
+              </label>
+              <button
+                type="button"
+                onClick={() => handleCabut(uid)}
+                disabled={busy}
+                className="ml-auto text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+              >
+                Cabut
+              </button>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 export default function AdminKegiatanDetailPage({
   params,
 }: {
   params: Promise<{ id: string }>;
 }) {
   const { id } = use(params);
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
+  const isAdminOrSuper = profile?.role === "admin" || profile?.role === "superadmin";
   const {
     items: kegiatanList,
     loading: loadingKegiatan,
     error: kegiatanListError,
-  } = useKegiatanList();
+  } = useKegiatanList(isAdminOrSuper ? {} : { untukPanitiaUid: user?.uid });
   const { items: modulList, loading: loadingModul, error: modulListError } = useModulList(id);
   const { items: topikList, error: topikError } = useTopikList();
 
@@ -226,6 +492,13 @@ export default function AdminKegiatanDetailPage({
     kegiatanList,
     id,
   ]);
+
+  // Slice 8.1: satu sumber kebenaran untuk kemampuan pengguna ini di
+  // kegiatan ini — dipakai untuk menyembunyikan bagian yang tidak boleh
+  // disentuh. Pasangan penolakannya ada di firestore.rules
+  // (panitiaBolehSuntingData()) untuk sunting kegiatan/modul, bukan cuma
+  // disembunyikan di sini.
+  const izin = izinPanitia(profile, kegiatan);
 
   const topikLabel = useMemo(() => {
     const map = new Map<string, string>();
@@ -631,14 +904,40 @@ export default function AdminKegiatanDetailPage({
             {kegiatan.kode || "(tanpa kode)"}
           </span>
         </h1>
-        <Link
-          href={`/admin/kegiatan/${id}/peserta`}
-          className="mt-1 inline-block text-sm font-medium text-black underline dark:text-zinc-50"
-        >
-          Lihat peserta & terbitkan sertifikat
-        </Link>
+        {izin.lihatPeserta && (
+          <Link
+            href={`/admin/kegiatan/${id}/peserta`}
+            className="mt-1 inline-block text-sm font-medium text-black underline dark:text-zinc-50"
+          >
+            Lihat peserta & terbitkan sertifikat
+          </Link>
+        )}
       </div>
 
+      {!isAdminOrSuper && (
+        <p className="rounded-lg border border-zinc-200 bg-white p-4 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-300">
+          Anda panitia kegiatan ini. Yang bisa Anda lakukan di sini:{" "}
+          <span className="font-medium text-black dark:text-zinc-50">
+            {[
+              "melihat peserta",
+              izin.terbitkanSertifikat && "menerbitkan/mencabut sertifikat",
+              izin.suntingKegiatan && "menyunting kegiatan & modul",
+            ]
+              .filter(Boolean)
+              .join(", ")}
+          </span>
+          . Tidak bisa: menunjuk panitia lain, mengubah izin sendiri
+          {!izin.terbitkanSertifikat && ", menerbitkan/mencabut sertifikat"}
+          {!izin.suntingKegiatan && ", menyunting kegiatan & modul"}, atau membuat/menyunting
+          bank soal.
+        </p>
+      )}
+
+      {isAdminOrSuper && (
+        <PanitiaKegiatanIni kegiatanId={id} kegiatan={kegiatan} actorId={user?.uid ?? ""} />
+      )}
+
+      {izin.suntingKegiatan && (
       <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">Sunting kegiatan</h2>
         {editingKegiatanForm && (
@@ -655,13 +954,19 @@ export default function AdminKegiatanDetailPage({
                   id="det-kode"
                   type="text"
                   required
+                  disabled={!isAdminOrSuper}
                   placeholder="DIKLAT-2026"
                   value={editingKegiatanForm.kode}
                   onChange={(event) =>
                     setKegiatanForm({ ...editingKegiatanForm, kode: event.target.value })
                   }
-                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
                 />
+                {!isAdminOrSuper && (
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Hanya admin yang boleh mengubah kode kegiatan.
+                  </p>
+                )}
               </div>
               <div>
                 <label
@@ -1049,8 +1354,9 @@ export default function AdminKegiatanDetailPage({
           </form>
         )}
       </section>
+      )}
 
-      {topikError && (
+      {topikError && izin.suntingKegiatan && (
         <p className="text-sm text-red-600">Gagal memuat daftar topik: {topikError}</p>
       )}
 
@@ -1064,6 +1370,7 @@ export default function AdminKegiatanDetailPage({
         </p>
       )}
 
+      {izin.suntingKegiatan && (
       <section className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">
           {editingModulId ? "Sunting modul" : "Tambah modul"}
@@ -1637,6 +1944,7 @@ export default function AdminKegiatanDetailPage({
           </div>
         </form>
       </section>
+      )}
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">Daftar modul</h2>
@@ -1694,21 +2002,27 @@ export default function AdminKegiatanDetailPage({
                   </td>
                   <td className="px-4 py-2 text-right">
                     <div className="flex justify-end gap-3">
-                      <button
-                        type="button"
-                        onClick={() => startEditModul(modul)}
-                        className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
-                      >
-                        Sunting
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDeleteModul(modul.id)}
-                        disabled={deletingModulId === modul.id}
-                        className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                      >
-                        Hapus
-                      </button>
+                      {izin.suntingKegiatan ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEditModul(modul)}
+                            className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                          >
+                            Sunting
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteModul(modul.id)}
+                            disabled={deletingModulId === modul.id}
+                            className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                          >
+                            Hapus
+                          </button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-zinc-400">Hanya lihat</span>
+                      )}
                     </div>
                   </td>
                 </tr>

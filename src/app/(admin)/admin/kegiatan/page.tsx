@@ -11,6 +11,7 @@ import {
 import { formatDateTime } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
+import { izinPanitia } from "@/lib/izin-panitia";
 import {
   createKegiatan,
   setKegiatanArchived,
@@ -80,8 +81,11 @@ function JumlahModul({ kegiatanId }: { kegiatanId: string }) {
 }
 
 export default function AdminKegiatanPage() {
-  const { user } = useAuth();
-  const { items, loading, error: listError } = useKegiatanList();
+  const { user, profile } = useAuth();
+  const isAdminOrSuper = profile?.role === "admin" || profile?.role === "superadmin";
+  const { items, loading, error: listError } = useKegiatanList(
+    isAdminOrSuper ? {} : { untukPanitiaUid: user?.uid }
+  );
 
   const [form, setForm] = useState<FormState>(() => emptyForm());
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -192,11 +196,13 @@ export default function AdminKegiatanPage() {
       <div>
         <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Kegiatan</h1>
         <p className="text-sm text-zinc-500">
-          Satu gelombang = satu kegiatan. Kelola modul evaluasinya lewat halaman detail.
-          Kegiatan tidak pernah dihapus permanen — arsipkan kalau sudah selesai.
+          {isAdminOrSuper
+            ? "Satu gelombang = satu kegiatan. Kelola modul evaluasinya lewat halaman detail. Kegiatan tidak pernah dihapus permanen — arsipkan kalau sudah selesai."
+            : "Kegiatan yang ditugaskan kepada Anda sebagai panitia."}
         </p>
       </div>
 
+      {isAdminOrSuper && (
       <form
         onSubmit={handleSubmit}
         className="space-y-4 rounded-lg border border-zinc-200 bg-white p-6 dark:border-zinc-800 dark:bg-zinc-950"
@@ -411,6 +417,7 @@ export default function AdminKegiatanPage() {
           )}
         </div>
       </form>
+      )}
 
       <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
         <table className="w-full text-left text-sm">
@@ -482,35 +489,41 @@ export default function AdminKegiatanPage() {
                     >
                       Kelola modul
                     </Link>
-                    <Link
-                      href={`/admin/kegiatan/${item.id}/peserta`}
-                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
-                    >
-                      Peserta
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => startEdit(item)}
-                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
-                    >
-                      Sunting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleTogglePublished(item)}
-                      disabled={publishingId === item.id}
-                      className="text-sm font-medium text-zinc-700 hover:underline disabled:opacity-50 dark:text-zinc-300"
-                    >
-                      {item.isPublished ? "Tarik" : "Terbitkan"}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleArchived(item)}
-                      disabled={archivingId === item.id}
-                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      {item.isArchived ? "Buka arsip" : "Arsipkan"}
-                    </button>
+                    {izinPanitia(profile, item).lihatPeserta && (
+                      <Link
+                        href={`/admin/kegiatan/${item.id}/peserta`}
+                        className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                      >
+                        Peserta
+                      </Link>
+                    )}
+                    {isAdminOrSuper && (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                        >
+                          Sunting
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleTogglePublished(item)}
+                          disabled={publishingId === item.id}
+                          className="text-sm font-medium text-zinc-700 hover:underline disabled:opacity-50 dark:text-zinc-300"
+                        >
+                          {item.isPublished ? "Tarik" : "Terbitkan"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleArchived(item)}
+                          disabled={archivingId === item.id}
+                          className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          {item.isArchived ? "Buka arsip" : "Arsipkan"}
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>

@@ -23,6 +23,15 @@ export interface UseKegiatanListOptions {
    * Set hanyaTerbit: true di halaman non-admin.
    */
   hanyaTerbit?: boolean;
+  /**
+   * Slice 8.1: panitia hanya boleh membaca kegiatan yang ditugaskan padanya
+   * (firestore.rules, panitiaDitugaskanData()) — sama seperti hanyaTerbit di
+   * atas, itu PROVABLE untuk list hanya kalau query-nya sendiri menyertakan
+   * where('panitiaUids','array-contains', uid). Set ke uid panitia yang
+   * sedang masuk di /admin/kegiatan untuknya; abaikan untuk admin/superadmin
+   * (mereka melihat semua kegiatan tanpa filter ini).
+   */
+  untukPanitiaUid?: string;
 }
 
 export function useKegiatanList(options: UseKegiatanListOptions = {}): {
@@ -30,23 +39,30 @@ export function useKegiatanList(options: UseKegiatanListOptions = {}): {
   loading: boolean;
   error: string | null;
 } {
-  const { hanyaTerbit = false } = options;
+  const { hanyaTerbit = false, untukPanitiaUid } = options;
   const [items, setItems] = useState<Kegiatan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // hanyaTerbit berubah tanpa remount — kembali ke "sedang memuat" di sini,
-  // bukan di badan efek (lihat use-soal-list.ts untuk penjelasan pola ini).
-  const [hanyaTerbitSebelumnya, setHanyaTerbitSebelumnya] = useState(hanyaTerbit);
-  if (hanyaTerbitSebelumnya !== hanyaTerbit) {
-    setHanyaTerbitSebelumnya(hanyaTerbit);
+  // Opsi berubah tanpa remount — kembali ke "sedang memuat" di sini, bukan
+  // di badan efek (lihat use-soal-list.ts untuk penjelasan pola ini).
+  const [opsiSebelumnya, setOpsiSebelumnya] = useState({ hanyaTerbit, untukPanitiaUid });
+  if (
+    opsiSebelumnya.hanyaTerbit !== hanyaTerbit ||
+    opsiSebelumnya.untukPanitiaUid !== untukPanitiaUid
+  ) {
+    setOpsiSebelumnya({ hanyaTerbit, untukPanitiaUid });
     setLoading(true);
     setError(null);
   }
 
   useEffect(() => {
     const ref = collection(db, "kegiatan");
-    const target = hanyaTerbit ? query(ref, where("isPublished", "==", true)) : ref;
+    const target = untukPanitiaUid
+      ? query(ref, where("panitiaUids", "array-contains", untukPanitiaUid))
+      : hanyaTerbit
+        ? query(ref, where("isPublished", "==", true))
+        : ref;
     const unsubscribe = onSnapshot(
       target,
       (snapshot) => {
@@ -63,7 +79,7 @@ export function useKegiatanList(options: UseKegiatanListOptions = {}): {
       }
     );
     return () => unsubscribe();
-  }, [hanyaTerbit]);
+  }, [hanyaTerbit, untukPanitiaUid]);
 
   return { items, loading, error };
 }

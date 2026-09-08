@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
 import {
@@ -20,6 +21,14 @@ interface FormState {
 const EMPTY_FORM: FormState = { kode: "", nama: "", deskripsi: "", urutan: "0" };
 
 export default function AdminTopikPage() {
+  return (
+    <WajibAdmin>
+      <AdminTopikPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminTopikPageIsi() {
   const { user } = useAuth();
   const { items, loading, error: listError } = useTopikList();
 

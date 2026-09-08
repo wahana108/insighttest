@@ -48,6 +48,20 @@ export interface TemplateSertifikat {
   teksTambahan: string;
 }
 
+/**
+ * Tiga saklar kewenangan panitia UNTUK SATU KEGIATAN INI — dipilih admin
+ * saat menunjuk (Slice 8.1, docs/arsitektur.md §"peran bertingkat").
+ * Kepercayaan ini per orang per acara, bukan global: panitia yang sama
+ * bisa punya saklar berbeda di kegiatan lain. `buatSoal` sudah bisa
+ * dinyalakan admin tapi belum berfungsi — menyusul Slice 8.2, lihat
+ * izinPanitia() di src/lib/izin-panitia.ts.
+ */
+export interface PanitiaIzin {
+  terbitkanSertifikat: boolean;
+  suntingKegiatan: boolean;
+  buatSoal: boolean;
+}
+
 export interface Kegiatan {
   id: string;
   /** Menyusun nomor serial sertifikat — lihat §10, docs/arsitektur.md. */
@@ -60,6 +74,17 @@ export interface Kegiatan {
   isArchived: boolean;
   syaratSertifikat: SyaratSertifikat;
   templateSertifikat: TemplateSertifikat;
+  /**
+   * panitiaUids DAN panitiaIzin selalu ditulis bersamaan (lihat
+   * tetapkanPanitia()/ubahIzinPanitia()/cabutPanitia() di
+   * src/lib/services/kegiatan.ts) — panitiaUids untuk pemeriksaan
+   * keanggotaan murah di firestore.rules, panitiaIzin untuk saklarnya.
+   * Dokumen kegiatan lama tidak punya field ini sama sekali; mapKegiatan()
+   * memperlakukan itu sebagai daftar/peta kosong, bukan galat. JANGAN
+   * PERNAH menulis salah satu tanpa yang lain.
+   */
+  panitiaUids: string[];
+  panitiaIzin: Record<string, PanitiaIzin>;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

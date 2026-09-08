@@ -3,7 +3,9 @@
 import Link from "next/link";
 import { use, useCallback, useEffect, useMemo, useState } from "react";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
+import { useAuth } from "@/lib/auth/auth-provider";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
+import { izinPanitia } from "@/lib/izin-panitia";
 import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
 import type { PesertaAdminRingkas } from "@/types/admin-pendaftaran";
 
@@ -60,11 +62,20 @@ export default function AdminPesertaPage({
   params: Promise<{ id: string }>;
 }) {
   const { id: kegiatanId } = use(params);
-  const { items: kegiatanList } = useKegiatanList();
+  const { user, profile } = useAuth();
+  const isAdminOrSuper = profile?.role === "admin" || profile?.role === "superadmin";
+  const { items: kegiatanList } = useKegiatanList(
+    isAdminOrSuper ? {} : { untukPanitiaUid: user?.uid }
+  );
   const kegiatan = useMemo(
     () => kegiatanList.find((item) => item.id === kegiatanId) ?? null,
     [kegiatanList, kegiatanId]
   );
+
+  // Satu sumber kebenaran (Slice 8.1) — pasangan penolakannya ada di server
+  // (GET /api/admin/pendaftaran dan POST /api/sertifikat/terbitkan[-massal]/
+  // cabut memakai izinPanitia() yang sama), bukan cuma disembunyikan di sini.
+  const izin = izinPanitia(profile, kegiatan);
 
   const [items, setItems] = useState<PesertaAdminRingkas[]>([]);
   const [loading, setLoading] = useState(true);
@@ -302,6 +313,7 @@ export default function AdminPesertaPage({
         </div>
       )}
 
+      {izin.terbitkanSertifikat && (
       <div className="flex flex-wrap items-center gap-3">
         <button
           type="button"
@@ -317,6 +329,7 @@ export default function AdminPesertaPage({
         </button>
         {errorTerbitkan && <p className="text-sm text-red-600">{errorTerbitkan}</p>}
       </div>
+      )}
 
       {hasilTerbitkan && (
         <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950">
@@ -344,15 +357,17 @@ export default function AdminPesertaPage({
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
-              <th className="px-3 py-2 font-medium">
-                <input
-                  type="checkbox"
-                  checked={selected.size > 0 && selected.size === dapatDipilih.length}
-                  onChange={toggleSelectAll}
-                  disabled={dapatDipilih.length === 0}
-                  aria-label="Pilih semua yang bisa diterbitkan"
-                />
-              </th>
+              {izin.terbitkanSertifikat && (
+                <th className="px-3 py-2 font-medium">
+                  <input
+                    type="checkbox"
+                    checked={selected.size > 0 && selected.size === dapatDipilih.length}
+                    onChange={toggleSelectAll}
+                    disabled={dapatDipilih.length === 0}
+                    aria-label="Pilih semua yang bisa diterbitkan"
+                  />
+                </th>
+              )}
               <th className="px-3 py-2 font-medium">No.</th>
               <th className="px-3 py-2 font-medium">Nama</th>
               <th className="px-3 py-2 font-medium">Email</th>
@@ -368,21 +383,21 @@ export default function AdminPesertaPage({
           <tbody>
             {loading && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-zinc-500">
                   Memuat...
                 </td>
               </tr>
             )}
             {!loading && error && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-red-600">
+                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-red-600">
                   Gagal memuat peserta: {error}
                 </td>
               </tr>
             )}
             {!loading && !error && items.length === 0 && (
               <tr>
-                <td colSpan={11} className="px-4 py-6 text-center text-zinc-500">
+                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-zinc-500">
                   Belum ada peserta terdaftar.
                 </td>
               </tr>
@@ -395,14 +410,16 @@ export default function AdminPesertaPage({
                   key={item.uid}
                   className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
                 >
-                  <td className="px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={selected.has(item.uid)}
-                      onChange={() => toggleSelect(item.uid)}
-                      disabled={terkunci}
-                    />
-                  </td>
+                  {izin.terbitkanSertifikat && (
+                    <td className="px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(item.uid)}
+                        onChange={() => toggleSelect(item.uid)}
+                        disabled={terkunci}
+                      />
+                    </td>
+                  )}
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.nomorUrut}</td>
                   <td className="px-3 py-2 text-black dark:text-zinc-50">{item.namaLengkap}</td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.email}</td>
@@ -461,7 +478,9 @@ export default function AdminPesertaPage({
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {terkunci ? (
+                    {!izin.terbitkanSertifikat ? (
+                      <span className="text-xs text-zinc-400">Hanya lihat</span>
+                    ) : terkunci ? (
                       <button
                         type="button"
                         onClick={() =>
