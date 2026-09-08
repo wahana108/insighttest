@@ -36,6 +36,49 @@ service cloud.firestore {
       return hasRole('superadmin');
     }
 
+    // Slice 8.1 (docs/kickoff.md): panitia ditugaskan PER KEGIATAN lewat
+    // panitiaUids + panitiaIzin pada kegiatan/{id} itu sendiri — bukan role
+    // global seperti isAdmin(). Ini REIMPLEMENTASI izinPanitia()
+    // (src/lib/izin-panitia.ts) di bahasa Rules, karena Rules tidak bisa
+    // memanggil TS: kalau salah satu berubah, ubah yang lain. Dipakai lewat
+    // `resource.data` (pemeriksaan pada dokumen kegiatan yang SEDANG
+    // dibaca/ditulis) untuk match /kegiatan/{id} sendiri, dan lewat get()
+    // eksplisit untuk match /kegiatan/{id}/modul/{mid} yang butuh data
+    // kegiatan induknya.
+    function panitiaBolehSuntingData(kegiatanData) {
+      return isSignedIn()
+        && hasRole('panitia')
+        && request.auth.uid in kegiatanData.get('panitiaUids', [])
+        && kegiatanData.get('panitiaIzin', {})
+          .get(request.auth.uid, {})
+          .get('suntingKegiatan', false) == true;
+    }
+
+    function panitiaDitugaskanData(kegiatanData) {
+      return isSignedIn()
+        && hasRole('panitia')
+        && request.auth.uid in kegiatanData.get('panitiaUids', []);
+    }
+
+    // Slice 8.1a: DAFTAR IZIN untuk field kegiatan/{id} yang boleh disentuh
+    // panitia lewat suntingKegiatan — "yang berkaitan dengan penyelenggaraan"
+    // (docs/kickoff.md): judul, deskripsi, jendela waktu, syarat sertifikat
+    // (beserta ambang dan centang prasyaratnya — satu field map, ditulis
+    // sebagai satu kesatuan oleh updateKegiatan()), dan template sertifikat.
+    // updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
+    // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
+    // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
+    // daftar ini tertolak oleh hasOnly() di allow update, termasuk field
+    // yang belum ada hari ini.
+    function panitiaKegiatanKunciDiizinkan() {
+      return [
+        'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
+        'syaratSertifikat', 'templateSertifikat',
+        'updatedAt', 'updatedBy'
+      ];
+    }
+
     function undanganPath(email) {
       return /databases/$(database)/documents/undangan/$(email);
     }
@@ -144,7 +187,10 @@ service cloud.firestore {
     // besar, A-Z/0-9/tanda hubung), lihat normalizeKode() di
     // src/lib/services/topik.ts. ID deterministik ini mencegah kode ganda
     // by construction (KA-3, docs/arsitektur.md). Tidak ada hapus permanen —
-    // topik yang dihapus meninggalkan soal yatim di bank soal (KA-6).
+    // topik yang dihapus meninggalkan soal yatim di bank soal (KA-6). BACA
+    // sudah terbuka untuk SIAPA PUN yang masuk sejak awal (bukan cuma
+    // admin) — diperiksa ulang di Slice 8.1b, tidak diubah, hanya soal/{id}
+    // di bawah yang memang tertutup.
     match /topik/{kode} {
       allow read: if isSignedIn();
       allow create, update: if isAdmin();
@@ -154,11 +200,16 @@ service cloud.firestore {
     // soal/{id}: bank soal, id dokumen auto (bukan deterministik — bank soal
     // tidak terikat kegiatan, kegiatan hanya merujuk id-nya, KA-6). Opsi di
     // sini TIDAK PERNAH membawa penanda benar/salah, lihat kunci_soal di
-    // bawah. Peserta tidak pernah membaca koleksi ini langsung — di tahap 3
+    // bawah — itu pemisahan yang membuat Slice 8.1b aman: panitia BACA soal
+    // (pertanyaan + pilihan, perlu menyusun modul evaluasi lewat
+    // src/lib/services/modul.ts) tapi TIDAK PERNAH kunci_soal (jawaban).
+    // Peserta tetap tidak pernah membaca koleksi ini langsung — di tahap 3
     // soal dikirim ke peserta lewat Route Handler yang menyaring kunci.
+    // MENULIS tetap admin/superadmin saja — saklar buatSoal (izinPanitia())
+    // sudah tersimpan tapi belum aktif, jangan dinyalakan di sini dulu.
     // Tidak ada hapus permanen, hanya isActive.
     match /soal/{id} {
-      allow read: if isAdmin();
+      allow read: if isAdmin() || hasRole('panitia');
       allow create, update: if isAdmin();
       allow delete: if false;
     }
@@ -174,19 +225,48 @@ service cloud.firestore {
 
     // kegiatan/{id}: satu gelombang = satu dokumen (§4, docs/arsitektur.md).
     // Peserta hanya boleh membaca kegiatan yang sudah diterbitkan; admin
-    // boleh melihat draf juga supaya bisa menyunting sebelum menerbitkan.
-    // Tidak ada hapus permanen — pakai isArchived.
+    // boleh melihat draf juga supaya bisa menyunting sebelum menerbitkan;
+    // sejak Slice 8.1, panitia yang ditugaskan juga boleh membaca kegiatan
+    // ini walau belum terbit (lihat panitiaDitugaskanData() di atas) — READ
+    // ini provable untuk query list ber-where('panitiaUids','array-contains',
+    // uid), sama seperti pola where('isPublished','==',true) untuk peserta
+    // (lihat komentar di src/lib/hooks/use-kegiatan-list.ts). Tidak ada
+    // hapus permanen — pakai isArchived.
     match /kegiatan/{id} {
-      allow read: if isSignedIn() && (resource.data.get('isPublished', false) == true || isAdmin());
-      allow create, update: if isAdmin();
+      allow read: if isSignedIn() && (
+        resource.data.get('isPublished', false) == true
+        || isAdmin()
+        || panitiaDitugaskanData(resource.data)
+      );
+      allow create: if isAdmin();
+      // Slice 8.1a: DAFTAR IZIN, bukan daftar larangan. panitiaKegiatanKunciDiizinkan()
+      // di atas adalah SATU-SATUNYA tempat yang menyebut field mana yang
+      // boleh disentuh panitia — hasOnly() mensyaratkan affectedKeys() jadi
+      // SUBSET dari daftar itu, jadi field APA PUN yang tidak disebutkan di
+      // sana (baik yang sudah ada sekarang seperti nomorUrutTerakhir/
+      // isPublished/isArchived/kode/panitiaUids/panitiaIzin, MAUPUN field
+      // yang baru ditambahkan nanti dan lupa dipikirkan) otomatis TERTOLAK,
+      // bukan otomatis diizinkan — kebalikan dari pola hasAny()/denylist
+      // sebelumnya, yang "gagal terbuka" (field baru yang tidak
+      // didaftarkan otomatis lolos). admin/superadmin tidak lewat cabang
+      // ini sama sekali — mereka tetap boleh menulis field apa pun.
+      allow update: if isAdmin() || (
+        panitiaBolehSuntingData(resource.data)
+        && request.resource.data.diff(resource.data)
+          .affectedKeys()
+          .hasOnly(panitiaKegiatanKunciDiizinkan())
+      );
       allow delete: if false;
 
       // kegiatan/{id}/modul/{mid}: kategori referensi | atestasi | evaluasi
       // (§2). Bank soal tidak disalin ke sini — modul evaluasi hanya
-      // menyimpan rujukan (soalIds atau topikKode+jumlah), KA-6.
+      // menyimpan rujukan (soalIds atau topikKode+jumlah), KA-6. Izin
+      // panitia dibaca dari dokumen kegiatan INDUK (id), bukan dari modul
+      // itu sendiri — modul tidak menyimpan panitiaUids/panitiaIzin sendiri.
       match /modul/{mid} {
         allow read: if isSignedIn();
-        allow write: if isAdmin();
+        allow write: if isAdmin()
+          || panitiaBolehSuntingData(get(/databases/$(database)/documents/kegiatan/$(id)).data);
       }
     }
 

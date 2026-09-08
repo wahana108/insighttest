@@ -1,5 +1,8 @@
 import {
+  arrayRemove,
+  arrayUnion,
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -13,6 +16,7 @@ import { db } from "@/lib/firebase/client";
 import type {
   JenisSyaratSertifikat,
   Kegiatan,
+  PanitiaIzin,
   SyaratSertifikat,
   TemplateSertifikat,
 } from "@/types/kegiatan";
@@ -105,6 +109,40 @@ function normalizeTemplateSertifikat(t: TemplateSertifikat): TemplateSertifikat 
   };
 }
 
+function mapPanitiaUids(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.filter((item): item is string => typeof item === "string");
+}
+
+function mapPanitiaIzinSatuOrang(value: unknown): PanitiaIzin {
+  const data = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return {
+    terbitkanSertifikat: data.terbitkanSertifikat === true,
+    suntingKegiatan: data.suntingKegiatan === true,
+    buatSoal: data.buatSoal === true,
+  };
+}
+
+/**
+ * Dokumen kegiatan lama tidak punya panitiaUids/panitiaIzin sama sekali
+ * (Slice 8.1) — keduanya jatuh ke daftar/peta kosong, bukan galat. Kalau
+ * salah satunya rusak atau tidak sinkron (mis. uid ada di panitiaUids tapi
+ * tidak ada entri panitiaIzin-nya), izinPanitia() (src/lib/izin-panitia.ts)
+ * yang memutuskan artinya — di sini cuma dipetakan apa adanya.
+ */
+function mapPanitiaIzin(value: unknown): Record<string, PanitiaIzin> {
+  if (typeof value !== "object" || value === null) {
+    return {};
+  }
+  const hasil: Record<string, PanitiaIzin> = {};
+  for (const [uid, entry] of Object.entries(value as Record<string, unknown>)) {
+    hasil[uid] = mapPanitiaIzinSatuOrang(entry);
+  }
+  return hasil;
+}
+
 export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
   return {
     id,
@@ -117,6 +155,8 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     isArchived: typeof data.isArchived === "boolean" ? data.isArchived : false,
     syaratSertifikat: mapSyaratSertifikat(data.syaratSertifikat),
     templateSertifikat: mapTemplateSertifikat(data.templateSertifikat),
+    panitiaUids: mapPanitiaUids(data.panitiaUids),
+    panitiaIzin: mapPanitiaIzin(data.panitiaIzin),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
     createdBy: typeof data.createdBy === "string" ? data.createdBy : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : "",
@@ -189,6 +229,8 @@ export async function createKegiatan(
     isArchived: false,
     syaratSertifikat: input.syaratSertifikat,
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
+    panitiaUids: [],
+    panitiaIzin: {},
     createdAt: now,
     createdBy: actorId,
     updatedAt: now,
@@ -241,6 +283,55 @@ export async function setKegiatanArchived(
 ): Promise<void> {
   await updateDoc(kegiatanRef(id), {
     isArchived,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId,
+  });
+}
+
+/**
+ * Menunjuk panitia baru — menulis panitiaUids DAN panitiaIzin BERSAMAAN
+ * (Slice 8.1, §2 kickoff.md), tidak pernah salah satu saja. Pemanggilnya
+ * (halaman /admin/kegiatan/[id]) hanya boleh admin/superadmin — dijaga
+ * firestore.rules (panitia tidak boleh menyentuh dua field ini sama
+ * sekali), bukan cuma disembunyikan di UI.
+ */
+export async function tetapkanPanitia(
+  kegiatanId: string,
+  uid: string,
+  izin: PanitiaIzin,
+  actorId: string
+): Promise<void> {
+  await updateDoc(kegiatanRef(kegiatanId), {
+    panitiaUids: arrayUnion(uid),
+    [`panitiaIzin.${uid}`]: izin,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId,
+  });
+}
+
+/** Mengubah tiga saklar panitia yang SUDAH ditugaskan — panitiaUids tidak disentuh. */
+export async function ubahIzinPanitia(
+  kegiatanId: string,
+  uid: string,
+  izin: PanitiaIzin,
+  actorId: string
+): Promise<void> {
+  await updateDoc(kegiatanRef(kegiatanId), {
+    [`panitiaIzin.${uid}`]: izin,
+    updatedAt: new Date().toISOString(),
+    updatedBy: actorId,
+  });
+}
+
+/** Mencabut panitia — menghapus dari panitiaUids DAN panitiaIzin bersamaan. */
+export async function cabutPanitia(
+  kegiatanId: string,
+  uid: string,
+  actorId: string
+): Promise<void> {
+  await updateDoc(kegiatanRef(kegiatanId), {
+    panitiaUids: arrayRemove(uid),
+    [`panitiaIzin.${uid}`]: deleteField(),
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });

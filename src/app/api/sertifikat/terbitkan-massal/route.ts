@@ -1,4 +1,5 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
+import { ambilIzinKegiatan } from "@/lib/api/izin-panitia-server";
 import { SertifikatRouteError, terbitkanSertifikatUntuk } from "@/lib/api/sertifikat-server";
 import { getAdminDb } from "@/lib/firebase/admin";
 
@@ -23,10 +24,6 @@ interface HasilBarisTerbitkan {
 export async function POST(request: Request) {
   try {
     const user = await verifyRequest(request);
-    const isAdminRole = user.role === "admin" || user.role === "superadmin";
-    if (!isAdminRole) {
-      throw new SertifikatRouteError(403, "Hanya admin yang boleh menerbitkan sertifikat massal.");
-    }
 
     let body: unknown;
     try {
@@ -53,6 +50,16 @@ export async function POST(request: Request) {
     }
 
     const db = getAdminDb();
+
+    // Slice 8.1: admin/superadmin selalu lolos lewat izinPanitia(); panitia
+    // butuh terbitkanSertifikat menyala untuk KEGIATAN INI.
+    const izin = await ambilIzinKegiatan(db, kegiatanId, user);
+    if (!izin.terbitkanSertifikat) {
+      throw new SertifikatRouteError(
+        403,
+        "Anda tidak berhak menerbitkan sertifikat massal di kegiatan ini."
+      );
+    }
     const hasil: HasilBarisTerbitkan[] = await Promise.all(
       uids.map(async (uid): Promise<HasilBarisTerbitkan> => {
         try {

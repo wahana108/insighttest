@@ -1,4 +1,5 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
+import { ambilIzinKegiatan } from "@/lib/api/izin-panitia-server";
 import { SertifikatRouteError, terbitkanSertifikatUntuk } from "@/lib/api/sertifikat-server";
 import { getAdminDb } from "@/lib/firebase/admin";
 
@@ -28,17 +29,22 @@ export async function POST(request: Request) {
     const isSelfIssue = !requestedUid;
     const targetUid = requestedUid ?? user.uid;
 
+    const db = getAdminDb();
+
+    // Slice 8.1: menerbitkan untuk ORANG LAIN butuh izin terbitkanSertifikat
+    // di kegiatan ini — admin/superadmin selalu lolos lewat izinPanitia().
+    // Menerbitkan milik sendiri (isSelfIssue) tidak digerbangi di sini sama
+    // sekali — itu jalur peserta biasa, digerbangi kelayakan di
+    // terbitkanSertifikatUntuk(), bukan oleh peran.
     if (!isSelfIssue) {
-      const isAdminRole = user.role === "admin" || user.role === "superadmin";
-      if (!isAdminRole) {
+      const izin = await ambilIzinKegiatan(db, kegiatanId, user);
+      if (!izin.terbitkanSertifikat) {
         throw new SertifikatRouteError(
           403,
-          "Hanya admin yang boleh menerbitkan sertifikat untuk pengguna lain."
+          "Anda tidak berhak menerbitkan sertifikat untuk pengguna lain di kegiatan ini."
         );
       }
     }
-
-    const db = getAdminDb();
     const hasil = await terbitkanSertifikatUntuk(db, {
       kegiatanId,
       targetUid,

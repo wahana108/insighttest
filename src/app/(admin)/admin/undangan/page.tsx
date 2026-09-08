@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { formatDate } from "@/lib/format-date";
 import { useUndanganList } from "@/lib/hooks/use-undangan-list";
@@ -10,6 +11,14 @@ import type { UndanganRole } from "@/types/undangan";
 const ROLE_OPTIONS: UndanganRole[] = ["admin", "panitia", "peserta"];
 
 export default function AdminUndanganPage() {
+  return (
+    <WajibAdmin>
+      <AdminUndanganPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminUndanganPageIsi() {
   const { user } = useAuth();
   const { items, loading, error: listError } = useUndanganList();
 

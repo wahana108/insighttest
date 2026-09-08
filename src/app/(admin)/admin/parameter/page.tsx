@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import {
   DEFAULT_SYSTEM_PARAMETER,
@@ -10,6 +11,14 @@ import {
 import type { ModePendaftaran, SystemParameter } from "@/types/parameter";
 
 export default function AdminParameterPage() {
+  return (
+    <WajibAdmin>
+      <AdminParameterPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminParameterPageIsi() {
   const { user, profile } = useAuth();
   const [parameter, setParameter] = useState<SystemParameter>(DEFAULT_SYSTEM_PARAMETER);
   const [loading, setLoading] = useState(true);

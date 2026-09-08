@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import Link from "next/link";
 import { writeBatch } from "firebase/firestore";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { db } from "@/lib/firebase/client";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
@@ -65,6 +66,14 @@ function badgeLabel(status: StatusBarisImpor): string {
 }
 
 export default function AdminSoalImporPage() {
+  return (
+    <WajibAdmin>
+      <AdminSoalImporPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminSoalImporPageIsi() {
   const { user } = useAuth();
   const { items: topikList, error: topikError } = useTopikList();
   const topikAktif = useMemo(() => topikList.filter((topik) => topik.isActive), [topikList]);

@@ -2,6 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
+import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
@@ -52,6 +53,14 @@ function truncate(teks: string, max = 70): string {
 }
 
 export default function AdminSoalPage() {
+  return (
+    <WajibAdmin>
+      <AdminSoalPageIsi />
+    </WajibAdmin>
+  );
+}
+
+function AdminSoalPageIsi() {
   const { user } = useAuth();
   const { items: topikList, error: topikError } = useTopikList();
 
