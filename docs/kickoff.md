@@ -1637,3 +1637,175 @@ dan peringatan kuning kalau N = 0 bahwa centang itu belum berpengaruh.
 > **Pelajaran:** kalau perancangnya sendiri bingung membedakan dua kontrol, pemakai
 > berikutnya pasti lebih bingung. Memperjelas label lebih murah daripada menjelaskannya
 > berulang kali.
+
+---
+
+## O. Tahap 7 — Atestasi CCL (3–4 Sep 2026) — SELESAI
+
+Enam slice: 7.1 pendaftaran modul + gerbang verifikasi, 7.1a pembeda pesan berbasis
+bentuk, 7.2 pemutaran + perekaman, 7.2a kewajaran berbasis pertambahan + tata letak,
+7.3 pernyataan + kelayakan, 7.4 pemisahan kelayakan/prasyarat + alat diagnosa,
+7.5 normalisasi ambang, 7.6 kejujuran pelaporan. `npm run uji`: 34 kasus.
+
+### Yang dibangun
+Kategori modul `atestasi` menyematkan game CCL lewat iframe dan mengonsumsi telemetri
+`postMessage` yang sudah ada — **nol modifikasi CCL**. Gerbang pendaftaran memuat URL di
+iframe tersembunyi, menunggu `CCL_READY` (10 detik), lalu `duration_sec` (5 detik lagi,
+opsional). `gameId`/`gameName`/`versi`/`originDiizinkan` diisi game itu sendiri, tidak
+pernah diketik admin.
+
+### Jebakan kuota — bagian tersulit, dan berhasil
+Video 1546 detik mengirim ~1 laporan/detik. Menulis tiap laporan = **1500 tulis per
+peserta**; 13 peserta menghabiskan kuota gratis harian. Rancangannya menulis **2–3 kali**:
+sekali saat modul dibuka, sekali saat ambang tercapai (menyelamatkan hasil kalau tab
+ditutup mendadak), sekali saat ditutup. Laporan disimpan di `useRef`, bukan state.
+**Terukur di produksi: 3 panggilan dalam sesi 25 menit.**
+
+### `detikTersaksikan` — portal hanya mengakui yang ia saksikan
+Satu konsep menyatukan video dan game: detik yang portal saksikan sebagai keterlibatan
+nyata. Video → bertambah saat `watch_credit_sec` bertambah. Game → bertambah saat
+`score`/`wave`/`hp` berubah. Laporan identik tidak menambah apa pun. Dihitung klien,
+**dibatasi jam server** — tidak boleh bertambah lebih cepat dari waktu nyata.
+
+Versi pertama membandingkan **angka mutlak** dan menolak dengan 400. Itu menolak peserta
+jujur yang menonton sampai 95%, karena CCL menyimpan kredit tontonnya sendiri sehingga
+sesi baru dimulai dengan angka tinggi.
+
+> **Pagar yang menolak orang jujur lebih berbahaya daripada tidak ada pagar**, karena
+> kegagalannya senyap. Jangan pernah menolak data dengan alasan kewajaran — simpan
+> laporannya, akui hanya bagian yang tersaksikan, tandai yang dipangkas.
+
+### Kelayakan ≠ pembukaan kunci (7.4)
+Dirumuskan oleh pemilik produk: *"sertifikatnya sudah ada kalau dia lulus, tapi untuk
+membukanya, lapisan CCL yang harus dituntaskan."* `evaluasiKelayakan()` kini
+mengembalikan `{ kelayakan, prasyaratMateri }` terpisah. Mode otomatis: prasyarat
+**menghalangi** (digerbang di server, bukan cuma menyembunyikan tombol). Mode manual
+admin: prasyarat **menginformasikan**, admin tetap bebas.
+
+### Dua cacat yang lahir dari asumsi
+**7.5 — syarat yang mustahil.** Migrasi 7.3 memetakan `ambangKreditPersen` lama ke mode
+persen tanpa memeriksa apakah durasi ada. Game tanpa durasi jadi "55% dari durasi yang
+tidak diketahui" — mustahil dipenuhi, tanpa pesan apa pun. Form admin bahkan sudah
+menjanjikan ambang itu diabaikan; janjinya tidak pernah diterapkan.
+
+> **Sistem tidak boleh pernah menyimpan syarat yang mustahil dipenuhi.** Ambang yang
+> tidak bisa dievaluasi diabaikan, bukan dianggap gagal selamanya.
+
+**7.6 — mengklaim tuntas padahal tidak.** Ketika gerbang atestasi dimatikan, laporan
+berbunyi *"Semua materi wajib sudah tuntas"* walau ada modul wajib yang `belum`. Bukan
+salah hitung, **salah bicara** — dan kalimat itulah yang dibaca admin untuk memutuskan.
+Sekarang tiga keadaan: tuntas / belum tuntas (menghalangi) / belum tuntas (gerbang tidak
+aktif, tidak menghalangi).
+
+### Titik balik: berhenti menguji lewat klik
+Pengujian kelayakan gagal berulang kali karena empat keadaan tersembunyi sekaligus:
+`modulSnapshot` beku, sertifikat yang sudah terlanjur terbit, keadaan centang di luar
+layar, dan halaman yang menampilkan data lama. Empat putaran habis untuk menebak.
+
+`scripts/periksa-kelayakan.ts <kegiatanId>` menjawab **"kenapa orang ini layak?"** dalam
+satu perintah — baca-saja, menyebut isi snapshot tiap peserta beserta peringatan kalau
+ada field yang hilang, hasil atestasi per modul, dan kesimpulan beserta alasannya. Ia
+langsung menemukan cacat 7.5 pada percobaan pertama.
+
+> **Kalau sebuah pertanyaan butuh tujuh klik untuk dijawab dan tetap salah, yang perlu
+> dibangun adalah alat yang menjawabnya — bukan instruksi klik yang lebih teliti.**
+
+### Bukti alur utuh
+Peserta `kadal itokimo`: lulus evaluasi 100; `ccl game bermain` 62 detik/skor 3930 →
+*memahami*; `ccl vidio testing` 322 detik/skor 205 → *memahami*; **BISA TERBIT**.
+Peserta lain dengan nilai 100 tapi atestasi belum tuntas: **BELUM BISA TERBIT**.
+
+### Warisan untuk tahap berikutnya
+Aturan operasional dipindahkan ke dokumen tersendiri: `ATURAN-MAIN-kelayakan-sertifikat.md`
+— tiga kategori modul, apa yang dibekukan kapan, tiga kontrol prasyarat yang mudah
+tertukar, dan tabel "terlihat seperti bug padahal bukan".
+
+---
+
+## P. Tahap 8 — Peran bertingkat, rekap, ekspor (6–8 Sep 2026) — SELESAI
+
+Enam slice: 8.1 peran panitia + saklar izin, 8.1a daftar izin menggantikan daftar
+larangan, 8.1b panitia boleh membaca bank soal, 8.2 kepemilikan soal, 8.3 rekap + ekspor
+CSV, 8.3a sel kosong yang ambigu. `npm run uji`: 100 kasus, 7 skrip.
+
+Menyelesaikan tujuan yang ditulis di deskripsi project sejak awal dan belum pernah
+tersentuh: *"administrator bertingkat agar platform bisa ditangani bersama yang ditunjuk."*
+
+### Rancangan
+Panitia **ditunjuk per kegiatan** (`kegiatan.panitiaUids` + `kegiatan.panitiaIzin`),
+dengan dua saklar per penugasan: terbitkan sertifikat, sunting kegiatan & modul.
+`izinPanitia(profil, kegiatan)` adalah satu-satunya sumber kebenaran, dipakai identik di
+server dan klien.
+
+### Enam pelajaran yang berlaku di luar proyek ini
+
+**1. Lingkup izin harus cocok dengan lingkup dampaknya.**
+Saklar ketiga semula ikut di penugasan per-kegiatan: "boleh buat soal". Tapi bank soal
+**global** (KA-6) — soal buatan panitia masuk ke bank yang dipakai semua kegiatan. Izin
+berlingkup sempit dengan dampak luas adalah kebohongan, dan aturan Firestore tidak bisa
+menegakkannya (ia hanya bisa membaca satu dokumen, tidak bisa menelusuri semua kegiatan
+tempat seseorang jadi panitia). Dipindahkan jadi `users/{uid}.bolehBuatSoal` — global,
+karena dampaknya memang global.
+
+**2. Daftar larangan gagal terbuka; daftar izin gagal tertutup.**
+Aturan pertama: panitia boleh menulis semua field kegiatan **kecuali** `panitiaUids` dan
+`panitiaIzin`. Itu berarti ia juga boleh menulis `nomorUrutTerakhir` — penghitung nomor
+serial sertifikat; memundurkannya menghasilkan dua sertifikat bernomor sama, permanen,
+tanpa ada yang menyadarinya. Juga `isPublished`, `isArchived`, `kode`.
+Diganti `hasOnly([...])`: hanya field yang disebut yang boleh disentuh.
+**Dibuktikan gagal-tertutup** dengan menulis field fiktif `fieldMasaDepanYangBelumDipikirkan`
+— ditolak tanpa menyentuh rule sama sekali.
+
+**3. `get()` di rules tidak melihat dokumen yang ditulis dalam batch yang sama.**
+Ditemukan CLI lewat emulator, bukan lewat kegagalan produksi. `soal` dan `kunci_soal`
+selalu ditulis berpasangan dalam satu `writeBatch`, jadi aturan
+"`kunci_soal` boleh dibaca kalau `get(soal/{id}).dibuatOleh == uid`" **selalu gagal**.
+Perbaikannya: `dibuatOleh` disalin ke dokumen `kunci_soal` sendiri oleh fungsi tulis yang
+sama, sehingga tidak ada `get()` lintas dokumen sama sekali.
+
+**4. Cara membuktikan KA-1, bukan sekadar mengklaimnya.**
+CLI membuat salinan rules yang **sengaja dirusak** (`.data.panitiaUids` tanpa default) dan
+menjalankannya berdampingan di emulator. Versi rusak: `Property panitiaUids is undefined
+on object`. Versi asli: penolakan `false` yang bersih. Perbedaan terukur, bukan pembacaan
+kode yang optimistis.
+
+Nuansa yang ikut ditemukan: karena `allow read` memakai `A || B || C` dengan hubung-singkat,
+kegiatan **terbit** tidak pernah menyentuh cabang panitia. Untuk menguji cabang itu,
+kasus ujinya harus memakai kegiatan **draf** — kalau tidak, ujiannya lulus tanpa pernah
+menjalankan kode yang diuji.
+
+**5. Aturan Firestore punya jalur pemasangan sendiri.**
+Push ke `main` men-deploy kode lewat Vercel; `firestore.rules` tetap berkas teks sampai
+`firebase deploy --only firestore:rules` dijalankan. Dan karena rules hidup di server
+Google, **localhost pun memakai rules produksi** — mengubah berkasnya di komputer tidak
+berpengaruh apa pun sampai dipasang. Gejalanya: panitia ditolak dengan "Missing or
+insufficient permissions" meski kodenya benar.
+
+> Varian dari pelajaran tahap 5: **data dibagi, kode tidak** — dan **aturan dibagi, dengan
+> jalur pemasangannya sendiri.**
+
+**6. Jangan menebak lokal pengguna.**
+Ekspor CSV memakai titik koma sebagai bawaan, dengan alasan Excel Indonesia
+mengharapkannya. Excel pengguna ternyata berlokal Inggris; seluruh baris menumpuk di satu
+kolom. Diganti **dua tombol berlabel jelas** — koma dan titik koma — plus keterangan
+"kalau menumpuk, coba yang satunya". Dua pilihan yang terlihat lebih baik daripada satu
+tebakan yang benar sebagian waktu.
+
+### Sel kosong yang berbohong (8.3a)
+Kolom CSV disusun dari modul kegiatan **saat ini**; nilai peserta dari `modulSnapshot`
+yang **beku** (KA-5). Sel kosong jadi punya dua arti yang tak terbedakan: modul ada di
+pendaftarannya tapi belum dikerjakan (dihitung nol, menurunkan nilai akhir), atau modul
+belum ada saat ia mendaftar (tidak dihitung).
+
+Terlihat dari data nyata: peserta dengan dua modul bernilai 100 dan dua sel kosong punya
+nilai akhir **67** — 100+100+0 dibagi tiga. Sekarang: kosong = belum dikerjakan,
+`-` = tidak ada di pendaftarannya.
+
+> Kelas yang sama dengan cacat 7.6: bukan angkanya yang salah, **kalimatnya yang
+> menyembunyikan kenyataan** — dan kalimat itulah yang dibaca orang untuk memutuskan.
+
+### Standar verifikasi baru
+Setiap slice yang menyentuh `firestore.rules` diverifikasi dengan **Firestore Emulator
+sungguhan** (12, 20, 13, 11, dan 3 kasus fungsional di slice-slice ini), lalu diperiksa
+sekali lagi di **Rules Playground** Firebase Console — karena emulator menguji berkas di
+komputer, Playground menguji yang benar-benar terpasang.

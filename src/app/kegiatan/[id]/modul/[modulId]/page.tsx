@@ -964,7 +964,7 @@ export default function ModulAttemptPage({
       )}
 
       {layar === "mengerjakan" && (
-        <div className="space-y-4 pb-24">
+        <div className="space-y-4 pb-40">
           <div className="sticky top-0 z-10 -mx-4 border-b border-zinc-200 bg-zinc-50/95 px-4 py-2 backdrop-blur dark:border-zinc-800 dark:bg-black/95">
             <p className="text-sm font-medium text-black dark:text-zinc-50">{modul.judul}</p>
             <p
@@ -1005,14 +1005,14 @@ export default function ModulAttemptPage({
                 {butir.opsi.map((opsi) => (
                   <label
                     key={opsi.id}
-                    className="flex items-start gap-2 rounded border border-zinc-200 p-2.5 text-sm dark:border-zinc-800"
+                    className="flex min-h-11 items-center gap-2 rounded border border-zinc-200 p-2.5 text-sm dark:border-zinc-800"
                   >
                     <input
                       type="radio"
                       name={`soal-${butir.id}`}
                       checked={jawaban[butir.id] === opsi.id}
                       onChange={() => handlePilihJawaban(butir.id, opsi.id)}
-                      className="mt-0.5"
+                      className="shrink-0"
                     />
                     <span className="text-zinc-700 dark:text-zinc-300">{opsi.label}</span>
                   </label>
@@ -1021,7 +1021,10 @@ export default function ModulAttemptPage({
             </div>
           ))}
 
-          <div className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div
+            className="fixed inset-x-0 bottom-0 border-t border-zinc-200 bg-white px-4 pt-4 dark:border-zinc-800 dark:bg-zinc-950"
+            style={{ paddingBottom: "max(1rem, env(safe-area-inset-bottom))" }}
+          >
             <div className="mx-auto max-w-md">
               {!mengonfirmasi ? (
                 <button

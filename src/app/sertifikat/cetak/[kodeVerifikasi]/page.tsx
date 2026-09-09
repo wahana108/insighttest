@@ -179,7 +179,7 @@ export default function SertifikatCetakPage({
           )}
         </div>
 
-        <div className="cetak-kertas mx-auto w-full rounded-lg border border-zinc-200 bg-white px-8 py-10 text-black shadow-sm print:flex print:min-h-screen print:flex-col print:justify-between print:px-2 print:py-2 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
+        <div className="cetak-kertas mx-auto w-full rounded-lg border border-zinc-200 bg-white px-4 py-6 text-black shadow-sm sm:px-8 sm:py-10 print:flex print:min-h-screen print:flex-col print:justify-between print:px-2 print:py-2 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
           {/* Blok atas — tetap di atas halaman saat cetak. */}
           <div className="space-y-5">
             {adaKepala && (

@@ -278,40 +278,42 @@ export default function KegiatanDetailPage({
               return (
                 <li
                   key={modul.modulId}
-                  className="flex items-center justify-between gap-3 border-b border-zinc-100 pb-2 text-sm last:border-0 last:pb-0 dark:border-zinc-900"
+                  className="flex flex-col gap-2 border-b border-zinc-100 pb-3 text-sm last:border-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between sm:gap-3 dark:border-zinc-900"
                 >
-                  <div>
-                    <span className="text-black dark:text-zinc-50">{modul.judul}</span>
-                    <span className="ml-2 text-xs text-zinc-500">
-                      {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
-                      {modul.wajib ? "Wajib" : "Opsional"}
-                    </span>
-                    {hasil && (
-                      <span
-                        className={`ml-2 text-xs font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
-                      >
-                        Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
+                  <div className="space-y-1">
+                    <p className="text-black dark:text-zinc-50">{modul.judul}</p>
+                    <p className="flex flex-wrap gap-x-2 gap-y-1 text-xs">
+                      <span className="text-zinc-500">
+                        {KATEGORI_LABEL[modul.kategori] ?? modul.kategori} ·{" "}
+                        {modul.wajib ? "Wajib" : "Opsional"}
                       </span>
-                    )}
-                    {modul.kategori === "referensi" && (
-                      <span
-                        className={`ml-2 text-xs font-medium ${sudahDibuka ? "text-green-600" : "text-zinc-400"}`}
-                      >
-                        {sudahDibuka ? "Sudah dibuka" : "Belum dibuka"}
-                      </span>
-                    )}
-                    {statusAtestasi && (
-                      <span
-                        className={`ml-2 text-xs font-medium ${statusAtestasi.tingkat === "belum" ? "text-zinc-400" : "text-green-600"}`}
-                      >
-                        {LABEL_TINGKAT_ATESTASI[statusAtestasi.tingkat]}
-                      </span>
-                    )}
+                      {hasil && (
+                        <span
+                          className={`font-medium ${hasil.lulus ? "text-green-600" : "text-amber-600"}`}
+                        >
+                          Skor {hasil.skorTertinggi} · {hasil.lulus ? "Lulus" : "Belum lulus"}
+                        </span>
+                      )}
+                      {modul.kategori === "referensi" && (
+                        <span
+                          className={`font-medium ${sudahDibuka ? "text-green-600" : "text-zinc-400"}`}
+                        >
+                          {sudahDibuka ? "Sudah dibuka" : "Belum dibuka"}
+                        </span>
+                      )}
+                      {statusAtestasi && (
+                        <span
+                          className={`font-medium ${statusAtestasi.tingkat === "belum" ? "text-zinc-400" : "text-green-600"}`}
+                        >
+                          {LABEL_TINGKAT_ATESTASI[statusAtestasi.tingkat]}
+                        </span>
+                      )}
+                    </p>
                   </div>
                   {modul.kategori === "evaluasi" && (
                     <Link
                       href={`/kegiatan/${id}/modul/${modul.modulId}`}
-                      className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                      className="inline-block shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
                     >
                       Kerjakan
                     </Link>
@@ -319,7 +321,7 @@ export default function KegiatanDetailPage({
                   {(modul.kategori === "referensi" || modul.kategori === "atestasi") && (
                     <Link
                       href={`/kegiatan/${id}/modul/${modul.modulId}`}
-                      className="shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                      className="inline-block shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
                     >
                       Lihat
                     </Link>

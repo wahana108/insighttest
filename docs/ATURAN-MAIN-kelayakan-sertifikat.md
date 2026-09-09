@@ -1,10 +1,12 @@
-# Aturan Main — Kelayakan & Penerbitan Sertifikat
+# Aturan Main — Kelayakan, Peran & Penerbitan Sertifikat
 
-Ditulis 4 Sep 2026 setelah tahap 7, karena aturan-aturan ini berulang kali menyebabkan
-kebingungan saat pengujian — bukan karena rumit, tapi karena tidak pernah dituliskan.
+Ditulis 4 Sep 2026 setelah tahap 7, diperbarui 8 Sep 2026 setelah tahap 8. Aturan-aturan
+ini berulang kali menyebabkan kebingungan saat pengujian — bukan karena rumit, tapi
+karena tidak pernah dituliskan.
 
 Dokumen ini rujukan operasional. Rancangannya ada di `ARSITEKTUR-portal-webinar.md`,
-riwayat pembangunannya di `KICKOFF-portal-evaluasi.md`.
+riwayat pembangunannya di `KICKOFF-portal-evaluasi.md`, arah pengembangan yang belum
+dikerjakan di `ARAH-PENGEMBANGAN-berikutnya.md`.
 
 ---
 
@@ -47,6 +49,10 @@ Dua hal berbeda yang dulu tercampur dalam satu kata "layak":
 Gerbangnya ada di **server**, bukan hanya di tampilan. Tombol yang disembunyikan
 bukan pagar.
 
+Laporan tidak pernah boleh mengklaim "semua materi tuntas" ketika gerbangnya sekadar
+dimatikan. Tiga keadaan yang harus dibedakan: **tuntas**, **belum tuntas (menghalangi)**,
+dan **belum tuntas (gerbang tidak aktif — tidak menghalangi)**.
+
 ---
 
 ## 3. Apa yang dibekukan, dan kapan
@@ -84,7 +90,56 @@ dengan kalimat ringkasan hidup di atasnya, dan kontrol yang tidak relevan disemb
 
 ---
 
-## 5. Cara memeriksa tanpa menebak
+## 5. Peran dan kewenangan (tahap 8)
+
+Empat peran, dari yang paling luas:
+
+| Peran | Bisa apa |
+|---|---|
+| **superadmin** | segalanya, termasuk mengubah peran orang lain |
+| **admin** | semua kegiatan, semua bank soal, parameter sistem, menunjuk panitia |
+| **panitia** | hanya kegiatan yang **ditugaskan** kepadanya, sesuai saklar |
+| **peserta** | mendaftar, mengerjakan, menerima sertifikat |
+
+### Panitia ditunjuk per kegiatan
+
+Admin menambahkan panitia di halaman kegiatan, dan memilih **dua saklar** untuk orang itu
+**pada kegiatan itu saja**:
+
+| Saklar | Mati | Hidup |
+|---|---|---|
+| **Terbitkan sertifikat** | panitia hanya memantau | panitia menerbitkan dan mencabut |
+| **Sunting kegiatan & modul** | menjalankan sesuai yang admin siapkan | mengatur sendiri modul dan syaratnya |
+
+Melihat daftar peserta dan nilainya **selalu** boleh — tanpa itu peran panitia tidak ada
+gunanya. Panitia yang sama bisa punya saklar berbeda di kegiatan berbeda.
+
+Panitia **tidak pernah** bisa menunjuk panitia lain atau mengubah izinnya sendiri, meski
+saklar sunting menyala.
+
+### "Boleh buat soal" itu kewenangan global, bukan per kegiatan
+
+Diberikan admin di `/admin/pengguna`, bukan di halaman kegiatan. Alasannya: **bank soal
+satu untuk seluruh platform** (KA-6). Soal buatan panitia masuk ke bank yang dipakai
+semua kegiatan, jadi dampaknya global — dan izin berlingkup sempit dengan dampak luas
+adalah kebohongan.
+
+Dengan kewenangan itu, panitia boleh **membuat** soal dan **menyunting soal buatannya
+sendiri**. Ia tidak pernah bisa menyentuh soal orang lain, dan tidak pernah bisa membaca
+kunci jawaban soal orang lain. Soal yang dibuat sebelum tahap 8 dianggap milik admin.
+
+Tanpa kewenangan itu, panitia tetap bisa **memakai** soal yang ada untuk modul
+kegiatannya — ia hanya tidak bisa mengubah isinya.
+
+### Yang panitia tidak pernah bisa
+
+Menerbitkan atau mengarsipkan kegiatan, mengubah kode kegiatan, menyentuh penghitung
+nomor serial, membuka halaman Parameter/Undangan/Pengguna/Topik, dan membaca
+`kunci_soal` milik orang lain.
+
+---
+
+## 6. Cara memeriksa tanpa menebak
 
 ```
 npx tsx scripts/periksa-kelayakan.ts <kegiatanId>
@@ -102,23 +157,52 @@ npm run uji
 Menguji aturan sebagai fungsi murni — tanpa database, tanpa browser. Pakai ini untuk
 "apakah aturannya benar"; pakai klik untuk "apakah alurnya utuh".
 
+**Ekspor CSV** dari halaman peserta menyediakan dua pilihan pemisah — koma dan titik
+koma. Kalau kolomnya menumpuk jadi satu saat dibuka di Excel, unduh dengan pilihan yang
+satunya; pemisah yang cocok berbeda tergantung region Excel.
+
+Di berkas itu, sel **kosong** berarti modul ada di pendaftaran peserta tapi belum
+dikerjakan (dihitung nol), sedangkan **`-`** berarti modul belum ada saat ia mendaftar
+(tidak dihitung sama sekali). Berkasnya memuat data pribadi — email, nomor identitas,
+nomor telepon — jadi perlakukan sesuai.
+
 ---
 
-## 6. Terlihat seperti bug, padahal bukan
+## 7. Dua hal yang di-deploy, dua jalur berbeda
+
+| Yang berubah | Cara memasangnya |
+|---|---|
+| Kode aplikasi | push ke `main` → Vercel otomatis |
+| `firestore.rules` | `firebase deploy --only firestore:rules` — **manual** |
+
+Push ke `main` **tidak pernah** memasang aturan. Dan karena aturan hidup di server
+Google, **localhost pun memakai aturan produksi** — mengubah berkasnya di komputer tidak
+berpengaruh apa pun sampai dipasang.
+
+Gejala kalau lupa: "Missing or insufficient permissions" pada fitur yang kodenya sudah
+benar. Jalankan deploy dari `C:\game\insighttest`, jangan dari folder CCL.
+
+---
+
+## 8. Terlihat seperti bug, padahal bukan
 
 | Gejala | Sebenarnya |
 |---|---|
 | Fitur baru tidak muncul di Vercel | Belum di-push. **Data dibagi, kode tidak** — Firestore sama, build berbeda. |
+| Fitur baru tidak jalan padahal sudah di-push | Aturan Firestore belum di-deploy (§7). |
 | Peserta lama tidak terpengaruh setup baru | `modulSnapshot` beku (KA-5). Pakai peserta baru. |
 | Sertifikat tetap ada padahal materi belum tuntas | Gerbang menghalangi **penerbitan**, tidak mencabut yang sudah terbit. Cabut dulu. |
 | Sertifikat dicabut masih terlihat | Sertifikat tidak pernah dihapus, hanya dicabut — dan bisa diterbitkan ulang dengan serial yang sama. |
 | Centang "wajib" pada modul tidak berpengaruh | Gerbang kegiatannya belum dinyalakan (§4). |
+| Panitia tidak melihat menu Soal | Kewenangan "Boleh buat soal" diberikan di `/admin/pengguna`, bukan di halaman kegiatan (§5). Masuk ulang setelah diberikan. |
+| Kolom CSV menumpuk jadi satu di Excel | Pemisahnya tidak cocok dengan region Excel. Unduh dengan pilihan satunya (§6). |
 | Tautan gambar mati setelah beberapa menit | Tautan tempel GitHub kedaluwarsa 300 detik. Pakai `raw.githubusercontent.com` dari repo aset (KA-8). |
 | Tautan YouTube "berubah" tiap disalin | Itu `?si=` — kode pelacak berbagi. ID videonya tetap. |
+| Jawaban hilang saat refresh | Tidak lagi — tersimpan otomatis di perangkat itu. Tapi berpindah perangkat tetap mulai dari kosong. |
 
 ---
 
-## 7. Batas yang perlu diketahui
+## 9. Batas yang perlu diketahui
 
 - **Skor CCL bisa dipalsukan** oleh peserta yang paham konsol browser. Pertahanannya:
   verifikasi `event.origin`, dan pembatasan `detikTersaksikan` terhadap jam server —
@@ -128,3 +212,7 @@ Menguji aturan sebagai fungsi murni — tanpa database, tanpa browser. Pakai ini
   sepuluh field telemetri yang tersedia.
 - **Papan peringkat CCL dan atestasi portal adalah dua catatan terpisah.** Yang satu
   rusak tidak menular ke yang lain.
+- **Jawaban yang dikirim setelah waktu habis tetap dinilai.** Attempt ditandai
+  `kadaluarsa`, tapi skornya tetap masuk. Kalau nanti ada ujian berbatas waktu yang
+  serius, kebijakan ini harus diputuskan sadar — dan pengiriman otomatis di browser
+  adalah kesopanan, bukan pengaman; yang menentukan tetap jam server.
