@@ -1809,3 +1809,195 @@ Setiap slice yang menyentuh `firestore.rules` diverifikasi dengan **Firestore Em
 sungguhan** (12, 20, 13, 11, dan 3 kasus fungsional di slice-slice ini), lalu diperiksa
 sekali lagi di **Rules Playground** Firebase Console — karena emulator menguji berkas di
 komputer, Playground menguji yang benar-benar terpasang.
+
+---
+
+## Q. Tahap 9 — Poles (8–9 Sep 2026)
+
+### Slice 9.1 — jalur peserta di 390px
+Sembilan halaman peserta ditinjau untuk layar 390px potret. Yang benar-benar diubah cuma
+lima berkas — sisanya sudah aman karena dibangun dengan `max-w-*` sejak awal.
+
+Yang berubah: baris modul di `/kegiatan/[id]` bertumpuk di layar sempit; baris jawaban
+soal dinaikkan ke `min-h-11` dan dibungkus `<label>` supaya seluruh baris jadi target
+sentuh 44px, bukan hanya lingkaran radionya; bilah "Kirim jawaban" diberi
+`env(safe-area-inset-bottom)` dan jarak konten dinaikkan supaya soal terakhir tidak
+tertutup; padding sertifikat dikecilkan di layar sempit sementara `@media print` dibiarkan
+utuh.
+
+### Slice 9.1a — portal memberi ruang, bukan memaksa bentuk
+Pembungkus iframe CCL memakai `aspect-video max-h-[80vh] overflow-hidden`. Di lebar 390px
+itu berarti tinggi iframe **~219px**, dan `overflow-hidden` memotong sisanya. Gamenya
+sendiri responsif — dibuka langsung di platform aslinya ia tampil normal di potret maupun
+mendatar.
+
+> **Portal memberi ruang, bukan memaksa bentuk.** Konten pihak ketiga yang punya tata
+> letaknya sendiri tidak boleh dijejalkan ke rasio tetap. Beri kotak yang jujur, biarkan
+> ia menyusun dirinya.
+
+Perbaikannya: potret memakai `h-[min(78svh,700px)]` tanpa `overflow-hidden`; mendatar
+kembali ke `aspect-video` yang memang sudah benar di orientasi itu. **Murni media query
+CSS** (`landscape:`), bukan listener `orientationchange` — kalau React me-render ulang saat
+HP diputar, iframe ter-remount dan kredit tonton CCL hilang di tengah peserta bermain.
+
+Ikut diperbaiki: atribut `allow`/`allowFullScreen` pada kedua iframe; `playsinline=1` pada
+URL embed YouTube **di titik render saja**, tidak ditulis ke Firestore; dan cadangan layar
+penuh untuk Safari iOS, yang tidak mendukung Fullscreen API pada elemen selain `<video>` —
+`requestFullscreen()` dicoba dulu, gagal jatuh ke `fixed inset-0 z-50`.
+
+### Empat jam hilang karena menguji kode yang tidak pernah sampai
+
+Setelah 9.1a, pengujian dari HP melaporkan gejala baru dan menakutkan: **sentuhan tidak
+menembus iframe**. Tiga iframe yang tidak berhubungan — game CCL, pemutar video CCL, embed
+YouTube — gagal identik. Bekerja dengan mouse di PC, bekerja saat layar penuh, bekerja saat
+situs CCL dibuka langsung.
+
+Dugaan saya: sentuhan ditelan sebagai gerak-isyarat menggulung, obatnya `touch-action`.
+**Dugaan itu salah.** Dibuktikan salah oleh `public/uji-sentuh-iframe.html` — halaman statis
+yang menyematkan URL apa pun lalu menukar kelas pembungkus di antara lima varian **tanpa
+memuat ulang iframe**, sambil mencatat apakah ketukan mendarat di halaman induk atau
+menembus ke dalam. Hasilnya: sentuhan tembus di **semua** varian, termasuk iframe polos
+tanpa CSS sama sekali.
+
+Penyebab sebenarnya jauh lebih memalukan. Selama ini push hanya ke **branch**, dan branch
+tidak mengubah alamat produksi. HP menguji `insighttest-gamma.vercel.app` — yaitu kode
+**lama**, masih dengan kotak 219px. Kendali game memang berada di luar area yang terlihat.
+Begitu `poles-tampilan` di-merge ke `main`, ketiga media langsung berfungsi tanpa satu baris
+perbaikan tambahan.
+
+> **Sebelum mendiagnosis gejala, pastikan dulu kode yang diuji adalah kode yang ditulis.**
+> Ini pengulangan pelajaran tahap 5 ("saya menguji di Vercel padahal kodenya baru ada di
+> lokal"), dalam bentuk terbalik: kali ini kodenya ada di GitHub, tapi di branch yang tidak
+> pernah dipasang. Dua deploy path yang berbeda (§7 ATURAN-MAIN) punya anak ketiga:
+> **branch bukan produksi.**
+
+Yang tetap dipertahankan meski dugaannya salah: `touch-action: none` **tidak** dipasang.
+Sentuhan sudah tembus tanpanya, dan pagar untuk masalah yang tidak ada punya harga —
+peserta jadi tidak bisa menggulung halaman dengan menggeser jari di atas iframe. Kunci
+gulung halaman hanya berlaku di dalam mode layar penuh, tidak pernah di tampilan biasa.
+
+### Slice 9.2 & 9.2a — area admin di layar sempit
+Sidebar admin jadi menu geser di bawah `sm:` dengan tiga jalur keluar (tombol ✕, tap di
+luar, hamburger). Delapan halaman bertabel diubah jadi **daftar kartu berlabel** di layar
+sempit — bukan tabel mini, bukan scroll mendatar, karena tabel yang digeser-geser di HP
+tidak terbaca. Tabel 11 kolom di rekap peserta adalah yang tersulit dan jadi ukuran
+keberhasilannya.
+
+Ditemukan sambil jalan: baris `<input type="date">` + jam + tombol "Kosongkan" dalam satu
+flex row menolak mengecil di bawah lebar intrinsiknya. `min-w-0` saja tidak cukup — tiga
+elemen itu memang tidak muat di 390px, jadi barisnya harus **bertumpuk**. Akibatnya tombol
+"Kosongkan" terpotong di tepi kanan dan tidak bisa dijangkau, karena halaman (dengan benar)
+tidak bisa digeser mendatar.
+
+### Slice 9.3 — landing pengunjung
+`/` tidak lagi melempar pengunjung ke `/masuk`. Isinya: apa platform ini, tiga hal yang
+bisa dilakukannya, tombol masuk/daftar — dan **kotak verifikasi sertifikat di posisi
+menonjol**, karena `/s/{kode}` adalah satu-satunya fungsi platform yang berguna bagi orang
+yang tidak punya akun sama sekali: perusahaan yang menerima sertifikat peserta dan ingin
+memastikan keasliannya. Kotak itu hanya menyusun URL lalu menavigasi — nol bacaan
+Firestore.
+
+Tombol debug "Uji koneksi server" dihapus dari `/beranda`. `/api/whoami` **dipertahankan**
+meski tak dipanggil dari UI mana pun — endpoint itu yang membuka kunci bug 401 produksi,
+dan alat diagnosis memang seharusnya dipanggil saat dibutuhkan, bukan dipajang di halaman
+peserta.
+
+Dua koreksi dari CLI yang benar: proyek ini di **Next 16**, bukan 15 — dan Next 16 menghapus
+total integrasi ESLint bawaan, jadi `eslint.ignoreDuringBuilds` tidak punya efek apa pun.
+Pagar lint yang sesungguhnya sudah terpasang di `package.json`:
+`"build": "npm run lint && next build"`. Utang lint tahap 9 ternyata sudah lunas dua kali.
+
+### Slice 9.3a — halaman verifikasi yang berbohong
+
+Kode sertifikat yang benar tapi diketik **huruf kecil** menghasilkan "Sertifikat tidak
+ditemukan". Pencocokan peka huruf besar-kecil di dua titik: `/s/[kode]` dan route cetak.
+
+> Ini bukan cacat tampilan. Halaman verifikasi adalah janji tentang keaslian. HRD yang
+> mengetik kode apa adanya lalu dibilang tidak ditemukan tidak menyimpulkan "saya salah
+> ketik" — ia menyimpulkan **"sertifikat ini palsu"**.
+
+Kelas yang sama dengan cacat 7.6 dan sel CSV kosong: bukan datanya yang salah, kalimatnya
+yang menyembunyikan kenyataan. Diperbaiki dengan fungsi murni `normalisasiKodeVerifikasi()`
+— trim, buang tanda hubung, huruf besar — dipasang di **titik pencocokan**, bukan di titik
+input, supaya berlaku sama bagi yang mengetik langsung di bilah alamat atau menyalin dari
+QR. Data yang sudah beku tidak disentuh (KA-6). Delapan kasus uji baru.
+
+### Slice 9.3b — admin buta terhadap kodenya sendiri
+
+Ditemukan lewat pertanyaan pengguna, bukan lewat pengujian: selama menguji, kode sertifikat
+hanya bisa didapat dengan **masuk sebagai peserta pemiliknya**. `kodeVerifikasi` dibaca dari
+Firestore di kedua Route Handler admin lalu **dibuang** sebelum masuk ke respons.
+
+Akibatnya tiga hal mustahil dilakukan admin: mengirim ulang sertifikat yang hilang,
+menjawab telepon "apakah sertifikat atas nama X asli", dan menyusun laporan gelombang.
+
+Kode verifikasi **bukan rahasia** — ia tercetak di sertifikat dan tertanam di QR-nya. Yang
+memang tidak pernah dikembalikan adalah `nomorUrut` **ke peserta saat mendaftar**, supaya ia
+tidak tahu ia orang ke berapa. Admin melihatnya wajar. Aturan itu tentang penerima, bukan
+tentang siapa saja.
+
+Sekarang kode muncul di rekap peserta sebagai tautan ke `/s/{kode}`, dan sebagai kolom baru
+di kedua ekspor CSV. Sertifikat yang dicabut **tetap menampilkan kodenya**, dengan penanda
+merah "(dicabut — tidak berlaku)" di sebelahnya — bukan hanya mengandalkan baris status di
+atasnya.
+
+### Tahap 9 selesai — 9 Sep 2026
+
+Delapan dari sembilan tahap peta awal tuntas. `npm run uji` kini 105 kasus di 8 skrip.
+Tersisa tahap 6.
+
+> **Pelajaran tahap 9 yang paling mahal**, dan berlaku di luar proyek ini:
+> *sebelum mendiagnosis gejala, pastikan kode yang diuji adalah kode yang ditulis.*
+> Dua hari dihabiskan memburu masalah sentuh yang tidak pernah ada.
+
+### Rencana tahap 10 — keamanan akun (setelah tahap 6)
+
+Dicatat 9 Sep 2026 atas usulan pengguna. **Belum dikerjakan.**
+
+1. **Lupa password.** Bukan fitur keamanan — kebutuhan operasional. Tanpa itu setiap
+   peserta yang lupa password jadi pekerjaan manual di Firebase Console.
+   `sendPasswordResetEmail` sudah tersedia; kerjanya satu halaman `/lupa-password`, satu
+   tautan di `/masuk`, dan template email berbahasa Indonesia di Console.
+
+2. **Verifikasi email sebagai parameter** (`wajibVerifikasiEmail`, bawaan mati).
+   Pertanyaannya bukan "apakah diverifikasi" tapi **apa yang diblokir kalau belum**.
+   Rekomendasi: blokir **pendaftaran ke kegiatan**, bukan login — identitas baru penting
+   saat ia dibekukan ke `pendaftaran` dan nanti ke sertifikat. Penegakannya nyata, bukan
+   di klien: `pendaftaran` hanya ditulis Admin SDK, dan token membawa `email_verified`.
+   Akun Google datang dengan `emailVerified: true`, jadi otomatis lolos.
+
+3. Tiga setelan Firebase Console yang gratis: perlindungan enumerasi email, kebijakan
+   password, dan App Check nanti kalau pendaftaran dibuka umum.
+
+> Catatan yang menghemat pekerjaan: untuk gelombang sertifikasi tertutup, **mode
+> pendaftaran "undangan" sudah menyelesaikan penyamaran identitas sepenuhnya** — hanya
+> email yang didaftarkan lebih dulu yang boleh masuk. Verifikasi email baru benar-benar
+> dibutuhkan kalau pendaftaran dibuka bebas untuk umum.
+
+### Slice 6.0 — setel ulang password (9 Sep 2026)
+
+Dikerjakan lebih dulu daripada rencananya di tahap 10, karena keputusan tahap 6 mengubah
+urutannya: impor daftar hadir akan **membuatkan akun** untuk peserta yang hadir tapi belum
+punya akun, dan akun itu lahir tanpa password. Alur setel ulang adalah satu-satunya pintu
+masuk mereka.
+
+Halaman `/lupa-password` memakai `sendPasswordResetEmail` dari client SDK. Halaman "password
+baru" sengaja **tidak** dibuat sendiri — Firebase sudah menyediakan halaman aksinya, dan
+menggantinya berarti menangani `oobCode` sendiri: permukaan keamanan tambahan tanpa manfaat.
+
+> **Pesan yang sama untuk email terdaftar maupun tidak.** Halaman yang menjawab "email tidak
+> terdaftar" adalah alat rapi bagi siapa pun untuk memeriksa satu per satu apakah seseorang
+> jadi peserta di sini. `auth/user-not-found` ditangkap dan diperlakukan seperti sukses;
+> error lain (jaringan, terlalu banyak percobaan, format salah) tetap ditampilkan apa adanya
+> — jangan menelan semua error jadi pesan sukses palsu.
+
+Diuji sampai tuntas: email datang, tautan bekerja, password baru dipakai untuk masuk, dan
+email yang belum terdaftar menghasilkan kalimat yang persis sama.
+
+**Keterbatasan Firebase Console, bukan utang teknis:** project ini menolak penyuntingan
+template email — *"Email template updates are currently unavailable for this project."*
+Isi email tetap berbahasa Inggris. Yang berhasil diubah dan yang paling penting:
+**Sender name** dari `insighttest-66524` jadi `InsightTest`. Nama pengirim yang benar adalah
+yang menentukan email terlihat sah atau seperti penipuan; bahasa isinya jauh kurang
+berdampak. Kalau suatu saat benar-benar dibutuhkan, jalurnya adalah SMTP kustom — bukan
+prioritas.

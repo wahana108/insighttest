@@ -63,12 +63,20 @@ export default function MasukPage() {
             />
           </div>
           <div>
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
-            >
-              Kata sandi
-            </label>
+            <div className="flex items-baseline justify-between gap-2">
+              <label
+                htmlFor="password"
+                className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+              >
+                Kata sandi
+              </label>
+              <Link
+                href="/lupa-password"
+                className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
+              >
+                Lupa kata sandi?
+              </Link>
+            </div>
             <input
               id="password"
               type="password"
