@@ -59,7 +59,12 @@ export interface RekapPesertaBaris {
   jumlahReferensiDibuka: number;
   statusKelayakan: StatusKelayakan;
   statusPrasyaratMateri: StatusPrasyaratMateri;
-  sertifikat: { serial: string; status: StatusSertifikat; terbitPada: string } | null;
+  sertifikat: {
+    serial: string;
+    status: StatusSertifikat;
+    terbitPada: string;
+    kodeVerifikasi: string;
+  } | null;
 }
 
 const LABEL_STATUS_PENDAFTARAN: Record<StatusPendaftaran, string> = {
@@ -132,6 +137,7 @@ export function susunBarisRekap(
     "Serial Sertifikat",
     "Status Sertifikat",
     "Tanggal Terbit",
+    "Kode Verifikasi",
   ];
 
   const baris: SelRekap[][] = daftarPeserta.map((peserta) => {
@@ -165,6 +171,10 @@ export function susunBarisRekap(
       peserta.sertifikat?.serial,
       peserta.sertifikat ? LABEL_STATUS_SERTIFIKAT[peserta.sertifikat.status] : undefined,
       peserta.sertifikat?.terbitPada,
+      // Ada untuk status apa pun (berlaku MAUPUN dicabut) — sertifikat yang
+      // dicabut tetap punya kode, kolom "Status Sertifikat" di sebelahnya
+      // sudah membedakan mana yang masih berlaku (Slice 9.3b §2b).
+      peserta.sertifikat?.kodeVerifikasi,
     ];
   });
 

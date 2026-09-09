@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { signOutUser } from "@/lib/auth/session";
-import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
 import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
@@ -17,8 +16,6 @@ export default function BerandaPage() {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [signingOut, setSigningOut] = useState(false);
-  const [testingServer, setTestingServer] = useState(false);
-  const [serverResult, setServerResult] = useState<string | null>(null);
 
   const {
     items: kegiatanSayaRaw,
@@ -40,20 +37,6 @@ export default function BerandaPage() {
     loading: loadingSertifikatSaya,
     error: sertifikatSayaError,
   } = useSertifikatSaya();
-
-  async function handleTestServer() {
-    setTestingServer(true);
-    setServerResult(null);
-    try {
-      const res = await fetchWithAuth("/api/whoami");
-      const body = await res.json();
-      setServerResult(JSON.stringify({ status: res.status, body }, null, 2));
-    } catch (err) {
-      setServerResult(err instanceof Error ? err.message : "Gagal memanggil /api/whoami.");
-    } finally {
-      setTestingServer(false);
-    }
-  }
 
   useEffect(() => {
     if (!loading && !user) {
@@ -208,22 +191,6 @@ export default function BerandaPage() {
               </li>
             ))}
           </ul>
-        )}
-      </div>
-
-      <div className="w-full max-w-sm space-y-2">
-        <button
-          type="button"
-          onClick={handleTestServer}
-          disabled={testingServer}
-          className="w-full rounded border border-zinc-300 px-3 py-1.5 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
-        >
-          {testingServer ? "Menguji..." : "Uji koneksi server"}
-        </button>
-        {serverResult && (
-          <pre className="overflow-x-auto rounded border border-zinc-200 bg-white p-3 text-left text-xs text-black dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-50">
-            {serverResult}
-          </pre>
         )}
       </div>
 

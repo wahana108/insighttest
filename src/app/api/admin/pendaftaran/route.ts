@@ -164,7 +164,10 @@ export async function GET(request: Request) {
     const atestasiJadiSyaratSyarat =
       typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
 
-    const sertifikatByUid = new Map<string, { id: string; serial: string; status: StatusSertifikat }>();
+    const sertifikatByUid = new Map<
+      string,
+      { id: string; serial: string; status: StatusSertifikat; kodeVerifikasi: string }
+    >();
     sertifikatSnap.docs.forEach((doc) => {
       const data = doc.data();
       const uid = typeof data.uid === "string" ? data.uid : "";
@@ -175,6 +178,7 @@ export async function GET(request: Request) {
         id: doc.id,
         serial: typeof data.serial === "string" ? data.serial : "",
         status: isStatusSertifikat(data.status) ? data.status : "berlaku",
+        kodeVerifikasi: typeof data.kodeVerifikasi === "string" ? data.kodeVerifikasi : "",
       });
     });
 

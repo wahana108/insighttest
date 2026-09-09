@@ -186,7 +186,7 @@ export async function GET(
 
     const sertifikatByUid = new Map<
       string,
-      { serial: string; status: StatusSertifikat; terbitPada: string }
+      { serial: string; status: StatusSertifikat; terbitPada: string; kodeVerifikasi: string }
     >();
     sertifikatSnap.docs.forEach((doc) => {
       const data = doc.data();
@@ -198,6 +198,7 @@ export async function GET(
         serial: typeof data.serial === "string" ? data.serial : "",
         status: isStatusSertifikat(data.status) ? data.status : "berlaku",
         terbitPada: typeof data.terbitPada === "string" ? data.terbitPada : "",
+        kodeVerifikasi: typeof data.kodeVerifikasi === "string" ? data.kodeVerifikasi : "",
       });
     });
 

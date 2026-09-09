@@ -1,6 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { buildSertifikatDetail, SertifikatRouteError } from "@/lib/api/sertifikat-server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { normalisasiKodeVerifikasi } from "@/lib/kode-verifikasi";
 
 /**
  * Untuk /sertifikat/cetak/[kodeVerifikasi] — alamat cetak yang bersih.
@@ -19,7 +20,7 @@ export async function GET(
     const db = getAdminDb();
     const snapshot = await db
       .collection("sertifikat")
-      .where("kodeVerifikasi", "==", kodeVerifikasi)
+      .where("kodeVerifikasi", "==", normalisasiKodeVerifikasi(kodeVerifikasi))
       .limit(1)
       .get();
     if (snapshot.empty) {

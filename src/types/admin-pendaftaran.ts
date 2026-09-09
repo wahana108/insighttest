@@ -37,5 +37,10 @@ export interface PesertaAdminRingkas {
   prasyaratMateri: PrasyaratMateri;
   bisaTerbit: boolean;
   alasanPenerbitan: string;
-  sertifikat: { id: string; serial: string; status: StatusSertifikat } | null;
+  sertifikat: {
+    id: string;
+    serial: string;
+    status: StatusSertifikat;
+    kodeVerifikasi: string;
+  } | null;
 }

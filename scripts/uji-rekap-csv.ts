@@ -129,7 +129,7 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
     "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua",
     "Atestasi: Atestasi Satu",
     "Referensi Dibuka", "Hasil Kelayakan", "Status Prasyarat Materi",
-    "Serial Sertifikat", "Status Sertifikat", "Tanggal Terbit",
+    "Serial Sertifikat", "Status Sertifikat", "Tanggal Terbit", "Kode Verifikasi",
   ]);
 });
 
@@ -202,18 +202,47 @@ uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di d
   );
 });
 
-uji("susunBarisRekap: peserta tanpa sertifikat -> tiga kolom sertifikat kosong", () => {
+uji("susunBarisRekap: peserta tanpa sertifikat -> empat kolom sertifikat (termasuk Kode Verifikasi) kosong", () => {
   const peserta = pesertaDasar({});
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
-  assert.deepEqual(baris.slice(-3), [undefined, undefined, undefined]);
+  assert.deepEqual(baris.slice(-4), [undefined, undefined, undefined, undefined]);
 });
 
-uji("susunBarisRekap: peserta dengan sertifikat terisi penuh", () => {
+uji("susunBarisRekap: peserta dengan sertifikat berlaku -> Kode Verifikasi ikut terisi", () => {
   const peserta = pesertaDasar({
-    sertifikat: { serial: "KEG-1/2026/0001", status: "berlaku", terbitPada: "2026-09-01T00:00:00.000Z" },
+    sertifikat: {
+      serial: "KEG-1/2026/0001",
+      status: "berlaku",
+      terbitPada: "2026-09-01T00:00:00.000Z",
+      kodeVerifikasi: "U6SK21JGWN",
+    },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
-  assert.deepEqual(baris.slice(-3), ["KEG-1/2026/0001", "Berlaku", "2026-09-01T00:00:00.000Z"]);
+  assert.deepEqual(baris.slice(-4), [
+    "KEG-1/2026/0001",
+    "Berlaku",
+    "2026-09-01T00:00:00.000Z",
+    "U6SK21JGWN",
+  ]);
+});
+
+uji("susunBarisRekap: sertifikat DICABUT tetap punya kode verifikasi di CSV (Slice 9.3b §2b)", () => {
+  const peserta = pesertaDasar({
+    sertifikat: {
+      serial: "KEG-1/2026/0002",
+      status: "dicabut",
+      terbitPada: "2026-09-01T00:00:00.000Z",
+      kodeVerifikasi: "ABCDE12345",
+    },
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  const idxKode = baris.length - 1;
+  assert.equal(
+    baris[idxKode],
+    "ABCDE12345",
+    "Kode verifikasi HARUS tetap terekspor untuk sertifikat dicabut — hanya belum-terbit yang kosong"
+  );
+  assert.equal(baris[idxKode - 2], "Dicabut", "kolom Status Sertifikat harus tetap menandai dicabut");
 });
 
 console.log(`\n${lulus} lulus, ${gagal} gagal.`);

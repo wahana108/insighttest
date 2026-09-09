@@ -1,5 +1,6 @@
 import { getAdminDb } from "@/lib/firebase/admin";
 import { formatDate } from "@/lib/format-date";
+import { normalisasiKodeVerifikasi } from "@/lib/kode-verifikasi";
 import type { ItemSertifikat, SertifikatPublik, StatusSertifikat } from "@/types/sertifikat";
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
@@ -44,7 +45,7 @@ async function ambilSertifikatPublik(kode: string): Promise<SertifikatPublik | n
   const db = getAdminDb();
   const snapshot = await db
     .collection("sertifikat")
-    .where("kodeVerifikasi", "==", kode)
+    .where("kodeVerifikasi", "==", normalisasiKodeVerifikasi(kode))
     .limit(1)
     .get();
   if (snapshot.empty) {

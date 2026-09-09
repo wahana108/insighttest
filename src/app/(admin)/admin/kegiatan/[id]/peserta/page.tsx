@@ -594,6 +594,28 @@ export default function AdminPesertaPage({
                   <span className="text-zinc-400">Belum terbit</span>
                 )}
               </p>
+              {item.sertifikat && (
+                <p>
+                  <span className="text-zinc-500">Kode verifikasi: </span>
+                  <a
+                    href={`/s/${item.sertifikat.kodeVerifikasi}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className={
+                      item.sertifikat.status === "berlaku"
+                        ? "font-mono text-black underline dark:text-zinc-50"
+                        : "font-mono text-zinc-400 underline"
+                    }
+                  >
+                    {item.sertifikat.kodeVerifikasi}
+                  </a>
+                  {item.sertifikat.status === "dicabut" && (
+                    <span className="ml-1 font-semibold text-red-600">
+                      (dicabut — tidak berlaku)
+                    </span>
+                  )}
+                </p>
+              )}
               <div className="pt-1">
                 {!izin.terbitkanSertifikat ? (
                   <span className="text-xs text-zinc-400">Hanya lihat</span>
@@ -728,6 +750,27 @@ export default function AdminPesertaPage({
                       </span>
                     ) : (
                       <span className="text-zinc-400">Belum terbit</span>
+                    )}
+                    {item.sertifikat && (
+                      <div>
+                        <a
+                          href={`/s/${item.sertifikat.kodeVerifikasi}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className={
+                            item.sertifikat.status === "berlaku"
+                              ? "font-mono text-black underline dark:text-zinc-50"
+                              : "font-mono text-zinc-400 underline"
+                          }
+                        >
+                          {item.sertifikat.kodeVerifikasi}
+                        </a>
+                        {item.sertifikat.status === "dicabut" && (
+                          <span className="ml-1 text-xs font-semibold text-red-600">
+                            (tidak berlaku)
+                          </span>
+                        )}
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
