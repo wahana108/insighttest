@@ -177,7 +177,7 @@ function AdminParameterPageIsi() {
           <button
             type="submit"
             disabled={saving}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
           >
             Simpan
           </button>

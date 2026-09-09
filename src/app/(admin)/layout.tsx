@@ -30,6 +30,9 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
   const [platformName, setPlatformName] = useState(DEFAULT_SYSTEM_PARAMETER.namaPlatform);
+  // Slice 9.2: sidebar jadi menu buka-tutup di bawah sm: — CSS murni
+  // (translate + sm:static), tidak ada library tambahan.
+  const [menuTerbuka, setMenuTerbuka] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -75,11 +78,32 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
 
   return (
     <div className="flex min-h-screen flex-1">
-      <aside className="w-56 shrink-0 border-r border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
-        <p className="mb-6 text-lg font-semibold text-black dark:text-zinc-50">
-          {platformName}
-        </p>
-        <nav className="space-y-1">
+      {menuTerbuka && (
+        <button
+          type="button"
+          aria-label="Tutup menu"
+          onClick={() => setMenuTerbuka(false)}
+          className="fixed inset-0 z-30 bg-black/40 sm:hidden"
+        />
+      )}
+
+      <aside
+        className={`${
+          menuTerbuka ? "translate-x-0" : "-translate-x-full"
+        } fixed inset-y-0 left-0 z-40 w-64 transform overflow-y-auto border-r border-zinc-200 bg-white p-4 transition-transform duration-200 ease-in-out sm:static sm:z-auto sm:w-56 sm:shrink-0 sm:translate-x-0 dark:border-zinc-800 dark:bg-zinc-950`}
+      >
+        <div className="mb-6 flex items-center justify-between">
+          <p className="text-lg font-semibold text-black dark:text-zinc-50">{platformName}</p>
+          <button
+            type="button"
+            onClick={() => setMenuTerbuka(false)}
+            aria-label="Tutup menu"
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded text-xl text-zinc-500 sm:hidden dark:text-zinc-400"
+          >
+            ✕
+          </button>
+        </div>
+        <nav className="space-y-1" onClick={() => setMenuTerbuka(false)}>
           {isAdminOrSuper && (
             <>
               <Link
@@ -125,24 +149,43 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <div className="flex flex-1 flex-col">
-        <header className="border-b border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-950">
-          <p className="text-sm text-zinc-500">
-            Masuk sebagai{" "}
-            <span className="font-medium text-black dark:text-zinc-50">
-              {profile.email}
-            </span>
-            {" — peran aktif: "}
-            <span className="font-medium text-black dark:text-zinc-50">{profile.role}</span>
-          </p>
-          {profile.role === "panitia" && (
-            <p className="mt-1 text-xs text-zinc-500">
-              Kewenangan panitia berbeda per kegiatan — buka kegiatan yang ditugaskan untuk
-              melihat persis apa yang bisa Anda lakukan di sana.
-            </p>
-          )}
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="border-b border-zinc-200 bg-white px-4 py-3 sm:px-6 sm:py-4 dark:border-zinc-800 dark:bg-zinc-950">
+          <div className="flex items-start gap-3">
+            <button
+              type="button"
+              onClick={() => setMenuTerbuka(true)}
+              aria-label="Buka menu"
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded border border-zinc-300 text-zinc-700 sm:hidden dark:border-zinc-700 dark:text-zinc-300"
+            >
+              <span className="sr-only">Buka menu</span>
+              <span aria-hidden className="space-y-1">
+                <span className="block h-0.5 w-5 bg-current" />
+                <span className="block h-0.5 w-5 bg-current" />
+                <span className="block h-0.5 w-5 bg-current" />
+              </span>
+            </button>
+            <div className="min-w-0">
+              <p className="break-words text-sm text-zinc-500">
+                Masuk sebagai{" "}
+                <span className="font-medium text-black dark:text-zinc-50">
+                  {profile.email}
+                </span>
+                {" — peran aktif: "}
+                <span className="font-medium text-black dark:text-zinc-50">{profile.role}</span>
+              </p>
+              {profile.role === "panitia" && (
+                <p className="mt-1 text-xs text-zinc-500">
+                  Kewenangan panitia berbeda per kegiatan — buka kegiatan yang ditugaskan untuk
+                  melihat persis apa yang bisa Anda lakukan di sana.
+                </p>
+              )}
+            </div>
+          </div>
         </header>
-        <main className="flex-1 bg-zinc-50 p-6 dark:bg-black">{children}</main>
+        <main className="flex-1 overflow-x-hidden bg-zinc-50 p-4 sm:p-6 dark:bg-black">
+          {children}
+        </main>
       </div>
     </div>
   );

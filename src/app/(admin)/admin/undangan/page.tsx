@@ -134,81 +134,115 @@ function AdminUndanganPageIsi() {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
         >
           Tambah undangan
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-            <tr>
-              <th className="px-4 py-2 font-medium">Email</th>
-              <th className="px-4 py-2 font-medium">Role</th>
-              <th className="px-4 py-2 font-medium">Catatan</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium">Dibuat</th>
-              <th className="px-4 py-2 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Memuat...
-                </td>
-              </tr>
-            )}
-            {!loading && listError && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
-                  Gagal memuat undangan: {listError}
-                </td>
-              </tr>
-            )}
-            {!loading && !listError && items.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Belum ada undangan.
-                </td>
-              </tr>
-            )}
+      {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+      {!loading && listError && (
+        <p className="text-sm text-red-600">Gagal memuat undangan: {listError}</p>
+      )}
+      {!loading && !listError && items.length === 0 && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">Belum ada undangan.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Undangan mengendalikan siapa yang boleh mendaftar saat mode pendaftaran
+            &quot;undangan&quot;. Tambahkan lewat form di atas.
+          </p>
+        </div>
+      )}
+
+      {!loading && !listError && items.length > 0 && (
+        <>
+          <ul className="space-y-3 sm:hidden">
             {items.map((item) => (
-              <tr
+              <li
                 key={item.email}
-                className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
               >
-                <td className="px-4 py-2 text-black dark:text-zinc-50">{item.email}</td>
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.role}</td>
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
-                  {item.catatan || "-"}
-                </td>
-                <td className="px-4 py-2">
+                <div className="flex items-start justify-between gap-3">
+                  <p className="font-medium text-black dark:text-zinc-50">{item.email}</p>
                   {item.usedAt ? (
-                    <span className="text-zinc-500">Sudah terpakai</span>
+                    <span className="shrink-0 text-zinc-500">Sudah terpakai</span>
                   ) : (
-                    <span className="text-green-600">Belum terpakai</span>
+                    <span className="shrink-0 text-green-600">Belum terpakai</span>
                   )}
-                </td>
-                <td className="px-4 py-2 text-zinc-500">{formatDate(item.createdAt)}</td>
-                <td className="px-4 py-2 text-right">
-                  {!item.usedAt && (
-                    <button
-                      type="button"
-                      onClick={() => handleDelete(item.email)}
-                      disabled={deletingEmail === item.email}
-                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      Hapus
-                    </button>
-                  )}
-                </td>
-              </tr>
+                </div>
+                <p className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-zinc-500">Role: </span>
+                  {item.role}
+                </p>
+                <p className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-zinc-500">Catatan: </span>
+                  {item.catatan || "-"}
+                </p>
+                <p className="text-zinc-500">Dibuat {formatDate(item.createdAt)}</p>
+                {!item.usedAt && (
+                  <button
+                    type="button"
+                    onClick={() => handleDelete(item.email)}
+                    disabled={deletingEmail === item.email}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    Hapus
+                  </button>
+                )}
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+
+          <div className="hidden rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Email</th>
+                  <th className="px-4 py-2 font-medium">Role</th>
+                  <th className="px-4 py-2 font-medium">Catatan</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium">Dibuat</th>
+                  <th className="px-4 py-2 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr
+                    key={item.email}
+                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                  >
+                    <td className="px-4 py-2 text-black dark:text-zinc-50">{item.email}</td>
+                    <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.role}</td>
+                    <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
+                      {item.catatan || "-"}
+                    </td>
+                    <td className="px-4 py-2">
+                      {item.usedAt ? (
+                        <span className="text-zinc-500">Sudah terpakai</span>
+                      ) : (
+                        <span className="text-green-600">Belum terpakai</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-zinc-500">{formatDate(item.createdAt)}</td>
+                    <td className="px-4 py-2 text-right">
+                      {!item.usedAt && (
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(item.email)}
+                          disabled={deletingEmail === item.email}
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          Hapus
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

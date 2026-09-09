@@ -342,7 +342,7 @@ function AdminSoalPageIsi() {
                 type="button"
                 onClick={() => removeOpsi(opsi.id)}
                 disabled={form.opsi.length <= 2}
-                className="text-sm font-medium text-red-600 hover:underline disabled:opacity-30"
+                className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-30"
               >
                 Hapus
               </button>
@@ -351,7 +351,7 @@ function AdminSoalPageIsi() {
           <button
             type="button"
             onClick={addOpsi}
-            className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+            className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
           >
             + Tambah opsi
           </button>
@@ -380,7 +380,7 @@ function AdminSoalPageIsi() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
           >
             {editingId ? "Simpan perubahan" : "Tambah soal"}
           </button>
@@ -388,7 +388,7 @@ function AdminSoalPageIsi() {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
             >
               Batal
             </button>
@@ -416,7 +416,120 @@ function AdminSoalPageIsi() {
         </select>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+      {!loading && soalError && (
+        <p className="text-sm text-red-600">Gagal memuat soal: {soalError}</p>
+      )}
+      {!loading && !soalError && items.length === 0 && filterTopikKode && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">
+            Tidak ada soal yang cocok dengan penyaring topik ini.
+          </p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Coba pilih topik lain, atau hapus penyaringnya untuk melihat semua soal.
+          </p>
+          <button
+            type="button"
+            onClick={() => setFilterTopikKode("")}
+            className="mt-3 inline-flex min-h-11 items-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+          >
+            Hapus penyaring
+          </button>
+        </div>
+      )}
+      {!loading && !soalError && items.length === 0 && !filterTopikKode && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">Belum ada soal.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Soal bisa ditambahkan satu per satu lewat form di atas, atau diimpor sekaligus
+            dari berkas.
+          </p>
+          <div className="mt-3 flex flex-wrap justify-center gap-3">
+            <a
+              href="#teks"
+              className="inline-flex min-h-11 items-center rounded bg-black px-4 text-sm font-medium text-white dark:bg-white dark:text-black"
+            >
+              Tambah soal
+            </a>
+            <Link
+              href="/admin/soal/impor"
+              className="inline-flex min-h-11 items-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+            >
+              Impor soal
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!loading && !soalError && items.length > 0 && (
+      <>
+      {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+      <ul className="space-y-3 sm:hidden">
+        {items.map((item) => {
+          const bisaSunting = bolehSuntingSoal(profile, item);
+          return (
+            <li
+              key={item.id}
+              className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <p className="text-black dark:text-zinc-50">{truncate(item.teks)}</p>
+                {item.isActive ? (
+                  <span className="shrink-0 text-green-600">Aktif</span>
+                ) : (
+                  <span className="shrink-0 text-zinc-500">Nonaktif</span>
+                )}
+              </div>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Topik: </span>
+                {topikLabel.get(item.topikKode) ?? item.topikKode}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Tingkat: </span>
+                {item.tingkat}
+                {" · "}
+                <span className="text-zinc-500">Opsi: </span>
+                {item.opsi.length}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Pembuat: </span>
+                {!item.dibuatOleh ? (
+                  "Admin"
+                ) : item.dibuatOleh === profile?.uid ? (
+                  "Anda"
+                ) : isAdminOrSuper ? (
+                  <NamaPembuat uid={item.dibuatOleh} />
+                ) : (
+                  "Panitia lain"
+                )}
+              </p>
+              {bisaSunting ? (
+                <div className="flex gap-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(item)}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                  >
+                    Sunting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(item)}
+                    disabled={togglingId === item.id}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {item.isActive ? "Nonaktifkan" : "Aktifkan"}
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400">Hanya lihat</p>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
@@ -430,27 +543,6 @@ function AdminSoalPageIsi() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
-                  Memuat...
-                </td>
-              </tr>
-            )}
-            {!loading && soalError && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-red-600">
-                  Gagal memuat soal: {soalError}
-                </td>
-              </tr>
-            )}
-            {!loading && !soalError && items.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-6 text-center text-zinc-500">
-                  Belum ada soal.
-                </td>
-              </tr>
-            )}
             {items.map((item) => {
               const bisaSunting = bolehSuntingSoal(profile, item);
               return (
@@ -492,7 +584,7 @@ function AdminSoalPageIsi() {
                       <button
                         type="button"
                         onClick={() => startEdit(item)}
-                        className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
                       >
                         Sunting
                       </button>
@@ -500,7 +592,7 @@ function AdminSoalPageIsi() {
                         type="button"
                         onClick={() => handleToggleActive(item)}
                         disabled={togglingId === item.id}
-                        className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
                       >
                         {item.isActive ? "Nonaktifkan" : "Aktifkan"}
                       </button>
@@ -515,6 +607,8 @@ function AdminSoalPageIsi() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }

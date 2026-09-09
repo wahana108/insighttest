@@ -268,34 +268,36 @@ export default function AdminKegiatanPage() {
             >
               Dibuka pada (opsional)
             </label>
-            <div className="mt-1 flex gap-2">
-              <input
-                id="dibukaTanggal"
-                type="date"
-                value={form.dibukaTanggal}
-                onChange={(event) => {
-                  const tanggal = event.target.value;
-                  setForm((f) => ({
-                    ...f,
-                    dibukaTanggal: tanggal,
-                    dibukaJam: tanggal ? f.dibukaJam || "00:00" : "",
-                  }));
-                }}
-                className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
-              <input
-                type="time"
-                aria-label="Jam dibuka"
-                value={form.dibukaJam}
-                onChange={(event) =>
-                  setForm((f) => ({ ...f, dibukaJam: event.target.value }))
-                }
-                className="w-28 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex gap-2">
+                <input
+                  id="dibukaTanggal"
+                  type="date"
+                  value={form.dibukaTanggal}
+                  onChange={(event) => {
+                    const tanggal = event.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      dibukaTanggal: tanggal,
+                      dibukaJam: tanggal ? f.dibukaJam || "00:00" : "",
+                    }));
+                  }}
+                  className="min-w-0 flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <input
+                  type="time"
+                  aria-label="Jam dibuka"
+                  value={form.dibukaJam}
+                  onChange={(event) =>
+                    setForm((f) => ({ ...f, dibukaJam: event.target.value }))
+                  }
+                  className="w-28 shrink-0 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, dibukaTanggal: "", dibukaJam: "" }))}
-                className="shrink-0 rounded border border-zinc-300 px-2 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-600 sm:self-auto dark:border-zinc-700 dark:text-zinc-400"
               >
                 Kosongkan
               </button>
@@ -308,34 +310,36 @@ export default function AdminKegiatanPage() {
             >
               Ditutup pada (opsional)
             </label>
-            <div className="mt-1 flex gap-2">
-              <input
-                id="ditutupTanggal"
-                type="date"
-                value={form.ditutupTanggal}
-                onChange={(event) => {
-                  const tanggal = event.target.value;
-                  setForm((f) => ({
-                    ...f,
-                    ditutupTanggal: tanggal,
-                    ditutupJam: tanggal ? f.ditutupJam || "23:59" : "",
-                  }));
-                }}
-                className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
-              <input
-                type="time"
-                aria-label="Jam ditutup"
-                value={form.ditutupJam}
-                onChange={(event) =>
-                  setForm((f) => ({ ...f, ditutupJam: event.target.value }))
-                }
-                className="w-28 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
+            <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+              <div className="flex gap-2">
+                <input
+                  id="ditutupTanggal"
+                  type="date"
+                  value={form.ditutupTanggal}
+                  onChange={(event) => {
+                    const tanggal = event.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      ditutupTanggal: tanggal,
+                      ditutupJam: tanggal ? f.ditutupJam || "23:59" : "",
+                    }));
+                  }}
+                  className="min-w-0 flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <input
+                  type="time"
+                  aria-label="Jam ditutup"
+                  value={form.ditutupJam}
+                  onChange={(event) =>
+                    setForm((f) => ({ ...f, ditutupJam: event.target.value }))
+                  }
+                  className="w-28 shrink-0 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+              </div>
               <button
                 type="button"
                 onClick={() => setForm((f) => ({ ...f, ditutupTanggal: "", ditutupJam: "" }))}
-                className="shrink-0 rounded border border-zinc-300 px-2 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-600 sm:self-auto dark:border-zinc-700 dark:text-zinc-400"
               >
                 Kosongkan
               </button>
@@ -402,7 +406,7 @@ export default function AdminKegiatanPage() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
           >
             {editingId ? "Simpan perubahan" : "Tambah kegiatan"}
           </button>
@@ -410,7 +414,7 @@ export default function AdminKegiatanPage() {
             <button
               type="button"
               onClick={resetForm}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
             >
               Batal
             </button>
@@ -419,7 +423,104 @@ export default function AdminKegiatanPage() {
       </form>
       )}
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+      {!loading && listError && (
+        <p className="text-sm text-red-600">Gagal memuat kegiatan: {listError}</p>
+      )}
+      {!loading && !listError && items.length === 0 && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">
+            {isAdminOrSuper ? "Belum ada kegiatan." : "Anda belum ditugaskan sebagai panitia."}
+          </p>
+          <p className="mt-1 text-sm text-zinc-500">
+            {isAdminOrSuper
+              ? "Satu gelombang = satu kegiatan. Isi form di atas untuk menambahkan kegiatan pertama."
+              : "Kegiatan akan muncul di sini setelah admin menunjuk Anda sebagai panitianya. Hubungi admin kalau Anda merasa seharusnya sudah ditugaskan."}
+          </p>
+        </div>
+      )}
+
+      {!loading && !listError && items.length > 0 && (
+      <>
+      {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+      <ul className="space-y-3 sm:hidden">
+        {items.map((item) => (
+          <li
+            key={item.id}
+            className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+          >
+            <div>
+              <Link
+                href={`/admin/kegiatan/${item.id}`}
+                className="font-medium text-black hover:underline dark:text-zinc-50"
+              >
+                {item.judul}
+              </Link>
+              <p className="font-mono text-xs text-zinc-400">
+                {item.kode || "(tanpa kode)"}
+                {item.isArchived && " · diarsipkan"}
+              </p>
+            </div>
+            <p className="text-zinc-700 dark:text-zinc-300">{formatJendela(item)}</p>
+            <p className="text-zinc-700 dark:text-zinc-300">
+              <span className="text-zinc-500">Modul: </span>
+              <JumlahModul kegiatanId={item.id} />
+            </p>
+            <p>
+              {item.isPublished ? (
+                <span className="text-green-600">Terbit</span>
+              ) : (
+                <span className="text-zinc-500">Draf</span>
+              )}
+            </p>
+            <div className="flex flex-wrap gap-x-4 gap-y-2 pt-1">
+              <Link
+                href={`/admin/kegiatan/${item.id}`}
+                className="flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+              >
+                Kelola modul
+              </Link>
+              {izinPanitia(profile, item).lihatPeserta && (
+                <Link
+                  href={`/admin/kegiatan/${item.id}/peserta`}
+                  className="flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                >
+                  Peserta
+                </Link>
+              )}
+              {isAdminOrSuper && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => startEdit(item)}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                  >
+                    Sunting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleTogglePublished(item)}
+                    disabled={publishingId === item.id}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline disabled:opacity-50 dark:text-zinc-300"
+                  >
+                    {item.isPublished ? "Tarik" : "Terbitkan"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleArchived(item)}
+                    disabled={archivingId === item.id}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {item.isArchived ? "Buka arsip" : "Arsipkan"}
+                  </button>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+
+      <div className="hidden rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
@@ -431,27 +532,6 @@ export default function AdminKegiatanPage() {
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                  Memuat...
-                </td>
-              </tr>
-            )}
-            {!loading && listError && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-red-600">
-                  Gagal memuat kegiatan: {listError}
-                </td>
-              </tr>
-            )}
-            {!loading && !listError && items.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-6 text-center text-zinc-500">
-                  Belum ada kegiatan.
-                </td>
-              </tr>
-            )}
             {items.map((item) => (
               <tr
                 key={item.id}
@@ -485,14 +565,14 @@ export default function AdminKegiatanPage() {
                   <div className="flex flex-wrap justify-end gap-3">
                     <Link
                       href={`/admin/kegiatan/${item.id}`}
-                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                      className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
                     >
                       Kelola modul
                     </Link>
                     {izinPanitia(profile, item).lihatPeserta && (
                       <Link
                         href={`/admin/kegiatan/${item.id}/peserta`}
-                        className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
                       >
                         Peserta
                       </Link>
@@ -502,7 +582,7 @@ export default function AdminKegiatanPage() {
                         <button
                           type="button"
                           onClick={() => startEdit(item)}
-                          className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
                         >
                           Sunting
                         </button>
@@ -510,7 +590,7 @@ export default function AdminKegiatanPage() {
                           type="button"
                           onClick={() => handleTogglePublished(item)}
                           disabled={publishingId === item.id}
-                          className="text-sm font-medium text-zinc-700 hover:underline disabled:opacity-50 dark:text-zinc-300"
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline disabled:opacity-50 dark:text-zinc-300"
                         >
                           {item.isPublished ? "Tarik" : "Terbitkan"}
                         </button>
@@ -518,7 +598,7 @@ export default function AdminKegiatanPage() {
                           type="button"
                           onClick={() => handleToggleArchived(item)}
                           disabled={archivingId === item.id}
-                          className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
                         >
                           {item.isArchived ? "Buka arsip" : "Arsipkan"}
                         </button>
@@ -531,6 +611,8 @@ export default function AdminKegiatanPage() {
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }

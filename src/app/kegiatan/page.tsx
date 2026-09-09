@@ -81,7 +81,15 @@ export default function KegiatanKatalogPage() {
           <p className="text-sm text-red-600">Gagal memuat kegiatan: {kegiatanError}</p>
         )}
         {!loadingKegiatan && !kegiatanError && kegiatanTersedia.length === 0 && (
-          <p className="text-sm text-zinc-500">Belum ada kegiatan yang diterbitkan.</p>
+          <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+            <p className="text-sm font-medium text-black dark:text-zinc-50">
+              Belum ada kegiatan yang diterbitkan.
+            </p>
+            <p className="mt-1 text-sm text-zinc-500">
+              Admin belum menerbitkan kegiatan apa pun untuk saat ini — coba periksa lagi
+              nanti.
+            </p>
+          </div>
         )}
         {kegiatanTersedia.map((kegiatan) => (
           <Link

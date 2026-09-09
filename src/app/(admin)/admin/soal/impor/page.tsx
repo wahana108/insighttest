@@ -184,7 +184,7 @@ function AdminSoalImporPageIsi() {
         <button
           type="button"
           onClick={handleCopyPrompt}
-          className="rounded bg-black px-4 py-2 text-sm font-medium text-white dark:bg-white dark:text-black"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white dark:bg-white dark:text-black"
         >
           {copied ? "Tersalin!" : "Salin prompt"}
         </button>
@@ -212,7 +212,7 @@ function AdminSoalImporPageIsi() {
             type="button"
             onClick={handlePeriksa}
             disabled={checking || !jsonText.trim()}
-            className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+            className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
           >
             {checking ? "Memeriksa..." : "Periksa"}
           </button>
@@ -230,53 +230,93 @@ function AdminSoalImporPageIsi() {
                 sebelum menyimpan.
               </p>
             )}
-            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-              <table className="w-full text-left text-sm">
-                <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">Baris</th>
-                    <th className="px-3 py-2 font-medium">Status</th>
-                    <th className="px-3 py-2 font-medium">Topik</th>
-                    <th className="px-3 py-2 font-medium">Pertanyaan</th>
-                    <th className="px-3 py-2 font-medium">Pesan</th>
-                  </tr>
-                </thead>
-                <tbody>
+            {periksaResult.baris.length === 0 ? (
+              <p className="text-sm text-zinc-500">Tidak ada baris soal di berkas ini.</p>
+            ) : (
+              <>
+                {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+                <ul className="space-y-3 sm:hidden">
                   {periksaResult.baris.map((baris) => (
-                    <tr
+                    <li
                       key={baris.baris}
-                      className="border-b border-zinc-100 align-top last:border-0 dark:border-zinc-900"
+                      className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
                     >
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{baris.baris}</td>
-                      <td className="px-3 py-2">
+                      <div className="flex items-start justify-between gap-3">
+                        <p className="text-zinc-500">Baris {baris.baris}</p>
                         <span
-                          className={`rounded px-2 py-0.5 text-xs font-medium ${badgeClass(baris.status)}`}
+                          className={`shrink-0 rounded px-2 py-0.5 text-xs font-medium ${badgeClass(baris.status)}`}
                         >
                           {badgeLabel(baris.status)}
                         </span>
-                      </td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                      </div>
+                      <p className="text-zinc-700 dark:text-zinc-300">
+                        <span className="text-zinc-500">Topik: </span>
                         {baris.pratinjau?.topikKode ?? "-"}
-                      </td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                      </p>
+                      <p className="text-zinc-700 dark:text-zinc-300">
+                        <span className="text-zinc-500">Pertanyaan: </span>
                         {baris.pratinjau?.teks ?? "-"}
-                      </td>
-                      <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
-                        {baris.pesan.length > 0 ? (
-                          <ul className="list-inside list-disc space-y-0.5">
-                            {baris.pesan.map((pesan, index) => (
-                              <li key={index}>{pesan}</li>
-                            ))}
-                          </ul>
-                        ) : (
-                          "-"
-                        )}
-                      </td>
-                    </tr>
+                      </p>
+                      {baris.pesan.length > 0 && (
+                        <ul className="list-inside list-disc space-y-0.5 text-zinc-700 dark:text-zinc-300">
+                          {baris.pesan.map((pesan, index) => (
+                            <li key={index}>{pesan}</li>
+                          ))}
+                        </ul>
+                      )}
+                    </li>
                   ))}
-                </tbody>
-              </table>
-            </div>
+                </ul>
+
+                <div className="hidden overflow-x-auto rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
+                  <table className="w-full text-left text-sm">
+                    <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                      <tr>
+                        <th className="px-3 py-2 font-medium">Baris</th>
+                        <th className="px-3 py-2 font-medium">Status</th>
+                        <th className="px-3 py-2 font-medium">Topik</th>
+                        <th className="px-3 py-2 font-medium">Pertanyaan</th>
+                        <th className="px-3 py-2 font-medium">Pesan</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {periksaResult.baris.map((baris) => (
+                        <tr
+                          key={baris.baris}
+                          className="border-b border-zinc-100 align-top last:border-0 dark:border-zinc-900"
+                        >
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{baris.baris}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={`rounded px-2 py-0.5 text-xs font-medium ${badgeClass(baris.status)}`}
+                            >
+                              {badgeLabel(baris.status)}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                            {baris.pratinjau?.topikKode ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                            {baris.pratinjau?.teks ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                            {baris.pesan.length > 0 ? (
+                              <ul className="list-inside list-disc space-y-0.5">
+                                {baris.pesan.map((pesan, index) => (
+                                  <li key={index}>{pesan}</li>
+                                ))}
+                              </ul>
+                            ) : (
+                              "-"
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </>
+            )}
           </>
         )}
       </section>
@@ -295,7 +335,7 @@ function AdminSoalImporPageIsi() {
           type="button"
           onClick={handleSimpanSemua}
           disabled={!bisaSimpan}
-          className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
         >
           {saving ? "Menyimpan..." : "Simpan semua"}
         </button>

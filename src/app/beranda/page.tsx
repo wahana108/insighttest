@@ -142,7 +142,18 @@ export default function BerandaPage() {
           <p className="text-red-600">Gagal memuat: {kegiatanSayaError}</p>
         )}
         {!loadingKegiatanSaya && !kegiatanSayaError && kegiatanSayaRaw.length === 0 && (
-          <p className="text-zinc-500">Anda belum terdaftar di kegiatan mana pun.</p>
+          <div className="space-y-2">
+            <p className="text-zinc-500">Anda belum terdaftar di kegiatan mana pun.</p>
+            <p className="text-xs text-zinc-500">
+              Jelajahi kegiatan yang sudah diterbitkan dan daftar untuk mulai belajar.
+            </p>
+            <Link
+              href="/kegiatan"
+              className="inline-flex min-h-11 items-center rounded bg-black px-4 text-sm font-medium text-white dark:bg-white dark:text-black"
+            >
+              Jelajahi kegiatan
+            </Link>
+          </div>
         )}
         {!loadingKegiatanSaya && !kegiatanSayaError && kegiatanSayaRaw.length > 0 && (
           <ul className="space-y-2">
@@ -170,7 +181,13 @@ export default function BerandaPage() {
           <p className="text-red-600">Gagal memuat: {sertifikatSayaError}</p>
         )}
         {!loadingSertifikatSaya && !sertifikatSayaError && sertifikatSaya.length === 0 && (
-          <p className="text-zinc-500">Belum ada sertifikat yang terbit.</p>
+          <div className="space-y-1">
+            <p className="text-zinc-500">Belum ada sertifikat yang terbit.</p>
+            <p className="text-xs text-zinc-500">
+              Sertifikat muncul di sini setelah Anda menuntaskan syarat kegiatan dan panitia
+              menerbitkannya — tidak ada tindakan yang perlu diambil di sini.
+            </p>
+          </div>
         )}
         {!loadingSertifikatSaya && !sertifikatSayaError && sertifikatSaya.length > 0 && (
           <ul className="space-y-2">

@@ -260,7 +260,15 @@ export default function KegiatanDetailPage({
           // melihat persis modul yang dinilai untuknya, bukan versi terbaru.
           <ul className="space-y-2">
             {pendaftaranKegiatanIni.modulSnapshot.length === 0 && (
-              <p className="text-sm text-zinc-500">Belum ada modul.</p>
+              <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-center dark:border-zinc-700">
+                <p className="text-sm font-medium text-black dark:text-zinc-50">
+                  Belum ada modul.
+                </p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Kegiatan ini belum punya referensi, evaluasi, atau atestasi saat Anda
+                  mendaftar. Coba periksa lagi nanti atau hubungi panitia.
+                </p>
+              </div>
             )}
             {pendaftaranKegiatanIni.modulSnapshot.map((modul) => {
               const hasil = pendaftaranKegiatanIni.hasilModul[modul.modulId];
@@ -338,7 +346,15 @@ export default function KegiatanDetailPage({
               <p className="text-sm text-red-600">Gagal memuat modul: {modulListError}</p>
             )}
             {!loadingModul && !modulListError && modulList.length === 0 && (
-              <p className="text-sm text-zinc-500">Belum ada modul.</p>
+              <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-center dark:border-zinc-700">
+                <p className="text-sm font-medium text-black dark:text-zinc-50">
+                  Belum ada modul.
+                </p>
+                <p className="mt-1 text-sm text-zinc-500">
+                  Panitia belum menambahkan referensi, evaluasi, atau atestasi apa pun ke
+                  kegiatan ini. Coba periksa lagi nanti.
+                </p>
+              </div>
             )}
             <ul className="space-y-2">
               {modulList.map((modul) => (

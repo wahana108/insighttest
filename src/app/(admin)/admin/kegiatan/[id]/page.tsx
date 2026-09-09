@@ -389,7 +389,7 @@ function PanitiaKegiatanIni({
                 type="button"
                 onClick={() => handleTambah(orang.uid)}
                 disabled={busy}
-                className="rounded bg-black px-3 py-1.5 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+                className="inline-flex min-h-11 items-center justify-center rounded bg-black px-3 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
               >
                 {busy ? "Menambahkan..." : "Tambahkan sebagai panitia"}
               </button>
@@ -403,7 +403,10 @@ function PanitiaKegiatanIni({
           Panitia saat ini ({kegiatan.panitiaUids.length})
         </p>
         {kegiatan.panitiaUids.length === 0 && (
-          <p className="text-xs text-zinc-500">Belum ada panitia ditugaskan di kegiatan ini.</p>
+          <p className="text-xs text-zinc-500">
+            Belum ada panitia ditugaskan di kegiatan ini. Cari dan tambahkan lewat kotak
+            pencarian di atas.
+          </p>
         )}
         {kegiatan.panitiaUids.map((uid) => {
           const orang = userList.find((item) => item.uid === uid);
@@ -443,7 +446,7 @@ function PanitiaKegiatanIni({
                 type="button"
                 onClick={() => handleCabut(uid)}
                 disabled={busy}
-                className="ml-auto text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                className="ml-auto inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
               >
                 Cabut
               </button>
@@ -999,36 +1002,38 @@ export default function AdminKegiatanDetailPage({
                 >
                   Dibuka pada (opsional)
                 </label>
-                <div className="mt-1 flex gap-2">
-                  <input
-                    id="det-dibuka"
-                    type="date"
-                    value={editingKegiatanForm.dibukaTanggal}
-                    onChange={(event) => {
-                      const tanggal = event.target.value;
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        dibukaTanggal: tanggal,
-                        dibukaJam: tanggal ? editingKegiatanForm.dibukaJam || "00:00" : "",
-                      });
-                    }}
-                    className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
-                  <input
-                    type="time"
-                    aria-label="Jam dibuka"
-                    value={editingKegiatanForm.dibukaJam}
-                    onChange={(event) =>
-                      setKegiatanForm({ ...editingKegiatanForm, dibukaJam: event.target.value })
-                    }
-                    className="w-28 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex gap-2">
+                    <input
+                      id="det-dibuka"
+                      type="date"
+                      value={editingKegiatanForm.dibukaTanggal}
+                      onChange={(event) => {
+                        const tanggal = event.target.value;
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          dibukaTanggal: tanggal,
+                          dibukaJam: tanggal ? editingKegiatanForm.dibukaJam || "00:00" : "",
+                        });
+                      }}
+                      className="min-w-0 flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                    <input
+                      type="time"
+                      aria-label="Jam dibuka"
+                      value={editingKegiatanForm.dibukaJam}
+                      onChange={(event) =>
+                        setKegiatanForm({ ...editingKegiatanForm, dibukaJam: event.target.value })
+                      }
+                      className="w-28 shrink-0 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() =>
                       setKegiatanForm({ ...editingKegiatanForm, dibukaTanggal: "", dibukaJam: "" })
                     }
-                    className="shrink-0 rounded border border-zinc-300 px-2 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-600 sm:self-auto dark:border-zinc-700 dark:text-zinc-400"
                   >
                     Kosongkan
                   </button>
@@ -1041,30 +1046,32 @@ export default function AdminKegiatanDetailPage({
                 >
                   Ditutup pada (opsional)
                 </label>
-                <div className="mt-1 flex gap-2">
-                  <input
-                    id="det-ditutup"
-                    type="date"
-                    value={editingKegiatanForm.ditutupTanggal}
-                    onChange={(event) => {
-                      const tanggal = event.target.value;
-                      setKegiatanForm({
-                        ...editingKegiatanForm,
-                        ditutupTanggal: tanggal,
-                        ditutupJam: tanggal ? editingKegiatanForm.ditutupJam || "23:59" : "",
-                      });
-                    }}
-                    className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
-                  <input
-                    type="time"
-                    aria-label="Jam ditutup"
-                    value={editingKegiatanForm.ditutupJam}
-                    onChange={(event) =>
-                      setKegiatanForm({ ...editingKegiatanForm, ditutupJam: event.target.value })
-                    }
-                    className="w-28 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-                  />
+                <div className="mt-1 flex flex-col gap-2 sm:flex-row sm:items-center">
+                  <div className="flex gap-2">
+                    <input
+                      id="det-ditutup"
+                      type="date"
+                      value={editingKegiatanForm.ditutupTanggal}
+                      onChange={(event) => {
+                        const tanggal = event.target.value;
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          ditutupTanggal: tanggal,
+                          ditutupJam: tanggal ? editingKegiatanForm.ditutupJam || "23:59" : "",
+                        });
+                      }}
+                      className="min-w-0 flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                    <input
+                      type="time"
+                      aria-label="Jam ditutup"
+                      value={editingKegiatanForm.ditutupJam}
+                      onChange={(event) =>
+                        setKegiatanForm({ ...editingKegiatanForm, ditutupJam: event.target.value })
+                      }
+                      className="w-28 shrink-0 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    />
+                  </div>
                   <button
                     type="button"
                     onClick={() =>
@@ -1074,7 +1081,7 @@ export default function AdminKegiatanDetailPage({
                         ditutupJam: "",
                       })
                     }
-                    className="shrink-0 rounded border border-zinc-300 px-2 text-xs font-medium text-zinc-600 dark:border-zinc-700 dark:text-zinc-400"
+                    className="inline-flex min-h-11 shrink-0 items-center justify-center self-start rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-600 sm:self-auto dark:border-zinc-700 dark:text-zinc-400"
                   >
                     Kosongkan
                   </button>
@@ -1334,7 +1341,7 @@ export default function AdminKegiatanDetailPage({
             <button
               type="submit"
               disabled={savingKegiatan}
-              className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
               Simpan kegiatan
             </button>
@@ -1874,7 +1881,11 @@ export default function AdminKegiatanDetailPage({
                     !soalUntukPemilihanError &&
                     soalUntukPemilihan.length === 0 && (
                       <p className="p-3 text-sm text-zinc-500">
-                        Tidak ada soal untuk saringan ini.
+                        Tidak ada soal untuk topik ini. Pilih topik lain, atau{" "}
+                        <Link href="/admin/soal" className="underline">
+                          tambahkan soal dulu di /admin/soal
+                        </Link>
+                        .
                       </p>
                     )}
                   {soalUntukPemilihan.map((soal) => (
@@ -1909,7 +1920,7 @@ export default function AdminKegiatanDetailPage({
             <button
               type="submit"
               disabled={savingModul}
-              className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
               {memverifikasiAtestasi
                 ? "Memverifikasi..."
@@ -1923,7 +1934,7 @@ export default function AdminKegiatanDetailPage({
               <button
                 type="button"
                 onClick={resetModulForm}
-                className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
               >
                 Batal
               </button>
@@ -1935,7 +1946,74 @@ export default function AdminKegiatanDetailPage({
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-black dark:text-zinc-50">Daftar modul</h2>
-        <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+
+        {loadingModul && <p className="text-sm text-zinc-500">Memuat...</p>}
+        {!loadingModul && modulListError && (
+          <p className="text-sm text-red-600">Gagal memuat modul: {modulListError}</p>
+        )}
+        {!loadingModul && !modulListError && modulList.length === 0 && (
+          <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+            <p className="text-sm font-medium text-black dark:text-zinc-50">Belum ada modul.</p>
+            <p className="mt-1 text-sm text-zinc-500">
+              {izin.suntingKegiatan
+                ? "Tambahkan modul referensi, evaluasi, atau atestasi lewat form di atas."
+                : "Panitia yang berwenang menyunting kegiatan ini belum menambahkan modul apa pun."}
+            </p>
+          </div>
+        )}
+
+        {!loadingModul && !modulListError && modulList.length > 0 && (
+        <>
+        {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+        <ul className="space-y-3 sm:hidden">
+          {modulList.map((modul) => (
+            <li
+              key={modul.id}
+              className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <p className="font-medium text-black dark:text-zinc-50">
+                {modul.urutan}. {modul.judul}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Wajib: </span>
+                {modul.wajib ? "Ya" : "Tidak"}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Nilai min.: </span>
+                {modul.kategori === "atestasi"
+                  ? (modul.atestasi?.targetSkor ?? "-")
+                  : (modul.evaluasi?.nilaiMinimum ?? "-")}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Sumber soal: </span>
+                {ringkasanModul(modul, topikLabel)}
+              </p>
+              {izin.suntingKegiatan ? (
+                <div className="flex gap-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => startEditModul(modul)}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                  >
+                    Sunting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteModul(modul.id)}
+                    disabled={deletingModulId === modul.id}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    Hapus
+                  </button>
+                </div>
+              ) : (
+                <p className="text-xs text-zinc-400">Hanya lihat</p>
+              )}
+            </li>
+          ))}
+        </ul>
+
+        <div className="hidden rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
               <tr>
@@ -1948,27 +2026,6 @@ export default function AdminKegiatanDetailPage({
               </tr>
             </thead>
             <tbody>
-              {loadingModul && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                    Memuat...
-                  </td>
-                </tr>
-              )}
-              {!loadingModul && modulListError && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-red-600">
-                    Gagal memuat modul: {modulListError}
-                  </td>
-                </tr>
-              )}
-              {!loadingModul && !modulListError && modulList.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                    Belum ada modul.
-                  </td>
-                </tr>
-              )}
               {modulList.map((modul) => (
                 <tr
                   key={modul.id}
@@ -1994,7 +2051,7 @@ export default function AdminKegiatanDetailPage({
                           <button
                             type="button"
                             onClick={() => startEditModul(modul)}
-                            className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                            className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
                           >
                             Sunting
                           </button>
@@ -2002,7 +2059,7 @@ export default function AdminKegiatanDetailPage({
                             type="button"
                             onClick={() => handleDeleteModul(modul.id)}
                             disabled={deletingModulId === modul.id}
-                            className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                            className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
                           >
                             Hapus
                           </button>
@@ -2017,6 +2074,8 @@ export default function AdminKegiatanDetailPage({
             </tbody>
           </table>
         </div>
+        </>
+        )}
       </section>
     </div>
   );

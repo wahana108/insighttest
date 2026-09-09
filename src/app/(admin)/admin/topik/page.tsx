@@ -199,7 +199,7 @@ function AdminTopikPageIsi() {
           <button
             type="submit"
             disabled={submitting}
-            className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+            className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
           >
             {editingKode ? "Simpan perubahan" : "Tambah topik"}
           </button>
@@ -207,7 +207,7 @@ function AdminTopikPageIsi() {
             <button
               type="button"
               onClick={cancelEdit}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
             >
               Batal
             </button>
@@ -215,84 +215,128 @@ function AdminTopikPageIsi() {
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-            <tr>
-              <th className="px-4 py-2 font-medium">Kode</th>
-              <th className="px-4 py-2 font-medium">Nama</th>
-              <th className="px-4 py-2 font-medium">Deskripsi</th>
-              <th className="px-4 py-2 font-medium">Urutan</th>
-              <th className="px-4 py-2 font-medium">Status</th>
-              <th className="px-4 py-2 font-medium" />
-            </tr>
-          </thead>
-          <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Memuat...
-                </td>
-              </tr>
-            )}
-            {!loading && listError && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-red-600">
-                  Gagal memuat topik: {listError}
-                </td>
-              </tr>
-            )}
-            {!loading && !listError && items.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-6 text-center text-zinc-500">
-                  Belum ada topik.
-                </td>
-              </tr>
-            )}
+      {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+      {!loading && listError && (
+        <p className="text-sm text-red-600">Gagal memuat topik: {listError}</p>
+      )}
+      {!loading && !listError && items.length === 0 && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">Belum ada topik.</p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Topik mengelompokkan bank soal per kategori. Isi form di atas untuk menambahkan
+            topik pertama.
+          </p>
+        </div>
+      )}
+
+      {!loading && !listError && items.length > 0 && (
+        <>
+          {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+          <ul className="space-y-3 sm:hidden">
             {items.map((item) => (
-              <tr
+              <li
                 key={item.kode}
-                className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
               >
-                <td className="px-4 py-2 font-mono text-black dark:text-zinc-50">
-                  {item.kode}
-                </td>
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.nama}</td>
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
-                  {item.deskripsi || "-"}
-                </td>
-                <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.urutan}</td>
-                <td className="px-4 py-2">
-                  {item.isActive ? (
-                    <span className="text-green-600">Aktif</span>
-                  ) : (
-                    <span className="text-zinc-500">Nonaktif</span>
-                  )}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  <div className="flex justify-end gap-3">
-                    <button
-                      type="button"
-                      onClick={() => startEdit(item)}
-                      className="text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
-                    >
-                      Sunting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => handleToggleActive(item)}
-                      disabled={togglingKode === item.kode}
-                      className="text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
-                    >
-                      {item.isActive ? "Nonaktifkan" : "Aktifkan"}
-                    </button>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="font-mono text-xs text-zinc-400">{item.kode}</p>
+                    <p className="font-medium text-black dark:text-zinc-50">{item.nama}</p>
                   </div>
-                </td>
-              </tr>
+                  {item.isActive ? (
+                    <span className="shrink-0 text-green-600">Aktif</span>
+                  ) : (
+                    <span className="shrink-0 text-zinc-500">Nonaktif</span>
+                  )}
+                </div>
+                <p className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-zinc-500">Deskripsi: </span>
+                  {item.deskripsi || "-"}
+                </p>
+                <p className="text-zinc-700 dark:text-zinc-300">
+                  <span className="text-zinc-500">Urutan: </span>
+                  {item.urutan}
+                </p>
+                <div className="flex gap-4 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => startEdit(item)}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                  >
+                    Sunting
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleToggleActive(item)}
+                    disabled={togglingKode === item.kode}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                  >
+                    {item.isActive ? "Nonaktifkan" : "Aktifkan"}
+                  </button>
+                </div>
+              </li>
             ))}
-          </tbody>
-        </table>
-      </div>
+          </ul>
+
+          <div className="hidden rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Kode</th>
+                  <th className="px-4 py-2 font-medium">Nama</th>
+                  <th className="px-4 py-2 font-medium">Deskripsi</th>
+                  <th className="px-4 py-2 font-medium">Urutan</th>
+                  <th className="px-4 py-2 font-medium">Status</th>
+                  <th className="px-4 py-2 font-medium" />
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((item) => (
+                  <tr
+                    key={item.kode}
+                    className="border-b border-zinc-100 last:border-0 dark:border-zinc-900"
+                  >
+                    <td className="px-4 py-2 font-mono text-black dark:text-zinc-50">
+                      {item.kode}
+                    </td>
+                    <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.nama}</td>
+                    <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">
+                      {item.deskripsi || "-"}
+                    </td>
+                    <td className="px-4 py-2 text-zinc-700 dark:text-zinc-300">{item.urutan}</td>
+                    <td className="px-4 py-2">
+                      {item.isActive ? (
+                        <span className="text-green-600">Aktif</span>
+                      ) : (
+                        <span className="text-zinc-500">Nonaktif</span>
+                      )}
+                    </td>
+                    <td className="px-4 py-2 text-right">
+                      <div className="flex justify-end gap-3">
+                        <button
+                          type="button"
+                          onClick={() => startEdit(item)}
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-zinc-700 hover:underline dark:text-zinc-300"
+                        >
+                          Sunting
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleToggleActive(item)}
+                          disabled={togglingKode === item.kode}
+                          className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-50"
+                        >
+                          {item.isActive ? "Nonaktifkan" : "Aktifkan"}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      )}
     </div>
   );
 }

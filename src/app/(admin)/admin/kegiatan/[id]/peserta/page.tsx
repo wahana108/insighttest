@@ -385,7 +385,7 @@ export default function AdminPesertaPage({
               type="button"
               onClick={() => handleUnduhRekap("koma")}
               disabled={mengunduh !== null}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
             >
               {mengunduh === "koma" ? "Mengunduh..." : "Unduh CSV (pemisah koma)"}
             </button>
@@ -393,7 +393,7 @@ export default function AdminPesertaPage({
               type="button"
               onClick={() => handleUnduhRekap("titik-koma")}
               disabled={mengunduh !== null}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
             >
               {mengunduh === "titik-koma" ? "Mengunduh..." : "Unduh CSV (pemisah titik koma)"}
             </button>
@@ -434,7 +434,7 @@ export default function AdminPesertaPage({
               type="button"
               onClick={handleKonfirmasiCabut}
               disabled={mencabut}
-              className="rounded bg-red-600 px-4 py-2 text-sm font-medium text-white disabled:opacity-50"
+              className="inline-flex min-h-11 items-center justify-center rounded bg-red-600 px-4 text-sm font-medium text-white disabled:opacity-50"
             >
               {mencabut ? "Mencabut..." : "Cabut sertifikat"}
             </button>
@@ -446,7 +446,7 @@ export default function AdminPesertaPage({
                 setErrorCabut(null);
               }}
               disabled={mencabut}
-              className="rounded border border-zinc-300 px-4 py-2 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
             >
               Batal
             </button>
@@ -460,7 +460,7 @@ export default function AdminPesertaPage({
           type="button"
           onClick={handleTerbitkanTerpilih}
           disabled={selected.size === 0 || menerbitkan}
-          className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
         >
           {menerbitkan
             ? progres
@@ -494,7 +494,140 @@ export default function AdminPesertaPage({
 
       {errorTerbitSatu && <p className="text-sm text-red-600">{errorTerbitSatu}</p>}
 
-      <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-800">
+      {loading && <p className="text-sm text-zinc-500">Memuat...</p>}
+      {!loading && error && (
+        <p className="text-sm text-red-600">Gagal memuat peserta: {error}</p>
+      )}
+      {!loading && !error && items.length === 0 && (
+        <div className="rounded-lg border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+          <p className="text-sm font-medium text-black dark:text-zinc-50">
+            Belum ada peserta terdaftar.
+          </p>
+          <p className="mt-1 text-sm text-zinc-500">
+            Peserta akan muncul di sini setelah mereka mendaftar sendiri ke kegiatan ini —
+            tidak ada tindakan admin yang bisa dilakukan dari sisi ini.
+          </p>
+        </div>
+      )}
+
+      {!loading && !error && items.length > 0 && (
+      <>
+      {/* Kartu di layar sempit — tabel di sm: ke atas (rule 9.2b). */}
+      <ul className="space-y-3 sm:hidden">
+        {items.map((item) => {
+          const terkunci = item.sertifikat?.status === "berlaku";
+          const materiAdmin = deskripsiMateriAdmin(item.prasyaratMateri);
+          return (
+            <li
+              key={item.uid}
+              className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+            >
+              <div className="flex items-start gap-3">
+                {izin.terbitkanSertifikat && (
+                  <input
+                    type="checkbox"
+                    checked={selected.has(item.uid)}
+                    onChange={() => toggleSelect(item.uid)}
+                    disabled={terkunci}
+                    aria-label={`Pilih ${item.namaLengkap}`}
+                    className="mt-1 h-5 w-5 shrink-0"
+                  />
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-black dark:text-zinc-50">
+                    {item.nomorUrut}. {item.namaLengkap}
+                  </p>
+                  <p className="break-words text-zinc-700 dark:text-zinc-300">{item.email}</p>
+                </div>
+              </div>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Institusi: </span>
+                {item.institusi || "-"}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Status: </span>
+                {item.status}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Nilai: </span>
+                {item.nilaiAkhir}
+                {" · "}
+                {item.items.filter((modul) => modul.lulus).length}/{item.items.length} modul
+                lulus
+              </p>
+              <div>
+                <span className="text-zinc-500">Kelayakan: </span>
+                {item.statusKelayakan === "layak" && item.bisaTerbit && (
+                  <span className="text-green-600">Layak</span>
+                )}
+                {item.statusKelayakan === "layak" && !item.bisaTerbit && (
+                  <span className="text-amber-600">Nilai OK, materi belum tuntas</span>
+                )}
+                {item.statusKelayakan === "belum_layak" && (
+                  <span className="text-red-600">Belum layak</span>
+                )}
+                {item.statusKelayakan === "ditentukan_admin" && (
+                  <span className="text-zinc-600 dark:text-zinc-400">Ditentukan admin</span>
+                )}
+                {item.statusKelayakan === "belum_layak" && (
+                  <p className="text-xs text-zinc-400">{item.alasanKelayakan}</p>
+                )}
+                {item.statusKelayakan === "ditentukan_admin" && (
+                  <p className="text-xs text-zinc-400">
+                    Kegiatan ini bersyarat manual — nilai di atas sebagai bahan pertimbangan.
+                  </p>
+                )}
+                {materiAdmin && <p className="text-xs text-zinc-400">{materiAdmin}</p>}
+              </div>
+              <p>
+                <span className="text-zinc-500">Sertifikat: </span>
+                {item.sertifikat ? (
+                  <span
+                    className={
+                      item.sertifikat.status === "berlaku" ? "text-green-600" : "text-zinc-400"
+                    }
+                  >
+                    {item.sertifikat.status === "berlaku" ? "Terbit" : "Dicabut"} ·{" "}
+                    <span className="font-mono">{item.sertifikat.serial}</span>
+                  </span>
+                ) : (
+                  <span className="text-zinc-400">Belum terbit</span>
+                )}
+              </p>
+              <div className="pt-1">
+                {!izin.terbitkanSertifikat ? (
+                  <span className="text-xs text-zinc-400">Hanya lihat</span>
+                ) : terkunci ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCabutTarget({ uid: item.uid, namaLengkap: item.namaLengkap })
+                    }
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline"
+                  >
+                    Cabut
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleTerbitkanSatu(item.uid)}
+                    disabled={menerbitkanSatuUid === item.uid || menerbitkan}
+                    className="inline-flex min-h-11 items-center text-sm font-medium text-black hover:underline disabled:opacity-50 dark:text-zinc-50"
+                  >
+                    {menerbitkanSatuUid === item.uid
+                      ? "Menerbitkan..."
+                      : item.sertifikat?.status === "dicabut"
+                        ? "Terbitkan ulang"
+                        : "Terbit"}
+                  </button>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-lg border border-zinc-200 sm:block dark:border-zinc-800">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-zinc-200 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
             <tr>
@@ -522,27 +655,6 @@ export default function AdminPesertaPage({
             </tr>
           </thead>
           <tbody>
-            {loading && (
-              <tr>
-                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-zinc-500">
-                  Memuat...
-                </td>
-              </tr>
-            )}
-            {!loading && error && (
-              <tr>
-                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-red-600">
-                  Gagal memuat peserta: {error}
-                </td>
-              </tr>
-            )}
-            {!loading && !error && items.length === 0 && (
-              <tr>
-                <td colSpan={izin.terbitkanSertifikat ? 11 : 10} className="px-4 py-6 text-center text-zinc-500">
-                  Belum ada peserta terdaftar.
-                </td>
-              </tr>
-            )}
             {items.map((item) => {
               const terkunci = item.sertifikat?.status === "berlaku";
               const materiAdmin = deskripsiMateriAdmin(item.prasyaratMateri);
@@ -627,7 +739,7 @@ export default function AdminPesertaPage({
                         onClick={() =>
                           setCabutTarget({ uid: item.uid, namaLengkap: item.namaLengkap })
                         }
-                        className="text-sm font-medium text-red-600 hover:underline"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline"
                       >
                         Cabut
                       </button>
@@ -636,7 +748,7 @@ export default function AdminPesertaPage({
                         type="button"
                         onClick={() => handleTerbitkanSatu(item.uid)}
                         disabled={menerbitkanSatuUid === item.uid || menerbitkan}
-                        className="text-sm font-medium text-black hover:underline disabled:opacity-50 dark:text-zinc-50"
+                        className="inline-flex min-h-11 items-center text-sm font-medium text-black hover:underline disabled:opacity-50 dark:text-zinc-50"
                       >
                         {menerbitkanSatuUid === item.uid
                           ? "Menerbitkan..."
@@ -652,6 +764,8 @@ export default function AdminPesertaPage({
           </tbody>
         </table>
       </div>
+      </>
+      )}
     </div>
   );
 }
