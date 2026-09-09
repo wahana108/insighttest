@@ -53,10 +53,12 @@ function ModulReferensi({ modul, kegiatanId }: { modul: ModulKegiatan; kegiatanI
         (videoId ? (
           <div className="mx-auto aspect-video w-full max-w-[390px] overflow-hidden rounded-lg bg-black">
             <iframe
-              src={`https://www.youtube-nocookie.com/embed/${videoId}`}
+              // playsinline+rel HANYA di titik tampil — referensi.sumber di
+              // Firestore tidak disentuh (Slice 9.1a §3).
+              src={`https://www.youtube-nocookie.com/embed/${videoId}?playsinline=1&rel=0`}
               title={modul.judul}
               className="h-full w-full"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
               allowFullScreen
             />
           </div>
@@ -235,15 +237,76 @@ function ModulAtestasi({
     return () => document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
 
+  // Cadangan untuk Safari/iOS — Fullscreen API tidak didukung di sana
+  // untuk elemen selain <video>, requestFullscreen() gagal diam-diam.
+  // "Layar penuh palsu": wadah yang SAMA (fullscreenWrapperRef) diberi
+  // fixed inset-0 lewat className kondisional — iframe di dalamnya tidak
+  // pernah dibongkar-pasang, cuma className wadah luar yang berubah.
+  const [fakeFullscreen, setFakeFullscreen] = useState(false);
+  const fakeFullscreenPushedRef = useRef(false);
+
+  useEffect(() => {
+    if (!fakeFullscreen) {
+      return;
+    }
+    function onPopState() {
+      setFakeFullscreen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setFakeFullscreen(false);
+      }
+    }
+    const overflowSebelumnya = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    window.addEventListener("popstate", onPopState);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.body.style.overflow = overflowSebelumnya;
+      window.removeEventListener("popstate", onPopState);
+      document.removeEventListener("keydown", onKeyDown);
+      fakeFullscreenPushedRef.current = false;
+    };
+  }, [fakeFullscreen]);
+
+  function masukLayarPenuhPalsu() {
+    // Entri riwayat kosong (URL tidak berubah) — supaya tombol Kembali
+    // perangkat (popstate) maupun swipe-back iOS keluar dari mode ini,
+    // bukan berpindah halaman sungguhan.
+    fakeFullscreenPushedRef.current = true;
+    window.history.pushState({ atestasiLayarPenuhPalsu: true }, "");
+    setFakeFullscreen(true);
+  }
+
   // Dipanggil dari onClick tombol — requestFullscreen() HARUS berasal dari
   // gestur pengguna langsung (klik ini), tidak boleh dari effect/async
   // yang tertunda, atau browser menolaknya.
   function toggleFullscreen() {
     if (document.fullscreenElement) {
       void document.exitFullscreen();
-    } else {
-      void fullscreenWrapperRef.current?.requestFullscreen();
+      return;
     }
+    if (fakeFullscreen) {
+      if (fakeFullscreenPushedRef.current) {
+        window.history.back();
+      } else {
+        setFakeFullscreen(false);
+      }
+      return;
+    }
+    let hasil: Promise<void> | undefined;
+    try {
+      hasil = fullscreenWrapperRef.current?.requestFullscreen();
+    } catch {
+      hasil = undefined;
+    }
+    if (!hasil) {
+      masukLayarPenuhPalsu();
+      return;
+    }
+    hasil.catch(() => {
+      masukLayarPenuhPalsu();
+    });
   }
 
   async function kirimLaporan(opsi: { paksa?: boolean } = {}) {
@@ -478,10 +541,23 @@ function ModulAtestasi({
         </div>
       )}
 
-      {/* Wadah ini yang di-fullscreen — bilah status IKUT masuk supaya
-          tetap terlihat saat layar penuh (§2, Slice 7.2a). */}
-      <div ref={fullscreenWrapperRef} className="bg-black">
-        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100">
+      {/* Wadah ini yang di-fullscreen (asli maupun palsu) — bilah status
+          IKUT masuk supaya tombol "Keluar layar penuh" tetap terlihat
+          (§2, Slice 7.2a; cadangan iOS, Slice 9.1a). Hanya className yang
+          berubah antar mode — anak-anaknya (termasuk iframe) tidak pernah
+          dibongkar-pasang. */}
+      <div
+        ref={fullscreenWrapperRef}
+        className={fakeFullscreen ? "fixed inset-0 z-50 flex flex-col bg-black" : "bg-black"}
+      >
+        <div
+          className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 bg-zinc-900 px-3 py-1.5 text-xs text-zinc-100"
+          style={
+            fakeFullscreen
+              ? { paddingTop: "max(0.375rem, env(safe-area-inset-top))" }
+              : undefined
+          }
+        >
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1">
             {durasiDiketahui ? (
               <>
@@ -503,18 +579,25 @@ function ModulAtestasi({
           <button
             type="button"
             onClick={toggleFullscreen}
-            className="shrink-0 rounded border border-zinc-600 px-2 py-1 font-medium text-zinc-100"
+            className="flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded border border-zinc-600 px-3 font-medium text-zinc-100"
           >
-            {isFullscreen ? "Keluar layar penuh" : "Layar penuh"}
+            {isFullscreen || fakeFullscreen ? "Keluar layar penuh" : "Layar penuh"}
           </button>
         </div>
-        <div className="aspect-video max-h-[80vh] w-full overflow-hidden">
+        <div
+          className={
+            fakeFullscreen
+              ? "w-full flex-1 overflow-hidden"
+              : "h-[min(78svh,700px)] w-full landscape:aspect-video landscape:h-auto landscape:max-h-[80vh] landscape:overflow-hidden"
+          }
+        >
           <iframe
             ref={iframeRef}
             src={atestasi.sumberUrl}
             title={modul.judul}
             className="h-full w-full"
-            allow="autoplay; fullscreen"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; fullscreen"
+            allowFullScreen
           />
         </div>
       </div>
