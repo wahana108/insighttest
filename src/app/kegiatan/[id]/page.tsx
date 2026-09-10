@@ -433,7 +433,7 @@ export default function KegiatanDetailPage({
                 </ul>
                 <p className="mt-2 text-xs text-zinc-500">
                   Diambil dari{" "}
-                  <Link href="/profil" className="underline">
+                  <Link href={`/profil?untuk=${id}`} className="underline">
                     halaman Profil
                   </Link>
                   . Sunting di sana kalau perlu diubah atau dilengkapi.
@@ -443,7 +443,7 @@ export default function KegiatanDetailPage({
             {namaLengkapKosong && (
               <p className="text-sm text-amber-600">
                 Lengkapi nama lengkap Anda di{" "}
-                <Link href="/profil" className="underline">
+                <Link href={`/profil?untuk=${id}`} className="underline">
                   halaman Profil
                 </Link>{" "}
                 sebelum mendaftar.
@@ -452,7 +452,7 @@ export default function KegiatanDetailPage({
             {!namaLengkapKosong && !hasilFormulir.valid && (
               <p className="text-sm text-amber-600">
                 {hasilFormulir.pesan}{" "}
-                <Link href="/profil" className="underline">
+                <Link href={`/profil?untuk=${id}`} className="underline">
                   Lengkapi di halaman Profil
                 </Link>
                 .

@@ -151,6 +151,8 @@ async function main(): Promise<void> {
       email: `${uid}@example.invalid`,
       namaLengkap: d.nama,
       institusi: "Data uji Slice 5.2 — aman dihapus (lihat --bersihkan)",
+      nomorIdentitas: "",
+      noTelepon: "",
       // Sentinel di luar rentang normal — TIDAK menaikkan
       // kegiatan/{id}.nomorUrutTerakhir yang sungguhan (itu akan menyentuh
       // dokumen lain, dilarang oleh skrip ini).

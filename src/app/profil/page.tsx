@@ -1,9 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
+import { LABEL_FIELD_FORMULIR } from "@/lib/formulir-peserta";
+import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { updateProfilPeserta } from "@/lib/services/profil";
 
 interface FormState {
@@ -13,9 +15,73 @@ interface FormState {
   noTelepon: string;
 }
 
+function labelInstitusi(wajib: boolean): string {
+  return wajib ? "Institusi / asal (wajib)" : "Institusi / asal";
+}
+
+function labelNomorIdentitas(wajib: boolean): string {
+  return wajib ? "Nomor identitas (NIP/NIK/NIM, wajib)" : "Nomor identitas (NIP/NIK/NIM, opsional)";
+}
+
+function labelNoTelepon(wajib: boolean): string {
+  return wajib ? "No. telepon (wajib)" : "No. telepon (opsional)";
+}
+
+/**
+ * useSearchParams() (untuk ?untuk={kegiatanId}, Bagian 2) mensyaratkan
+ * Suspense boundary supaya /profil tetap bisa diprarender statis — tanpa
+ * ini `next build` gagal ("should be wrapped in a suspense boundary").
+ * Fallback sama dengan keadaan "Memuat..." di ProfilContent supaya tidak
+ * ada kedipan tampilan yang beda.
+ */
 export default function ProfilPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex min-h-screen flex-1 items-center justify-center bg-zinc-50 dark:bg-black">
+          <p className="text-zinc-500">Memuat...</p>
+        </div>
+      }
+    >
+      <ProfilContent />
+    </Suspense>
+  );
+}
+
+function ProfilContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const untukKegiatanId = searchParams.get("untuk");
   const { user, profile, loading } = useAuth();
+
+  // Bagian 2 (Slice 6.1a): peserta yang tombol Daftar-nya terkunci diarahkan
+  // ke sini dengan ?untuk={kegiatanId} — HANYA sebuah id, tidak pernah nama
+  // kegiatan mentah dari URL (2e: jangan pernah menampilkan teks dari URL
+  // ke halaman). Nama & field wajib SELALU dibaca dari data lewat id ini.
+  const { items: kegiatanList } = useKegiatanList({ hanyaTerbit: true });
+  const kegiatanUntuk = useMemo(
+    () =>
+      untukKegiatanId
+        ? kegiatanList.find((item) => item.id === untukKegiatanId && !item.isArchived) ?? null
+        : null,
+    [kegiatanList, untukKegiatanId]
+  );
+  // id yang tidak ditemukan, kegiatan diarsipkan, atau peserta tidak
+  // berhak melihatnya (rules: hanya kegiatan isPublished true yang masuk
+  // daftar ini) → kegiatanUntuk null → halaman tampil PERSIS seperti
+  // /profil biasa (2d/2e), tanpa satu pun tanda wajib.
+  const fieldWajibUntukKegiatan = useMemo(
+    () =>
+      kegiatanUntuk
+        ? (["institusi", "nomorIdentitas", "noTelepon"] as const).filter(
+            (field) => kegiatanUntuk.formulirPeserta[field] === "wajib"
+          )
+        : [],
+    [kegiatanUntuk]
+  );
+  const institusiWajib = fieldWajibUntukKegiatan.includes("institusi");
+  const nomorIdentitasWajib = fieldWajibUntukKegiatan.includes("nomorIdentitas");
+  const noTeleponWajib = fieldWajibUntukKegiatan.includes("noTelepon");
 
   const [form, setForm] = useState<FormState | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -47,6 +113,13 @@ export default function ProfilPage() {
     setSubmitting(true);
     try {
       await updateProfilPeserta(user.uid, form);
+      // 2c: kembali ke kegiatan asal HANYA kalau konteksnya benar-benar
+      // terverifikasi lewat data (kegiatanUntuk non-null) — bukan cuma
+      // karena parameter ada di URL, yang bisa saja basi atau salah ketik.
+      if (kegiatanUntuk) {
+        router.push(`/kegiatan/${kegiatanUntuk.id}`);
+        return;
+      }
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan profil.");
@@ -73,6 +146,12 @@ export default function ProfilPage() {
     );
   }
 
+  const labelWajibList = fieldWajibUntukKegiatan.map((field) => LABEL_FIELD_FORMULIR[field]);
+  const daftarFieldWajibTeks =
+    labelWajibList.length <= 1
+      ? labelWajibList[0]
+      : `${labelWajibList.slice(0, -1).join(", ")} dan ${labelWajibList[labelWajibList.length - 1]}`;
+
   return (
     <div className="flex min-h-screen flex-1 justify-center bg-zinc-50 px-4 py-10 dark:bg-black">
       <div className="w-full max-w-md space-y-6">
@@ -85,6 +164,13 @@ export default function ProfilPage() {
             Data ini dipakai saat Anda mendaftar ke kegiatan dan tercetak di sertifikat.
           </p>
         </div>
+
+        {kegiatanUntuk && fieldWajibUntukKegiatan.length > 0 && (
+          <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            Kegiatan «{kegiatanUntuk.judul}» mewajibkan {daftarFieldWajibTeks}. Lengkapi lalu
+            simpan untuk melanjutkan pendaftaran.
+          </p>
+        )}
 
         <form
           onSubmit={handleSubmit}
@@ -120,7 +206,7 @@ export default function ProfilPage() {
               htmlFor="institusi"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Institusi / asal
+              {labelInstitusi(institusiWajib)}
             </label>
             <input
               id="institusi"
@@ -136,7 +222,7 @@ export default function ProfilPage() {
               htmlFor="nomorIdentitas"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              Nomor identitas (NIP/NIK/NIM, opsional)
+              {labelNomorIdentitas(nomorIdentitasWajib)}
             </label>
             <input
               id="nomorIdentitas"
@@ -154,7 +240,7 @@ export default function ProfilPage() {
               htmlFor="noTelepon"
               className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
             >
-              No. telepon (opsional)
+              {labelNoTelepon(noTeleponWajib)}
             </label>
             <input
               id="noTelepon"

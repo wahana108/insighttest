@@ -104,6 +104,7 @@ function pesertaDasar(override: Partial<RekapPesertaBaris>): RekapPesertaBaris {
     institusi: "",
     nomorIdentitas: "",
     noTelepon: "",
+    identitasDariProfil: false,
     status: "terdaftar",
     nilaiAkhir: 0,
     // Bawaan: kedua modul evaluasi SUDAH ada di snapshot peserta ini —
@@ -123,7 +124,7 @@ function pesertaDasar(override: Partial<RekapPesertaBaris>): RekapPesertaBaris {
 uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan satu kolom per modul atestasi", () => {
   const [header] = susunBarisRekap(KEGIATAN, []);
   assert.deepEqual(header, [
-    "No.", "Nama", "Email", "Institusi", "Nomor Identitas", "No. Telepon",
+    "No.", "Nama", "Email", "Institusi", "Nomor Identitas", "No. Telepon", "Sumber Identitas",
     "Status Pendaftaran", "Nilai Akhir",
     "Skor: Evaluasi Satu", "Lulus: Evaluasi Satu",
     "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua",
@@ -137,10 +138,10 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
 // evaluasi — HARUS bisa dibedakan dari CSV-nya saja, tanpa membuka
 // pendaftaran mentahnya. Indeks kolom: 8 = Skor eval-1, 9 = Lulus eval-1,
 // 10 = Skor eval-2, 11 = Lulus eval-2 (setelah 8 kolom tetap di depan).
-const IDX_SKOR_EVAL_1 = 8;
-const IDX_LULUS_EVAL_1 = 9;
-const IDX_SKOR_EVAL_2 = 10;
-const IDX_LULUS_EVAL_2 = 11;
+const IDX_SKOR_EVAL_1 = 9;
+const IDX_LULUS_EVAL_1 = 10;
+const IDX_SKOR_EVAL_2 = 11;
+const IDX_LULUS_EVAL_2 = 12;
 
 uji("susunBarisRekap: modul TIDAK ADA di modulSnapshot peserta -> sel \"-\" (bukan kosong, bukan 0)", () => {
   const peserta = pesertaDasar({
@@ -193,7 +194,7 @@ uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di d
 
   const [, barisTanpa] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaTanpaAtestasi]);
   const [, barisBelum] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaBelumTuntasAtestasi]);
-  const idxAtestasi = 8; // setelah 8 kolom tetap, kegiatan ini tidak punya modul evaluasi
+  const idxAtestasi = 9; // setelah 9 kolom tetap, kegiatan ini tidak punya modul evaluasi
   assert.equal(barisTanpa[idxAtestasi], "-", "at-1 tidak ada di snapshot peserta -> \"-\"");
   assert.equal(
     barisBelum[idxAtestasi],
@@ -243,6 +244,66 @@ uji("susunBarisRekap: sertifikat DICABUT tetap punya kode verifikasi di CSV (Sli
     "Kode verifikasi HARUS tetap terekspor untuk sertifikat dicabut — hanya belum-terbit yang kosong"
   );
   assert.equal(baris[idxKode - 2], "Dicabut", "kolom Status Sertifikat harus tetap menandai dicabut");
+});
+
+// ---------------------------------------------------------------------
+// Slice 6.1a: kolom "Sumber Identitas" — nomorIdentitas/noTelepon dibekukan
+// saat mendaftar; pendaftaran dari SEBELUM slice ini tidak punya field itu
+// sama sekali dan jatuh ke fallback profil (KA-5/KA-6, pelajaran sel
+// berbohong Slice 8.3a: fallback itu HARUS ditandai, tidak diam-diam).
+// ---------------------------------------------------------------------
+const IDX_NOMOR_IDENTITAS = 4;
+const IDX_NO_TELEPON = 5;
+const IDX_SUMBER_IDENTITAS = 6;
+
+uji("susunBarisRekap: pendaftaran dengan field beku (identitasDariProfil=false) -> \"Dibekukan saat mendaftar\"", () => {
+  const peserta = pesertaDasar({
+    nomorIdentitas: "3201xxxx0001",
+    noTelepon: "0812xxxx0001",
+    identitasDariProfil: false,
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_NOMOR_IDENTITAS], "3201xxxx0001");
+  assert.equal(baris[IDX_NO_TELEPON], "0812xxxx0001");
+  assert.equal(baris[IDX_SUMBER_IDENTITAS], "Dibekukan saat mendaftar");
+});
+
+uji("susunBarisRekap: pendaftaran lama tanpa field beku (identitasDariProfil=true) -> \"Profil saat ini (belum dibekukan)\"", () => {
+  const peserta = pesertaDasar({
+    // Nilai yang tetap terisi di sini MENIRU fallback yang sudah dibaca
+    // Route Handler dari users/{uid} — susunBarisRekap() sendiri tidak
+    // pernah membaca Firestore, ia cuma menampilkan apa yang dioper.
+    nomorIdentitas: "3201yyyy0002",
+    noTelepon: "0812yyyy0002",
+    identitasDariProfil: true,
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_NOMOR_IDENTITAS], "3201yyyy0002");
+  assert.equal(baris[IDX_NO_TELEPON], "0812yyyy0002");
+  assert.equal(baris[IDX_SUMBER_IDENTITAS], "Profil saat ini (belum dibekukan)");
+});
+
+uji("susunBarisRekap: campuran pendaftaran beku dan lama dalam SATU kegiatan -> tiap baris menandai sumbernya sendiri", () => {
+  const pesertaBeku = pesertaDasar({
+    namaLengkap: "Peserta Baru",
+    nomorIdentitas: "111",
+    noTelepon: "222",
+    identitasDariProfil: false,
+  });
+  const pesertaLama = pesertaDasar({
+    namaLengkap: "Peserta Lama",
+    nomorIdentitas: "333",
+    noTelepon: "444",
+    identitasDariProfil: true,
+  });
+  const [, barisBeku, barisLama] = susunBarisRekap(KEGIATAN, [pesertaBeku, pesertaLama]);
+  assert.equal(barisBeku[IDX_SUMBER_IDENTITAS], "Dibekukan saat mendaftar");
+  assert.equal(barisLama[IDX_SUMBER_IDENTITAS], "Profil saat ini (belum dibekukan)");
+  assert.notEqual(
+    barisBeku[IDX_SUMBER_IDENTITAS],
+    barisLama[IDX_SUMBER_IDENTITAS],
+    "dua peserta dalam kegiatan yang sama harus bisa punya sumber identitas berbeda"
+  );
 });
 
 console.log(`\n${lulus} lulus, ${gagal} gagal.`);

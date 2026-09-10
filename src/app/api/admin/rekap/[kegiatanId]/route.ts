@@ -202,10 +202,13 @@ export async function GET(
       });
     });
 
-    // nomorIdentitas/noTelepon HANYA ada di profil pengguna (users/{uid}),
-    // tidak pernah dibekukan ke dokumen pendaftaran (lihat POST
-    // /api/pendaftaran) — satu getAll() untuk semua peserta sekaligus,
-    // bukan satu per satu.
+    // Slice 6.1a: nomorIdentitas/noTelepon SEKARANG dibekukan ke dokumen
+    // pendaftaran saat mendaftar (sama seperti institusi) — lihat POST
+    // /api/pendaftaran. Join ke users/{uid} di bawah TETAP ada, tapi
+    // HANYA sebagai fallback untuk pendaftaran dari SEBELUM slice ini
+    // (field itu tidak ada sama sekali pada dokumennya) — bukan lagi
+    // sumber utama. Satu getAll() untuk semua peserta sekaligus, bukan
+    // satu per satu.
     const uids = pendaftaranSnap.docs
       .map((doc) => doc.data().uid)
       .filter((uid): uid is string => typeof uid === "string" && uid.length > 0);
@@ -262,6 +265,15 @@ export async function GET(
         hasilAtestasi[item.modulId] = item.tingkat;
       }
 
+      // Slice 6.1a: kalau field beku TIDAK ADA sama sekali pada dokumen ini
+      // (pendaftaran dari sebelum slice ini), jatuh ke profil SAAT INI —
+      // TAPI tandai identitasDariProfil supaya CSV tidak diam-diam
+      // mengklaim nilai itu sebagai catatan resmi saat mendaftar (KA-5/KA-6,
+      // dan pelajaran sel-berbohong Slice 8.3a). typeof-check, bukan `??`,
+      // karena string kosong yang BEKU (peserta memang tak punya nomor)
+      // harus berbeda dari field yang belum pernah dibekukan sama sekali.
+      const nomorIdentitasBeku = typeof data.nomorIdentitas === "string";
+      const noTeleponBeku = typeof data.noTelepon === "string";
       const identitas = userByUid.get(uid);
 
       return {
@@ -269,8 +281,11 @@ export async function GET(
         namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
         email: typeof data.email === "string" ? data.email : "",
         institusi: typeof data.institusi === "string" ? data.institusi : "",
-        nomorIdentitas: identitas?.nomorIdentitas ?? "",
-        noTelepon: identitas?.noTelepon ?? "",
+        nomorIdentitas: nomorIdentitasBeku
+          ? (data.nomorIdentitas as string)
+          : identitas?.nomorIdentitas ?? "",
+        noTelepon: noTeleponBeku ? (data.noTelepon as string) : identitas?.noTelepon ?? "",
+        identitasDariProfil: !nomorIdentitasBeku || !noTeleponBeku,
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",
         nilaiAkhir: kelayakan.nilaiAkhir,
         modulEvaluasiDiSnapshot,

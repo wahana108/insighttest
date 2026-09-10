@@ -32,6 +32,16 @@ export interface RekapPesertaBaris {
   institusi: string;
   nomorIdentitas: string;
   noTelepon: string;
+  /**
+   * Slice 6.1a: true kalau nomorIdentitas DAN/ATAU noTelepon di atas TIDAK
+   * berasal dari dokumen pendaftaran yang beku, melainkan fallback live
+   * dari users/{uid} — karena pendaftaran ini dibuat SEBELUM Slice 6.1a
+   * (field itu belum ada sama sekali saat itu). Dipakai susunBarisRekap()
+   * untuk mengisi kolom "Sumber Identitas" secara EKSPLISIT, bukan
+   * membiarkan sel kosong berbohong tentang dari mana nilainya datang
+   * (pelajaran Slice 8.3a — sel yang ambigu sudah pernah menggigit).
+   */
+  identitasDariProfil: boolean;
   status: StatusPendaftaran;
   nilaiAkhir: number;
   /**
@@ -89,6 +99,11 @@ const LABEL_STATUS_SERTIFIKAT: Record<StatusSertifikat, string> = {
   dicabut: "Dicabut",
 };
 
+const LABEL_SUMBER_IDENTITAS = {
+  beku: "Dibekukan saat mendaftar",
+  profil: "Profil saat ini (belum dibekukan)",
+};
+
 /**
  * Fungsi murni — tidak menyentuh Firestore. Kolom modul evaluasi/atestasi
  * ditentukan dari kegiatan.modul (urutan SAAT INI), bukan dari gabungan
@@ -127,6 +142,7 @@ export function susunBarisRekap(
     "Institusi",
     "Nomor Identitas",
     "No. Telepon",
+    "Sumber Identitas",
     "Status Pendaftaran",
     "Nilai Akhir",
     ...modulEvaluasi.flatMap((m) => [`Skor: ${m.judul}`, `Lulus: ${m.judul}`]),
@@ -161,6 +177,7 @@ export function susunBarisRekap(
       peserta.institusi,
       peserta.nomorIdentitas,
       peserta.noTelepon,
+      peserta.identitasDariProfil ? LABEL_SUMBER_IDENTITAS.profil : LABEL_SUMBER_IDENTITAS.beku,
       LABEL_STATUS_PENDAFTARAN[peserta.status],
       peserta.nilaiAkhir,
       ...kolomEvaluasi,

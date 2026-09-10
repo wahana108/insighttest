@@ -42,6 +42,20 @@ export interface Pendaftaran {
   email: string;
   namaLengkap: string;
   institusi: string;
+  /**
+   * Slice 6.1a: dibekukan dari profil SAAT MENDAFTAR, sama seperti
+   * institusi — bukan dibaca live dari users/{uid} (itu yang membuat
+   * rekap kegiatan lama berubah diam-diam kalau peserta menyunting
+   * profilnya bulan depan, melanggar KA-5/KA-6). Pendaftaran dari SEBELUM
+   * slice ini TIDAK PUNYA field ini SAMA SEKALI (bukan string kosong) —
+   * pembaca (rekap/CSV, src/app/api/admin/rekap/[kegiatanId]/route.ts)
+   * HARUS memeriksa `typeof data.nomorIdentitas === 'string'` secara
+   * eksplisit sebelum memakai default, dan menandai kalau jatuh ke
+   * fallback profil — jangan diam-diam menganggapnya string kosong yang
+   * beku (itu klaim palsu tentang peserta yang memang tidak punya nomor).
+   */
+  nomorIdentitas: string;
+  noTelepon: string;
   nomorUrut: number;
   modulSnapshot: ModulSnapshotItem[];
   status: StatusPendaftaran;

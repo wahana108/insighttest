@@ -2049,3 +2049,33 @@ Ujinya lulus karena ia menguji **yang kita asumsikan**, bukan **yang kode lakuka
 >
 > Ini varian ketiga dari pelajaran yang sama sepanjang proyek ini: di tahap 9 kita menguji
 > kode yang tidak pernah dipasang; di sini kita menguji jalur yang tidak pernah dijalankan.
+
+### Rencana tahap 11 — ujian berbatas waktu (setelah tahap 6 & 10)
+
+Dicatat 10 Sep 2026. **Belum dikerjakan.** Parameternya sudah ada — modul evaluasi punya
+"Batas waktu (menit, opsional)" sejak tahap 3 — yang belum ada adalah **apa yang terjadi
+saat waktu habis**.
+
+**Tiga aturan yang menentukan rancangannya:**
+
+1. **Jam milik server, bukan browser.** Tenggat = waktu mulai `attempt` (dicatat server)
+   + batas waktu. Hitung mundur di layar hanya tampilan; ia tidak pernah memutuskan apa
+   pun. Jam browser bisa diubah peserta dalam dua klik.
+
+2. **Habis waktu berarti dikirim, bukan dikunci.** Mengunci tanpa mengirim menghukum
+   peserta atas hal yang bukan pengetahuannya — baterai habis, sinyal putus, tab tertutup.
+   Yang sudah dijawab harus tetap dinilai.
+
+3. **Server menolak jawaban yang datang setelah tenggat** (plus kelonggaran ~60 detik untuk
+   jaringan), dan menilai dari apa yang sudah tersimpan.
+
+**Konsekuensi yang membuat ini bukan slice kecil:** aturan 2 dan 3 hanya berarti kalau
+jawaban tersimpan **di server**, bukan hanya di browser. `pulihkanJawaban` sekarang
+menyelamatkan jawaban dari *refresh*, bukan dari perangkat yang mati. Simpan-otomatis ke
+server adalah tulisan Firestore berulang — dan kuota adalah batasan nyata proyek ini
+(20.000 tulis/hari). Rancangan yang masuk akal: simpan ter-*debounce* saat jawaban berubah,
+plus saat tab disembunyikan, bukan setiap beberapa detik. Untuk gelombang 30 orang itu
+ratusan tulis, bukan puluhan ribu — sama seperti pelajaran kuota di tahap 7.
+
+Karena menyentuh bentuk `attempt`, rules, dan kuota sekaligus, ini tahap tersendiri —
+bukan tempelan pada tahap 6.

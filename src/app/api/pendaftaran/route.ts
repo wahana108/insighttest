@@ -182,6 +182,10 @@ export async function POST(request: Request) {
         email: user.email,
         namaLengkap: user.namaLengkap,
         institusi: user.institusi,
+        // Slice 6.1a: dibekukan sama seperti institusi — sebelumnya hanya
+        // ada di profil dan dibaca live saat rekap dibuka (KA-5/KA-6).
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
         nomorUrut,
         modulSnapshot,
         status: "terdaftar",
