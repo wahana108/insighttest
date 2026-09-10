@@ -6,6 +6,7 @@ import { use, useEffect, useMemo, useState } from "react";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { formatDate, formatDateTime } from "@/lib/format-date";
+import { LABEL_FIELD_FORMULIR, periksaFormulirPeserta } from "@/lib/formulir-peserta";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
 import { useModulList } from "@/lib/hooks/use-modul-list";
@@ -218,6 +219,22 @@ export default function KegiatanDetailPage({
   const namaLengkapKosong = !profile?.namaLengkap?.trim();
   const jendelaStatus = statusJendelaKegiatan(kegiatan);
 
+  // Slice 6.1: field mana yang diminta kegiatan INI (bukan semua kegiatan)
+  // — bawaan 'tidak' untuk kegiatan lama membuat blok ini tidak tampil
+  // sama sekali (lihat FORMULIR_PESERTA_DEFAULT). Nilainya datang dari
+  // profil (diisi sekali di /profil, dipakai lintas kegiatan) — halaman
+  // ini hanya MENAMPILKAN dan MEMERIKSA, tidak punya input sendiri, supaya
+  // tidak ada dua tempat menyunting data yang sama.
+  const fieldFormulirDiminta = (["institusi", "nomorIdentitas", "noTelepon"] as const).filter(
+    (field) => kegiatan.formulirPeserta[field] !== "tidak"
+  );
+  const dataFormulirSaya = {
+    institusi: profile?.institusi ?? "",
+    nomorIdentitas: profile?.nomorIdentitas ?? "",
+    noTelepon: profile?.noTelepon ?? "",
+  };
+  const hasilFormulir = periksaFormulirPeserta(kegiatan.formulirPeserta, dataFormulirSaya);
+
   return (
     <div className="mx-auto min-h-screen max-w-2xl space-y-6 bg-zinc-50 px-4 py-10 dark:bg-black">
       <Link href="/kegiatan" className="text-sm text-zinc-500 hover:underline">
@@ -393,6 +410,36 @@ export default function KegiatanDetailPage({
           </p>
         ) : (
           <div className="space-y-3">
+            {fieldFormulirDiminta.length > 0 && (
+              <div className="rounded border border-zinc-200 p-3 text-sm dark:border-zinc-800">
+                <p className="mb-2 font-medium text-black dark:text-zinc-50">
+                  Data yang diminta kegiatan ini
+                </p>
+                <ul className="space-y-1">
+                  {fieldFormulirDiminta.map((field) => (
+                    <li key={field} className="flex flex-wrap items-baseline gap-x-2">
+                      <span className="text-zinc-500">
+                        {LABEL_FIELD_FORMULIR[field]}
+                        {kegiatan.formulirPeserta[field] === "wajib" && (
+                          <span className="text-red-600"> (wajib)</span>
+                        )}
+                        :
+                      </span>
+                      <span className="text-black dark:text-zinc-50">
+                        {dataFormulirSaya[field] || "(belum diisi)"}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-2 text-xs text-zinc-500">
+                  Diambil dari{" "}
+                  <Link href="/profil" className="underline">
+                    halaman Profil
+                  </Link>
+                  . Sunting di sana kalau perlu diubah atau dilengkapi.
+                </p>
+              </div>
+            )}
             {namaLengkapKosong && (
               <p className="text-sm text-amber-600">
                 Lengkapi nama lengkap Anda di{" "}
@@ -402,12 +449,23 @@ export default function KegiatanDetailPage({
                 sebelum mendaftar.
               </p>
             )}
+            {!namaLengkapKosong && !hasilFormulir.valid && (
+              <p className="text-sm text-amber-600">
+                {hasilFormulir.pesan}{" "}
+                <Link href="/profil" className="underline">
+                  Lengkapi di halaman Profil
+                </Link>
+                .
+              </p>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
             {sukses && <p className="text-sm text-green-600">{sukses}</p>}
             <button
               type="button"
               onClick={handleDaftar}
-              disabled={mendaftar || namaLengkapKosong || Boolean(sukses)}
+              disabled={
+                mendaftar || namaLengkapKosong || !hasilFormulir.valid || Boolean(sukses)
+              }
               className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
               {mendaftar ? "Mendaftar..." : "Daftar"}

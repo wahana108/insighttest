@@ -18,6 +18,8 @@ export interface VerifiedUser {
   status: UserStatus;
   namaLengkap: string;
   institusi: string;
+  nomorIdentitas: string;
+  noTelepon: string;
 }
 
 function isUserRole(value: unknown): value is UserRole {
@@ -68,5 +70,7 @@ export async function verifyRequest(req: Request): Promise<VerifiedUser> {
     status,
     namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
     institusi: typeof data.institusi === "string" ? data.institusi : "",
+    nomorIdentitas: typeof data.nomorIdentitas === "string" ? data.nomorIdentitas : "",
+    noTelepon: typeof data.noTelepon === "string" ? data.noTelepon : "",
   };
 }

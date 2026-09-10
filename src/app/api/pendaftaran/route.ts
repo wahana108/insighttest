@@ -1,6 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { mapFormulirPeserta, periksaFormulirPeserta } from "@/lib/formulir-peserta";
 import type { AmbangKeterlibatan, KategoriModul, ModeAmbangKeterlibatan } from "@/types/kegiatan";
 import type { ModulSnapshotItem } from "@/types/pendaftaran";
 
@@ -112,6 +113,20 @@ export async function POST(request: Request) {
       }
       if (ditutupPada && now > ditutupPada) {
         throw new PendaftaranRouteError(400, "Pendaftaran untuk kegiatan ini sudah ditutup.");
+      }
+
+      // Slice 6.1: penegakan SESUNGGUHNYA formulirPeserta ada di sini, bukan
+      // di klien — penjaga di src/app/kegiatan/[id]/page.tsx cuma
+      // kenyamanan. Hanya dijalankan saat pendaftaran BARU dibuat; peserta
+      // yang sudah terdaftar tidak pernah divalidasi ulang lewat jalur ini
+      // (KA-5, semangat yang sama dengan modulSnapshot).
+      const hasilFormulir = periksaFormulirPeserta(mapFormulirPeserta(kegiatanData.formulirPeserta), {
+        institusi: user.institusi,
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
+      });
+      if (!hasilFormulir.valid) {
+        throw new PendaftaranRouteError(400, hasilFormulir.pesan ?? "Data belum lengkap.");
       }
 
       const pendaftaranSnap = await tx.get(pendaftaranRef);

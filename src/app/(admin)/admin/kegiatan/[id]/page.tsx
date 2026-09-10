@@ -9,6 +9,7 @@ import {
   isoToDateValue,
   isoToTimeValue,
 } from "@/lib/datetime-local";
+import { LABEL_FIELD_FORMULIR } from "@/lib/formulir-peserta";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
@@ -34,6 +35,7 @@ import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import { verifikasiGameCcl } from "@/lib/verifikasi-atestasi-client";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
+  FormulirPeserta,
   JenisSyaratSertifikat,
   KategoriModul,
   Kegiatan,
@@ -41,9 +43,16 @@ import type {
   ModePemilihanSoal,
   ModulKegiatan,
   PanitiaIzin,
+  StatusFieldFormulir,
   TemplateSertifikat,
   TipeReferensi,
 } from "@/types/kegiatan";
+
+const STATUS_FIELD_FORMULIR_OPTIONS: { value: StatusFieldFormulir; label: string }[] = [
+  { value: "tidak", label: "Tidak diminta" },
+  { value: "opsional", label: "Opsional" },
+  { value: "wajib", label: "Wajib diisi" },
+];
 
 const KATEGORI_MODUL_OPTIONS: { value: KategoriModul; label: string }[] = [
   { value: "evaluasi", label: "Evaluasi" },
@@ -72,6 +81,7 @@ interface KegiatanFormState {
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
   templateSertifikat: TemplateSertifikat;
+  formulirPeserta: FormulirPeserta;
 }
 
 interface ModulFormState {
@@ -538,6 +548,7 @@ export default function AdminKegiatanDetailPage({
           syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
           syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
           templateSertifikat: kegiatan.templateSertifikat,
+          formulirPeserta: kegiatan.formulirPeserta,
         }
       : null);
 
@@ -614,8 +625,13 @@ export default function AdminKegiatanDetailPage({
           atestasiJadiSyarat: editingKegiatanForm.syaratAtestasiJadiSyarat,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
+        formulirPeserta: editingKegiatanForm.formulirPeserta,
       };
-      await updateKegiatan(id, input, user.uid);
+      // kodeSaatIni: kode YANG SUDAH TERSIMPAN di dokumen ini sebelum
+      // disunting — untuk panitia field ini `disabled` (lihat "det-kode"
+      // di bawah), jadi selalu sama, dan kodeSudahDipakai() (query yang
+      // ditolak rules untuk panitia) tidak pernah dijalankan untuk mereka.
+      await updateKegiatan(id, input, user.uid, kegiatan?.kode ?? input.kode);
       setKegiatanForm(null);
     } catch (err) {
       setKegiatanError(err instanceof Error ? err.message : "Gagal menyimpan kegiatan.");
@@ -1195,6 +1211,51 @@ export default function AdminKegiatanDetailPage({
                     </p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Formulir peserta
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Berlaku untuk pendaftaran baru saja — peserta yang sudah terdaftar tidak
+                  diminta melengkapi data dan tidak kehilangan kelayakan sertifikat kalau
+                  pengaturan ini diubah setelah mereka mendaftar.
+                </p>
+              </div>
+              <div className="grid gap-4 sm:grid-cols-3">
+                {(["institusi", "nomorIdentitas", "noTelepon"] as const).map((field) => (
+                  <div key={field}>
+                    <label
+                      htmlFor={`formulir-${field}`}
+                      className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                    >
+                      {LABEL_FIELD_FORMULIR[field]}
+                    </label>
+                    <select
+                      id={`formulir-${field}`}
+                      value={editingKegiatanForm.formulirPeserta[field]}
+                      onChange={(event) =>
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          formulirPeserta: {
+                            ...editingKegiatanForm.formulirPeserta,
+                            [field]: event.target.value as StatusFieldFormulir,
+                          },
+                        })
+                      }
+                      className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                    >
+                      {STATUS_FIELD_FORMULIR_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                ))}
               </div>
             </div>
 

@@ -9,6 +9,7 @@ import {
   isoToTimeValue,
 } from "@/lib/datetime-local";
 import { formatDateTime } from "@/lib/format-date";
+import { FORMULIR_PESERTA_DEFAULT } from "@/lib/formulir-peserta";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { useModulList } from "@/lib/hooks/use-modul-list";
 import { izinPanitia } from "@/lib/izin-panitia";
@@ -20,7 +21,12 @@ import {
   updateKegiatan,
   type KegiatanWriteInput,
 } from "@/lib/services/kegiatan";
-import type { JenisSyaratSertifikat, Kegiatan, TemplateSertifikat } from "@/types/kegiatan";
+import type {
+  FormulirPeserta,
+  JenisSyaratSertifikat,
+  Kegiatan,
+  TemplateSertifikat,
+} from "@/types/kegiatan";
 
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
 
@@ -37,6 +43,7 @@ interface FormState {
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
   templateSertifikat: TemplateSertifikat;
+  formulirPeserta: FormulirPeserta;
 }
 
 function emptyForm(): FormState {
@@ -53,6 +60,7 @@ function emptyForm(): FormState {
     syaratWajibBukaReferensi: false,
     syaratAtestasiJadiSyarat: false,
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
+    formulirPeserta: FORMULIR_PESERTA_DEFAULT,
   };
 }
 
@@ -120,8 +128,10 @@ export default function AdminKegiatanPage() {
       syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
       // Blok "Template sertifikat" disunting di /admin/kegiatan/[id], bukan
       // di sini — dioper apa adanya supaya "Simpan perubahan" di halaman
-      // ini tidak menimpanya jadi kosong.
+      // ini tidak menimpanya jadi kosong. Blok "Formulir peserta" (Slice
+      // 6.1) sama — disunting di /admin/kegiatan/[id].
       templateSertifikat: kegiatan.templateSertifikat,
+      formulirPeserta: kegiatan.formulirPeserta,
     });
   }
 
@@ -146,10 +156,15 @@ export default function AdminKegiatanPage() {
           atestasiJadiSyarat: form.syaratAtestasiJadiSyarat,
         },
         templateSertifikat: form.templateSertifikat,
+        formulirPeserta: form.formulirPeserta,
       };
 
       if (editingId) {
-        await updateKegiatan(editingId, input, user.uid);
+        // kodeSaatIni: kode YANG SUDAH TERSIMPAN sebelum disunting (bukan
+        // baca tambahan — dari daftar yang sudah dimuat) — lihat komentar
+        // updateKegiatan()/validasiKegiatan() di src/lib/services/kegiatan.ts.
+        const kodeSaatIni = items.find((item) => item.id === editingId)?.kode ?? form.kode;
+        await updateKegiatan(editingId, input, user.uid, kodeSaatIni);
       } else {
         await createKegiatan(input, user.uid);
       }

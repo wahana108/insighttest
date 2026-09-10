@@ -2001,3 +2001,51 @@ Isi email tetap berbahasa Inggris. Yang berhasil diubah dan yang paling penting:
 yang menentukan email terlihat sah atau seperti penipuan; bahasa isinya jauh kurang
 berdampak. Kalau suatu saat benar-benar dibutuhkan, jalurnya adalah SMTP kustom — bukan
 prioritas.
+
+### Slice 6.1 & 6.1-bug — formulir peserta, dan uji rules yang lulus palsu
+
+`formulirPeserta` ditambahkan sebagai pengaturan **per kegiatan**: `institusi`,
+`nomorIdentitas`, `noTelepon`, masing-masing `'tidak' | 'opsional' | 'wajib'`.
+
+Temuan yang menentukan bawaannya: ketiga field itu ternyata milik **profil akun**, bukan
+pendaftaran — hanya `institusi` yang disalin ke dokumen pendaftaran, dan tidak ada validasi
+wajib sama sekali kecuali `namaLengkap`. Karena itu bawaan untuk kegiatan lama harus
+`'tidak'`, bukan `'opsional'`: bawaan `'opsional'` akan memunculkan blok baru di halaman
+kegiatan lama, melanggar syarat "berperilaku persis seperti sekarang".
+
+Penegakan ada di Route Handler, di dalam transaksi, sebelum pendaftaran dibuat — bukan di
+klien. Dan **tidak surut ke belakang**: peserta yang sudah terdaftar tidak diminta melengkapi
+apa pun dan tidak kehilangan kelayakan, sama seperti `modulSnapshot` yang beku (KA-5).
+
+#### Panitia tiba-tiba tidak bisa menyimpan apa pun
+
+Gejala: `Missing or insufficient permissions` untuk panitia, sementara admin lancar.
+Dugaan pertama — `formulirPeserta` belum masuk `panitiaKegiatanKunciDiizinkan()` — **salah**;
+kunci itu sudah ada dan rules sudah terpasang (log deploy menyebut
+`already up to date, skipping upload`, yang membuktikan versi server identik dengan berkas
+lokal).
+
+Penyebab sebenarnya: `validasiKegiatan()` — dipanggil setiap `updateKegiatan()` — selalu
+menjalankan `kodeSudahDipakai()`, sebuah **query koleksi** yang bentuknya tidak diizinkan
+untuk non-admin.
+
+> **Yang ditolak bukan tulisannya, melainkan bacaannya.** Aturan Firestore menolak *bentuk
+> query*, bukan menyaring hasilnya — prinsip yang sudah tertulis sejak awal, tapi datang dari
+> arah yang tidak diduga. Pesan "insufficient permissions" pada sebuah tombol Simpan tidak
+> berarti tulisannya yang ditolak; bacaan apa pun di jalur yang sama bisa jadi pelakunya.
+
+Perbaikan: `kodeSaatIni` dioper dari `Kegiatan` yang sudah dimuat pemanggil, dan
+`kodeSudahDipakai()` dilewati kalau kode tidak berubah. Aman karena `kode` **tidak ada** di
+daftar izin panitia — rules yang menegakkan, bukan sekadar field yang di-*disable* di layar.
+
+#### Kenapa emulator meloloskannya kemarin
+
+CLI menyusun payload `updateDoc()` sendiri, dan tidak pernah memanggil `kodeSudahDipakai()`.
+Ujinya lulus karena ia menguji **yang kita asumsikan**, bukan **yang kode lakukan**.
+
+> **Uji rules harus menempuh jalur operasi yang sama dengan aplikasi** — seluruh rangkaian
+> baca dan tulisnya, bukan hanya tulisan terakhir yang kita karang. Payload buatan sendiri
+> menguji rule; ia tidak menguji kode.
+>
+> Ini varian ketiga dari pelajaran yang sama sepanjang proyek ini: di tahap 9 kita menguji
+> kode yang tidak pernah dipasang; di sini kita menguji jalur yang tidak pernah dijalankan.

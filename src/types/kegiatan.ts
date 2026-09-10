@@ -67,6 +67,22 @@ export interface PanitiaIzin {
   suntingKegiatan: boolean;
 }
 
+export type StatusFieldFormulir = "tidak" | "opsional" | "wajib";
+
+/**
+ * Slice 6.1 — apakah institusi/nomorIdentitas/noTelepon diminta saat
+ * peserta mendaftar ke KEGIATAN INI, dan apakah wajib. Berlaku hanya untuk
+ * pendaftaran baru (src/lib/formulir-peserta.ts, POST /api/pendaftaran) —
+ * tidak pernah memvalidasi ulang peserta yang sudah terdaftar. Kegiatan
+ * lama tidak punya field ini; mapKegiatan() memperlakukan itu sebagai
+ * 'tidak' untuk ketiganya (lihat FORMULIR_PESERTA_DEFAULT), bukan galat.
+ */
+export interface FormulirPeserta {
+  institusi: StatusFieldFormulir;
+  nomorIdentitas: StatusFieldFormulir;
+  noTelepon: StatusFieldFormulir;
+}
+
 export interface Kegiatan {
   id: string;
   /** Menyusun nomor serial sertifikat — lihat §10, docs/arsitektur.md. */
@@ -79,6 +95,7 @@ export interface Kegiatan {
   isArchived: boolean;
   syaratSertifikat: SyaratSertifikat;
   templateSertifikat: TemplateSertifikat;
+  formulirPeserta: FormulirPeserta;
   /**
    * panitiaUids DAN panitiaIzin selalu ditulis bersamaan (lihat
    * tetapkanPanitia()/ubahIzinPanitia()/cabutPanitia() di

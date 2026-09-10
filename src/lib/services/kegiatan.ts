@@ -13,7 +13,9 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { mapFormulirPeserta } from "@/lib/formulir-peserta";
 import type {
+  FormulirPeserta,
   JenisSyaratSertifikat,
   Kegiatan,
   PanitiaIzin,
@@ -154,6 +156,7 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     isArchived: typeof data.isArchived === "boolean" ? data.isArchived : false,
     syaratSertifikat: mapSyaratSertifikat(data.syaratSertifikat),
     templateSertifikat: mapTemplateSertifikat(data.templateSertifikat),
+    formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
     panitiaUids: mapPanitiaUids(data.panitiaUids),
     panitiaIzin: mapPanitiaIzin(data.panitiaIzin),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
@@ -171,13 +174,31 @@ export interface KegiatanWriteInput {
   ditutupPada: string | null;
   syaratSertifikat: SyaratSertifikat;
   templateSertifikat: TemplateSertifikat;
+  formulirPeserta: FormulirPeserta;
 }
 
 /**
  * Mengembalikan kode ternormalisasi supaya pemanggil (create/update) tidak
  * perlu menormalkan dua kali.
+ *
+ * `kodeSaatIni` (hanya untuk update, dari Kegiatan yang sudah dimuat
+ * pemanggil — bukan baca tambahan): kalau kode yang disunting SAMA dengan
+ * yang sudah tersimpan, kodeSudahDipakai() DILEWATI. Ini bukan cuma
+ * optimasi — field "Kode" di /admin/kegiatan/[id] sengaja `disabled` untuk
+ * panitia (hanya admin boleh mengubahnya), jadi bagi panitia kode yang
+ * disunting SELALU sama dengan yang tersimpan. kodeSudahDipakai() adalah
+ * query koleksi tanpa filter yang cocok dengan rule baca /kegiatan/{id}
+ * (isPublished/panitiaUids) — Firestore menolak bentuk query itu untuk
+ * siapa pun yang bukan admin, terlepas dari data aktualnya (query ditolak
+ * berdasarkan BENTUKNYA, bukan hasilnya). Melewatinya saat kode tidak
+ * berubah tidak melemahkan keunikan: kalau memang tidak berubah, ia sudah
+ * lolos unik saat terakhir disimpan.
  */
-async function validasiKegiatan(input: KegiatanWriteInput, excludeId?: string): Promise<string> {
+async function validasiKegiatan(
+  input: KegiatanWriteInput,
+  excludeId?: string,
+  kodeSaatIni?: string
+): Promise<string> {
   if (!input.judul.trim()) {
     throw new KegiatanError("Judul kegiatan wajib diisi.");
   }
@@ -194,7 +215,7 @@ async function validasiKegiatan(input: KegiatanWriteInput, excludeId?: string): 
   }
 
   const kode = normalizeKodeKegiatan(input.kode);
-  if (await kodeSudahDipakai(kode, excludeId)) {
+  if (kode !== kodeSaatIni && (await kodeSudahDipakai(kode, excludeId))) {
     throw new KegiatanError(
       "Kode kegiatan ini sudah dipakai kegiatan lain yang belum diarsipkan."
     );
@@ -228,6 +249,7 @@ export async function createKegiatan(
     isArchived: false,
     syaratSertifikat: input.syaratSertifikat,
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
+    formulirPeserta: input.formulirPeserta,
     panitiaUids: [],
     panitiaIzin: {},
     createdAt: now,
@@ -239,12 +261,19 @@ export async function createKegiatan(
   return record;
 }
 
+/**
+ * kodeSaatIni: Kegiatan.kode yang sudah dimuat pemanggil SEBELUM disunting
+ * (lihat komentar validasiKegiatan()) — wajib disertakan supaya panitia
+ * (yang tidak pernah benar-benar mengubah kode, field itu disabled untuk
+ * mereka) tidak memicu query kodeSudahDipakai() yang ditolak rules.
+ */
 export async function updateKegiatan(
   id: string,
   input: KegiatanWriteInput,
-  actorId: string
+  actorId: string,
+  kodeSaatIni: string
 ): Promise<void> {
-  const kode = await validasiKegiatan(input, id);
+  const kode = await validasiKegiatan(input, id, kodeSaatIni);
   await updateDoc(kegiatanRef(id), {
     kode,
     judul: input.judul.trim(),
@@ -253,6 +282,7 @@ export async function updateKegiatan(
     ditutupPada: input.ditutupPada,
     syaratSertifikat: input.syaratSertifikat,
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
+    formulirPeserta: input.formulirPeserta,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });
