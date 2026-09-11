@@ -2,7 +2,7 @@ import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import type { HasilUntukNilaiAtestasi } from "@/lib/atestasi-pernyataan";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { izinPanitia } from "@/lib/izin-panitia";
-import { evaluasiKelayakan, putuskanPenerbitan } from "@/lib/sertifikat-syarat";
+import { evaluasiKelayakan, putuskanPenerbitan, tentukanJenisSertifikat } from "@/lib/sertifikat-syarat";
 import type {
   AmbangKeterlibatan,
   JenisSyaratSertifikat,
@@ -15,7 +15,7 @@ import type {
   StatusPendaftaran,
   SumberPendaftaran,
 } from "@/types/pendaftaran";
-import type { StatusSertifikat } from "@/types/sertifikat";
+import type { JenisSertifikat, StatusSertifikat } from "@/types/sertifikat";
 import type { PesertaAdminRingkas } from "@/types/admin-pendaftaran";
 
 class AdminPendaftaranRouteError extends Error {
@@ -49,6 +49,12 @@ function isSumberPendaftaran(value: unknown): value is SumberPendaftaran {
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
   return value === "berlaku" || value === "dicabut";
+}
+
+// Slice 6.3 — sertifikat lama tanpa field jenis jatuh ke 'kelulusan',
+// bukan galat (satu-satunya jenis yang pernah terbit sebelum slice ini).
+function isJenisSertifikat(value: unknown): value is JenisSertifikat {
+  return value === "kelulusan" || value === "keikutsertaan";
 }
 
 function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
@@ -175,10 +181,19 @@ export async function GET(request: Request) {
       typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
     const atestasiJadiSyaratSyarat =
       typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
+    // Slice 6.3 — bawaan false SELALU, lihat komentar SyaratSertifikat.terbitkanKeikutsertaan.
+    const terbitkanKeikutsertaanSyarat =
+      typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
 
     const sertifikatByUid = new Map<
       string,
-      { id: string; serial: string; status: StatusSertifikat; kodeVerifikasi: string }
+      {
+        id: string;
+        serial: string;
+        status: StatusSertifikat;
+        kodeVerifikasi: string;
+        jenis: JenisSertifikat;
+      }
     >();
     sertifikatSnap.docs.forEach((doc) => {
       const data = doc.data();
@@ -191,6 +206,7 @@ export async function GET(request: Request) {
         serial: typeof data.serial === "string" ? data.serial : "",
         status: isStatusSertifikat(data.status) ? data.status : "berlaku",
         kodeVerifikasi: typeof data.kodeVerifikasi === "string" ? data.kodeVerifikasi : "",
+        jenis: isJenisSertifikat(data.jenis) ? data.jenis : "kelulusan",
       });
     });
 
@@ -209,10 +225,21 @@ export async function GET(request: Request) {
             nilaiMinimum: nilaiMinimumSyarat,
             wajibBukaReferensi: wajibBukaReferensiSyarat,
             atestasiJadiSyarat: atestasiJadiSyaratSyarat,
+            terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
           },
         }
       );
       const keputusan = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
+      // Slice 6.3 (BAGIAN d) — jenis yang AKAN dibekukan kalau admin
+      // menerbitkan sekarang, dihitung dengan fungsi murni yang SAMA
+      // dipakai terbitkanSertifikatUntuk() — supaya proyeksi yang admin
+      // lihat di rekap/konfirmasi tidak bisa diam-diam berbeda dari yang
+      // sungguhan terjadi saat tombol ditekan.
+      const hasilJenis = tentukanJenisSertifikat(
+        true,
+        keputusan.bisaTerbit,
+        terbitkanKeikutsertaanSyarat
+      );
       return {
         uid,
         namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
@@ -230,6 +257,10 @@ export async function GET(request: Request) {
         prasyaratMateri,
         bisaTerbit: keputusan.bisaTerbit,
         alasanPenerbitan: keputusan.alasan,
+        // Slice 6.3 — proyeksi jenis KALAU admin menerbitkan sekarang; null
+        // kalau tidak boleh terbit sama sekali (belum memenuhi syarat, dan
+        // kegiatan ini tidak mengizinkan keikutsertaan).
+        jenisSertifikatProyeksi: hasilJenis.jenis,
         sertifikat: sertifikatByUid.get(uid) ?? null,
       };
     });

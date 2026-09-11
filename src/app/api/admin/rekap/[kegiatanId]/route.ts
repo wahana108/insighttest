@@ -22,7 +22,7 @@ import type {
   StatusPendaftaran,
   SumberPendaftaran,
 } from "@/types/pendaftaran";
-import type { StatusSertifikat } from "@/types/sertifikat";
+import type { JenisSertifikat, StatusSertifikat } from "@/types/sertifikat";
 
 class RekapRouteError extends Error {
   status: number;
@@ -48,6 +48,12 @@ function isStatusPendaftaran(value: unknown): value is StatusPendaftaran {
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
   return value === "berlaku" || value === "dicabut";
+}
+
+// Slice 6.3 — sertifikat lama tanpa field jenis jatuh ke 'kelulusan',
+// bukan galat (satu-satunya jenis yang pernah terbit sebelum slice ini).
+function isJenisSertifikat(value: unknown): value is JenisSertifikat {
+  return value === "kelulusan" || value === "keikutsertaan";
 }
 
 // Slice 6.2 — pendaftaran lama tanpa field sumber jatuh ke 'mandiri',
@@ -197,7 +203,13 @@ export async function GET(
 
     const sertifikatByUid = new Map<
       string,
-      { serial: string; status: StatusSertifikat; terbitPada: string; kodeVerifikasi: string }
+      {
+        serial: string;
+        status: StatusSertifikat;
+        terbitPada: string;
+        kodeVerifikasi: string;
+        jenis: JenisSertifikat;
+      }
     >();
     sertifikatSnap.docs.forEach((doc) => {
       const data = doc.data();
@@ -210,6 +222,7 @@ export async function GET(
         status: isStatusSertifikat(data.status) ? data.status : "berlaku",
         terbitPada: typeof data.terbitPada === "string" ? data.terbitPada : "",
         kodeVerifikasi: typeof data.kodeVerifikasi === "string" ? data.kodeVerifikasi : "",
+        jenis: isJenisSertifikat(data.jenis) ? data.jenis : "kelulusan",
       });
     });
 
@@ -253,6 +266,7 @@ export async function GET(
             nilaiMinimum: nilaiMinimumSyarat,
             wajibBukaReferensi: wajibBukaReferensiSyarat,
             atestasiJadiSyarat: atestasiJadiSyaratSyarat,
+            terbitkanKeikutsertaan: false, // tidak dipakai di rute ini — CSV membaca jenis AKTUAL dari sertifikatByUid, bukan proyeksi
           },
         }
       );

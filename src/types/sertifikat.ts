@@ -2,6 +2,17 @@ import type { Timestamp } from "firebase-admin/firestore";
 
 export type StatusSertifikat = "berlaku" | "dicabut";
 
+/**
+ * Slice 6.3 — 'kelulusan': klaim lengkap (nilai, tabel modul, kalimat
+ * "atas keikutsertaan dan kelulusan"). 'keikutsertaan': HANYA klaim hadir
+ * — tidak pernah nilai akhir, tidak pernah tabel Skor/Status lulus (lihat
+ * tentukanJenisSertifikat(), src/lib/sertifikat-syarat.ts, untuk aturan
+ * penentuannya). Sertifikat dari SEBELUM field ini ada dibaca dengan
+ * default 'kelulusan' — itulah satu-satunya jenis yang pernah terbit
+ * sebelum slice ini — TIDAK ADA migrasi, tidak ditulis ulang.
+ */
+export type JenisSertifikat = "kelulusan" | "keikutsertaan";
+
 export interface ItemSertifikat {
   modulId: string;
   judul: string;
@@ -44,6 +55,8 @@ export interface Sertifikat {
   kodeVerifikasi: string;
   namaLengkap: string;
   judulKegiatan: string;
+  /** Slice 6.3 — lihat JenisSertifikat. Sertifikat lama tanpa field ini dibaca sebagai 'kelulusan'. */
+  jenis: JenisSertifikat;
   nilaiAkhir: number;
   items: ItemSertifikat[];
   /**
@@ -92,6 +105,7 @@ export interface SertifikatDetail {
   kodeVerifikasi: string;
   namaLengkap: string;
   judulKegiatan: string;
+  jenis: JenisSertifikat;
   nilaiAkhir: number;
   items: ItemSertifikat[];
   pernyataanAtestasi: string[];
@@ -116,6 +130,7 @@ export interface SertifikatDetail {
 export interface SertifikatPublik {
   namaLengkap: string;
   judulKegiatan: string;
+  jenis: JenisSertifikat;
   serial: string;
   nilaiAkhir: number;
   items: ItemSertifikat[];

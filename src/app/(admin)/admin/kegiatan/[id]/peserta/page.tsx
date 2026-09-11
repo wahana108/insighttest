@@ -21,6 +21,24 @@ const LABEL_SUMBER_PENDAFTARAN: Record<SumberPendaftaran, string> = {
 };
 
 /**
+ * Slice 6.3 (BAGIAN d) — jenis HARUS terlihat per baris, sebelum tombol
+ * ditekan, bukan cuma ringkasan agregat. null berarti tidak boleh terbit
+ * sama sekali (belum memenuhi syarat, dan kegiatan ini tidak mengizinkan
+ * keikutsertaan) — dibedakan jelas dari kedua jenis yang BOLEH terbit.
+ */
+function labelJenisProyeksi(jenis: "kelulusan" | "keikutsertaan" | null): string {
+  if (jenis === "kelulusan") return "Kelulusan";
+  if (jenis === "keikutsertaan") return "Keikutsertaan";
+  return "Tidak bisa terbit";
+}
+
+function kelasJenisProyeksi(jenis: "kelulusan" | "keikutsertaan" | null): string {
+  if (jenis === "kelulusan") return "text-green-600";
+  if (jenis === "keikutsertaan") return "text-amber-600";
+  return "text-red-600";
+}
+
+/**
  * Kalimat ringkas keadaan materi untuk kolom Kelayakan (Slice 7.4 §3).
  *
  * Slice 7.6: sebuah kategori ditampilkan kalau (a) syaratnya AKTIF —
@@ -153,6 +171,31 @@ export default function AdminPesertaPage({
     () => items.filter((item) => item.sertifikat?.status !== "berlaku"),
     [items]
   );
+
+  // Slice 6.3 (BAGIAN d) — jenis HARUS terlihat SEBELUM tombol "Terbitkan
+  // terpilih" ditekan: penerbitan massal tanpa melihat jenisnya adalah
+  // cara paling mudah menerbitkan puluhan sertifikat yang salah sekaligus.
+  // jenisSertifikatProyeksi dihitung server (tentukanJenisSertifikat(),
+  // fungsi murni yang SAMA dipakai terbitkanSertifikatUntuk()) — di sini
+  // hanya dihitung ulang per baris yang SEDANG dipilih.
+  const ringkasanTerpilih = useMemo(() => {
+    let kelulusan = 0;
+    let keikutsertaan = 0;
+    let tidakBisaTerbit = 0;
+    for (const item of items) {
+      if (!selected.has(item.uid)) {
+        continue;
+      }
+      if (item.jenisSertifikatProyeksi === "kelulusan") {
+        kelulusan += 1;
+      } else if (item.jenisSertifikatProyeksi === "keikutsertaan") {
+        keikutsertaan += 1;
+      } else {
+        tidakBisaTerbit += 1;
+      }
+    }
+    return { kelulusan, keikutsertaan, tidakBisaTerbit };
+  }, [items, selected]);
 
   // Rekap ringkas (Slice 8.3 §1) — dihitung dari `items` yang SUDAH dimuat
   // di atas, tidak ada pembacaan Firestore tambahan untuk ini.
@@ -478,20 +521,47 @@ export default function AdminPesertaPage({
       )}
 
       {izin.terbitkanSertifikat && (
-      <div className="flex flex-wrap items-center gap-3">
-        <button
-          type="button"
-          onClick={handleTerbitkanTerpilih}
-          disabled={selected.size === 0 || menerbitkan}
-          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
-        >
-          {menerbitkan
-            ? progres
-              ? `Menerbitkan ${progres.selesai} dari ${progres.total}…`
-              : "Menerbitkan..."
-            : `Terbitkan terpilih (${selected.size})`}
-        </button>
-        {errorTerbitkan && <p className="text-sm text-red-600">{errorTerbitkan}</p>}
+      <div className="space-y-2">
+        {selected.size > 0 && (
+          <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            Dari {selected.size} terpilih:{" "}
+            <span className="font-medium text-green-600">
+              {ringkasanTerpilih.kelulusan} kelulusan
+            </span>
+            {ringkasanTerpilih.keikutsertaan > 0 && (
+              <>
+                {", "}
+                <span className="font-medium text-amber-600">
+                  {ringkasanTerpilih.keikutsertaan} keikutsertaan
+                </span>
+              </>
+            )}
+            {ringkasanTerpilih.tidakBisaTerbit > 0 && (
+              <>
+                {", "}
+                <span className="font-medium text-red-600">
+                  {ringkasanTerpilih.tidakBisaTerbit} tidak bisa terbit
+                </span>
+              </>
+            )}
+            .
+          </p>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={handleTerbitkanTerpilih}
+            disabled={selected.size === 0 || menerbitkan}
+            className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+          >
+            {menerbitkan
+              ? progres
+                ? `Menerbitkan ${progres.selesai} dari ${progres.total}…`
+                : "Menerbitkan..."
+              : `Terbitkan terpilih (${selected.size})`}
+          </button>
+          {errorTerbitkan && <p className="text-sm text-red-600">{errorTerbitkan}</p>}
+        </div>
       </div>
       )}
 
@@ -607,6 +677,12 @@ export default function AdminPesertaPage({
                 {materiAdmin && <p className="text-xs text-zinc-400">{materiAdmin}</p>}
               </div>
               <p>
+                <span className="text-zinc-500">Kalau diterbitkan sekarang: </span>
+                <span className={`font-medium ${kelasJenisProyeksi(item.jenisSertifikatProyeksi)}`}>
+                  {labelJenisProyeksi(item.jenisSertifikatProyeksi)}
+                </span>
+              </p>
+              <p>
                 <span className="text-zinc-500">Sertifikat: </span>
                 {item.sertifikat ? (
                   <span
@@ -700,6 +776,7 @@ export default function AdminPesertaPage({
               <th className="px-3 py-2 font-medium">Nilai</th>
               <th className="px-3 py-2 font-medium">Modul lulus</th>
               <th className="px-3 py-2 font-medium">Kelayakan</th>
+              <th className="px-3 py-2 font-medium">Kalau diterbitkan sekarang</th>
               <th className="px-3 py-2 font-medium">Sertifikat</th>
               <th className="px-3 py-2 font-medium" />
             </tr>
@@ -768,6 +845,9 @@ export default function AdminPesertaPage({
                         </p>
                       </div>
                     )}
+                  </td>
+                  <td className={`px-3 py-2 font-medium ${kelasJenisProyeksi(item.jenisSertifikatProyeksi)}`}>
+                    {labelJenisProyeksi(item.jenisSertifikatProyeksi)}
                   </td>
                   <td className="px-3 py-2">
                     {item.sertifikat ? (

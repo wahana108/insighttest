@@ -84,6 +84,9 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
       typeof data.wajibBukaReferensi === "boolean" ? data.wajibBukaReferensi : false,
     atestasiJadiSyarat:
       typeof data.atestasiJadiSyarat === "boolean" ? data.atestasiJadiSyarat : false,
+    // Slice 6.3 — bawaan false SELALU, lihat komentar di types/kegiatan.ts.
+    terbitkanKeikutsertaan:
+      typeof data.terbitkanKeikutsertaan === "boolean" ? data.terbitkanKeikutsertaan : false,
   };
 }
 

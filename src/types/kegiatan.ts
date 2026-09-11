@@ -27,6 +27,20 @@ export interface SyaratSertifikat {
    * lihat PrasyaratMateri di sertifikat-syarat.ts.
    */
   atestasiJadiSyarat: boolean;
+  /**
+   * Slice 6.3 — default false SELALU (KA-4: syarat adalah data, bukan
+   * tebakan kode; kegiatan yang sudah ada tidak boleh mendadak bisa
+   * menerbitkan jenis sertifikat yang tidak pernah dimaksudkan
+   * penyelenggaranya). Kalau true, peserta yang TERDAFTAR tapi tidak
+   * memenuhi syarat kelayakan (lihat tentukanJenisSertifikat(),
+   * src/lib/sertifikat-syarat.ts) boleh diterbitkan sertifikat
+   * **keikutsertaan** — bukan kelulusan — sebagai pengganti "tidak bisa
+   * terbit sama sekali". Diletakkan di sini (bukan field kegiatan
+   * terpisah) SENGAJA: syaratSertifikat sudah masuk
+   * panitiaKegiatanKunciDiizinkan() di firestore.rules sebagai satu objek,
+   * jadi menambah field wajib di sini TIDAK memerlukan perubahan rules.
+   */
+  terbitkanKeikutsertaan: boolean;
 }
 
 /**

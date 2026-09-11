@@ -2109,3 +2109,110 @@ pilihan tentang *kapan sebuah akun dianggap sah*:
 > Catatan pengguna yang benar: **masuk lewat Google adalah yang paling aman dari keempatnya**
 > dan sudah tersedia sejak tahap 1 — tanpa kata sandi untuk dicuri, tanpa surel untuk
 > tersesat.
+
+### Slice 6.2, 6.2a, 6.2b — impor daftar hadir
+
+Satu-satunya jalur di platform ini yang **membuat akun untuk orang lain**. Hanya admin dan
+superadmin; panitia tidak, sekalipun ia berwenang menyunting kegiatan — membuat akun atas
+nama orang adalah kuasa yang berbeda kelas dari menyunting jadwal.
+
+Bentuk masukannya tempelan TSV/CSV dari spreadsheet, bukan JSON: daftar hadir hidup di
+Excel. Dua langkah — pratinjau menandai tiap baris dengan enam status, lalu eksekusi. Baris
+duplikat, tidak sah, dan "data wajib kurang" tidak pernah dieksekusi: **impor tidak boleh
+menembus aturan `formulirPeserta`**, kalau ditembus ada pendaftaran yang melanggar syarat
+kegiatannya sendiri.
+
+Dua hal yang menyelamatkan slice ini:
+
+**Idempoten, diperiksa di dalam transaksi** — bukan hanya di pratinjau. Impor yang dijalankan
+dua kali adalah kejadian biasa (orang ragu apakah yang pertama berhasil). Di platform ini,
+pendaftaran ganda berarti **dua sertifikat dengan serial berbeda untuk satu orang** — kerusakan
+pada `/s/{kode}` yang tidak bisa diperbaiki bersih setelah terbit.
+
+**Jejak asal** (`sumber: 'mandiri' | 'impor'`, `diimporOleh`, `diimporPada`), dibaca dengan
+default `'mandiri'` untuk data lama. Ini yang membuat 6.3 mungkin: sistem tahu siapa yang
+mendaftar sendiri dan siapa yang sekadar tercatat hadir.
+
+Efek samping yang justru merapikan: logika `modulSnapshot` diekstrak dan kini dipakai **sama**
+oleh jalur mandiri dan jalur impor — dua tempat yang berpotensi berbeda perilaku jadi satu.
+
+#### 6.2a — "Galat internal" dan orang yang tidak tahu formatnya
+
+Dua cacat yang hanya muncul saat dipakai orang sungguhan.
+
+`auth.getUsers()` memvalidasi tiap identifier dan **melempar** kalau satu saja formatnya salah
+— bukan menolak identifier itu sendiri. Satu baris rusak meruntuhkan seluruh permintaan, dan
+layar cuma berkata "Galat internal". Sekarang email disaring sebelum dikirim, dan tiap baris
+dibungkus sendiri: kegagalan tak terduga jatuh jadi status baris, tidak pernah jadi kegagalan
+permintaan.
+
+Cacat kedua lebih penting. Pengguna mengetik pemisah **spasi**; yang didukung TAB dan koma.
+Seluruh barisnya terbaca sebagai satu nama panjang, dan pesannya cuma "Data wajib kurang" —
+menyembunyikan sebab sebenarnya.
+
+> **Kalau sebuah masukan bisa disalahpahami, tampilkan bagaimana sistem memahaminya.**
+> Tabel pratinjau kini menampilkan institusi, nomor identitas, dan telepon *sebagaimana
+> diuraikan*. Orang tidak bisa memperbaiki apa yang tidak bisa mereka lihat.
+
+Ditambah templat CSV yang dibuat **dari kegiatan itu** (kolom mengikuti `formulirPeserta`,
+dengan penanda wajib), dan deteksi pemisah-spasi sebagai peringatan — bukan penolakan; jangan
+menebak maksud orang, cukup beri tahu.
+
+#### 6.2b — fitur yang tidak bisa ditemukan sama saja dengan tidak ada
+
+Panitia tidak punya satu pun tautan menuju areanya; ia harus mengetik `/admin/kegiatan`
+sendiri. Seluruh kerja peran bertingkat di tahap 8 karena itu praktis tak terjangkau.
+Tautan "Panel Panitia" kini muncul di `/beranda` — hanya kalau ia benar-benar ditugaskan di
+setidaknya satu kegiatan, dan **tanpa menyalin status panitia ke profil**: penugasan hidup di
+dokumen kegiatan, menyalinnya menciptakan sumber kebenaran kedua yang suatu hari berbeda.
+
+### Slice 6.3 — jenis sertifikat kedua, dan lubang yang tersingkap karenanya
+
+`jenis: 'kelulusan' | 'keikutsertaan'`, dibekukan saat penerbitan (KA-6). Sertifikat lama
+dibaca dengan default `'kelulusan'` — memang hanya itu yang pernah terbit. Parameter
+`terbitkanKeikutsertaan` **bawaannya mati**, diletakkan di dalam `syaratSertifikat` sehingga
+tidak menambah kunci tingkat-atas dan `hasOnly` di rules tidak terusik.
+
+Jenis ditentukan **otomatis** oleh satu fungsi murni. Admin tidak bisa menurunkan yang layak,
+tidak bisa menaikkan yang tidak layak.
+
+> Kalau admin bisa menyatakan seseorang "lulus" padahal datanya tidak mengatakan begitu,
+> `/s/{kode}` berhenti menjadi pernyataan tentang kenyataan dan berubah jadi pernyataan
+> tentang kehendak admin. Itu mencabut seluruh nilai halaman verifikasi.
+
+**Sertifikat keikutsertaan tidak memuat nilai dan tidak memuat tabel modul.** Bukan karena
+teknis: dokumen itu tidak mengklaim apa pun tentang nilai, dan mencetak angka yang tidak lulus
+di atas nama seseorang melukai tanpa memberi manfaat. `/s/{kode}` menyebut jenisnya lewat
+spanduk tegas, bukan catatan kaki.
+
+#### Lubang yang tersingkap
+
+Menutup celah "admin tidak bisa menaikkan yang tidak layak" menyingkap bahwa kode lama
+menggerbang **materi** untuk semua penerbit, tapi menggerbang **nilai** hanya untuk penerbitan
+mandiri. Admin secara teknis sudah bisa menerbitkan sertifikat kelulusan penuh bagi peserta
+bernilai di bawah minimum, asal materinya tuntas. Diperiksa: lubang itu tidak pernah sempat
+dipakai — tidak ada sertifikat keliru yang beredar.
+
+> Asimetri yang harus dipilih dengan sadar: pada kegiatan bermode **manual oleh admin**, tidak
+> ada penilaian otomatis sama sekali, jadi klaim sertifikat bersandar pada penilaian manusia,
+> bukan pada data. Pada mode otomatis, ia bersandar pada data. Keduanya sah — yang tidak sah
+> adalah tidak tahu mana yang sedang berlaku.
+
+---
+
+## PETA SEMBILAN TAHAP SELESAI — 11 Sep 2026
+
+Sembilan tahap tuntas seluruhnya. `npm run uji` 195 kasus di 12 skrip; setiap perubahan
+`firestore.rules` diverifikasi di emulator lalu diperiksa lagi di Rules Playground.
+
+Tiga pelajaran yang berlaku di luar proyek ini, dan semuanya varian dari satu hal:
+
+1. **Pastikan kode yang diuji adalah kode yang dipasang.** Dua hari hilang di tahap 9 memburu
+   masalah sentuh yang tidak pernah ada — HP menguji produksi, kodenya ada di branch.
+2. **Uji rules harus menempuh jalur operasi yang sama dengan aplikasi.** Emulator meloloskan
+   payload buatan sendiri; yang menolak panitia ternyata sebuah *query*, bukan tulisan.
+3. **Kalau sebuah masukan bisa disalahpahami, tampilkan bagaimana sistem memahaminya.**
+   Berlaku untuk CSV rekap, halaman uji iframe, dan pratinjau impor.
+
+Yang tertulis dan belum dikerjakan: tahap 10 (keamanan akun), tahap 11 (ujian berbatas waktu),
+dan dokumen Arah Pengembangan.

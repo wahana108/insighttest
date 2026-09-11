@@ -24,6 +24,7 @@ import {
   evaluasiKelayakan,
   putuskanPenerbitan,
   statusPrasyaratMateri,
+  tentukanJenisSertifikat,
 } from "../src/lib/sertifikat-syarat";
 import type { StatusPrasyaratMateri } from "../src/lib/sertifikat-syarat";
 import type {
@@ -208,6 +209,8 @@ async function main(): Promise<void> {
     typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
   const atestasiJadiSyaratSyarat =
     typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
+  const terbitkanKeikutsertaanSyarat =
+    typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
 
   console.log("=".repeat(72));
   console.log(`Kegiatan: ${typeof kegiatanData.kode === "string" ? kegiatanData.kode : "(tanpa kode)"} — ${typeof kegiatanData.judul === "string" ? kegiatanData.judul : "(tanpa judul)"}`);
@@ -217,6 +220,9 @@ async function main(): Promise<void> {
   );
   console.log(`Wajib buka referensi   : ${wajibBukaReferensiSyarat ? "AKTIF" : "tidak aktif"}`);
   console.log(`Atestasi jadi syarat   : ${atestasiJadiSyaratSyarat ? "AKTIF" : "tidak aktif"}`);
+  console.log(
+    `Terbitkan keikutsertaan: ${terbitkanKeikutsertaanSyarat ? "AKTIF (yang tidak layak bisa dapat sertifikat keikutsertaan)" : "tidak aktif"}`
+  );
 
   console.log("\nModul kegiatan:");
   if (modulSnap.empty) {
@@ -371,10 +377,12 @@ async function main(): Promise<void> {
           nilaiMinimum: nilaiMinimumSyarat,
           wajibBukaReferensi: wajibBukaReferensiSyarat,
           atestasiJadiSyarat: atestasiJadiSyaratSyarat,
+          terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
         },
       }
     );
     const keputusan = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
+    const hasilJenis = tentukanJenisSertifikat(true, keputusan.bisaTerbit, terbitkanKeikutsertaanSyarat);
 
     // Slice 7.6: TIGA keadaan, bukan dua — "tuntas" tidak boleh dipakai
     // untuk keadaan gerbang-mati-tapi-materi-nyatanya-belum (lihat komentar
@@ -402,6 +410,13 @@ async function main(): Promise<void> {
 
     console.log(
       `\nKesimpulan: ${keputusan.bisaTerbit ? "BISA TERBIT SEKARANG" : "BELUM BISA TERBIT"} — ${keputusan.alasan}`
+    );
+    // Slice 6.3 — jenis yang akan dibekukan KALAU admin menerbitkan sekarang.
+    // Peserta sendiri (self-issue) hanya pernah dapat 'kelulusan' atau ditolak.
+    console.log(
+      `Jenis sertifikat (kalau admin menerbitkan): ${
+        hasilJenis.jenis ?? "(tidak boleh terbit)"
+      } — ${hasilJenis.alasan}`
     );
   }
 

@@ -2,7 +2,7 @@ import { nilaiAtestasi } from "@/lib/atestasi-pernyataan";
 import type { HasilUntukNilaiAtestasi, TingkatAtestasi } from "@/lib/atestasi-pernyataan";
 import type { JenisSyaratSertifikat, Kegiatan } from "@/types/kegiatan";
 import type { Pendaftaran } from "@/types/pendaftaran";
-import type { ItemSertifikat } from "@/types/sertifikat";
+import type { ItemSertifikat, JenisSertifikat } from "@/types/sertifikat";
 
 export type StatusKelayakan = "layak" | "belum_layak" | "ditentukan_admin";
 
@@ -378,5 +378,63 @@ export function putuskanPenerbitan(
       statusPrasyaratMateri(prasyaratMateri) === "tuntas"
         ? "Nilai memenuhi syarat dan semua materi wajib sudah tuntas."
         : `Nilai memenuhi syarat. ${deskripsiPrasyaratMateri(prasyaratMateri)}`,
+  };
+}
+
+export interface HasilTentukanJenis {
+  bolehTerbit: boolean;
+  /** null kalau bolehTerbit false — tidak ada jenis untuk sesuatu yang tidak boleh terbit. */
+  jenis: JenisSertifikat | null;
+  alasan: string;
+}
+
+/**
+ * Slice 6.3 — fungsi murni SATU-SATUNYA yang memutuskan jenis sertifikat.
+ * TIDAK tersebar di UI: rekap peserta, konfirmasi "Terbitkan terpilih", DAN
+ * terbitkanSertifikatUntuk() (src/lib/api/sertifikat-server.ts) memanggil
+ * fungsi yang SAMA ini, supaya proyeksi yang admin lihat SEBELUM menekan
+ * tombol tidak bisa diam-diam berbeda dari yang sungguhan terjadi saat
+ * tombol ditekan.
+ *
+ * `bisaTerbitKelulusan` HARUS berasal dari putuskanPenerbitan(...).bisaTerbit
+ * — bukan dari kelayakan.layak saja. Itu satu-satunya cara "memenuhi syarat
+ * kelayakan" berarti benar untuk KEDUA mode syaratSertifikat:
+ *   - 'nilai_minimum': bisaTerbit true HANYA kalau nilai memenuhi syarat
+ *     DAN prasyaratMateri.tuntas — persis kondisi yang sudah dipakai
+ *     self-issue sekarang, sekarang diperluas berlaku juga untuk admin.
+ *   - 'manual_admin': bisaTerbit SELALU true (sistem tidak pernah menilai
+ *     otomatis) — jadi jenis SELALU 'kelulusan' di mode ini, sama seperti
+ *     perilaku satu-satunya yang pernah ada sebelum slice ini.
+ * terbitkanKeikutsertaan karena itu TIDAK PERNAH relevan untuk
+ * 'manual_admin' — bisaTerbit di sana tidak pernah false untuk memicunya.
+ *
+ * Admin TIDAK bisa menurunkan orang yang layak jadi keikutsertaan (jenis
+ * 'kelulusan' dikembalikan tanpa syarat begitu bisaTerbitKelulusan true,
+ * tidak peduli terbitkanKeikutsertaan), dan TIDAK bisa menaikkan yang
+ * tidak layak jadi kelulusan (satu-satunya jalan ke 'kelulusan' adalah
+ * bisaTerbitKelulusan true — tidak ada parameter lain yang bisa memaksanya).
+ */
+export function tentukanJenisSertifikat(
+  terdaftar: boolean,
+  bisaTerbitKelulusan: boolean,
+  terbitkanKeikutsertaan: boolean
+): HasilTentukanJenis {
+  if (!terdaftar) {
+    return { bolehTerbit: false, jenis: null, alasan: "Tidak terdaftar di kegiatan ini." };
+  }
+  if (bisaTerbitKelulusan) {
+    return { bolehTerbit: true, jenis: "kelulusan", alasan: "Memenuhi syarat kelayakan." };
+  }
+  if (terbitkanKeikutsertaan) {
+    return {
+      bolehTerbit: true,
+      jenis: "keikutsertaan",
+      alasan: "Belum memenuhi syarat kelayakan — kegiatan ini mengizinkan sertifikat keikutsertaan.",
+    };
+  }
+  return {
+    bolehTerbit: false,
+    jenis: null,
+    alasan: "Belum memenuhi syarat kelayakan, dan kegiatan ini tidak mengizinkan sertifikat keikutsertaan.",
   };
 }

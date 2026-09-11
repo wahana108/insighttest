@@ -1,6 +1,6 @@
 import type { PrasyaratMateri, StatusKelayakan } from "@/lib/sertifikat-syarat";
 import type { HasilModul, StatusPendaftaran, SumberPendaftaran } from "@/types/pendaftaran";
-import type { ItemSertifikat, StatusSertifikat } from "@/types/sertifikat";
+import type { ItemSertifikat, JenisSertifikat, StatusSertifikat } from "@/types/sertifikat";
 
 /**
  * Dipakai GET /api/admin/pendaftaran dan /admin/kegiatan/[id]/peserta —
@@ -44,10 +44,19 @@ export interface PesertaAdminRingkas {
   prasyaratMateri: PrasyaratMateri;
   bisaTerbit: boolean;
   alasanPenerbitan: string;
+  /**
+   * Slice 6.3 — jenis sertifikat yang AKAN dibekukan kalau admin
+   * menerbitkan SEKARANG (dihitung tentukanJenisSertifikat(), sumber yang
+   * sama dipakai terbitkanSertifikatUntuk()) — bukan status sertifikat
+   * yang SUDAH terbit (lihat `sertifikat.jenis` di bawah untuk itu). null
+   * kalau tidak boleh terbit sama sekali.
+   */
+  jenisSertifikatProyeksi: JenisSertifikat | null;
   sertifikat: {
     id: string;
     serial: string;
     status: StatusSertifikat;
     kodeVerifikasi: string;
+    jenis: JenisSertifikat;
   } | null;
 }

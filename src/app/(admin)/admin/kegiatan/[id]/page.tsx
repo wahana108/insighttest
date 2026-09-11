@@ -80,6 +80,7 @@ interface KegiatanFormState {
   syaratNilaiMinimum: string;
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
+  syaratTerbitkanKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
 }
@@ -547,6 +548,7 @@ export default function AdminKegiatanDetailPage({
           syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
           syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
           syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
+          syaratTerbitkanKeikutsertaan: kegiatan.syaratSertifikat.terbitkanKeikutsertaan,
           templateSertifikat: kegiatan.templateSertifikat,
           formulirPeserta: kegiatan.formulirPeserta,
         }
@@ -623,6 +625,7 @@ export default function AdminKegiatanDetailPage({
           nilaiMinimum: Number(editingKegiatanForm.syaratNilaiMinimum) || 0,
           wajibBukaReferensi: editingKegiatanForm.syaratWajibBukaReferensi,
           atestasiJadiSyarat: editingKegiatanForm.syaratAtestasiJadiSyarat,
+          terbitkanKeikutsertaan: editingKegiatanForm.syaratTerbitkanKeikutsertaan,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
         formulirPeserta: editingKegiatanForm.formulirPeserta,
@@ -1211,6 +1214,31 @@ export default function AdminKegiatanDetailPage({
                     </p>
                   </div>
                 )}
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={editingKegiatanForm.syaratTerbitkanKeikutsertaan}
+                      onChange={(event) =>
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          syaratTerbitkanKeikutsertaan: event.target.checked,
+                        })
+                      }
+                    />
+                    Boleh menerbitkan sertifikat keikutsertaan untuk yang tidak memenuhi syarat
+                    kelayakan
+                  </label>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Bawaan: tidak boleh (persis seperti sekarang — peserta yang belum memenuhi
+                    syarat tidak bisa menerima sertifikat apa pun). Kalau dinyalakan, admin bisa
+                    menerbitkan sertifikat <strong>keikutsertaan</strong> (tanpa nilai, tanpa
+                    klaim lulus) untuk peserta terdaftar yang belum memenuhi syarat kelayakan —
+                    berguna untuk peserta yang hadir (termasuk yang diimpor dari daftar hadir)
+                    tapi tidak mengerjakan atau tidak lulus evaluasi. Jenis sertifikat SELALU
+                    ditentukan otomatis dari kelayakan — tidak bisa dipilih manual per peserta.
+                  </p>
+                </div>
               </div>
             </div>
 

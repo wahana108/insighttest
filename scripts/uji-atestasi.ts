@@ -281,6 +281,7 @@ function syarat(override: Partial<SyaratSertifikat> = {}): SyaratSertifikat {
     nilaiMinimum: 70,
     wajibBukaReferensi: false,
     atestasiJadiSyarat: false,
+    terbitkanKeikutsertaan: false,
     ...override,
   };
 }

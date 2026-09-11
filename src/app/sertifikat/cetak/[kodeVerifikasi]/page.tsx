@@ -201,16 +201,22 @@ export default function SertifikatCetakPage({
             <div className="space-y-2 text-center">
               <p className="text-sm text-zinc-500">Diberikan kepada</p>
               <p className="text-4xl font-bold text-black dark:text-zinc-50">{data.namaLengkap}</p>
+              {/* Slice 6.3 (BAGIAN e) — sertifikat keikutsertaan TIDAK PERNAH
+                  mengklaim kelulusan, dalam bentuk apa pun. */}
               <p className="text-sm text-zinc-500">
-                atas keikutsertaan dan kelulusan dalam kegiatan
+                {data.jenis === "keikutsertaan"
+                  ? "atas keikutsertaan dalam kegiatan"
+                  : "atas keikutsertaan dan kelulusan dalam kegiatan"}
               </p>
               <p className="text-lg font-bold text-black dark:text-zinc-50">{data.judulKegiatan}</p>
-              <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Nilai akhir: {data.nilaiAkhir}
-              </p>
+              {data.jenis === "kelulusan" && (
+                <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                  Nilai akhir: {data.nilaiAkhir}
+                </p>
+              )}
             </div>
 
-            {data.items.length > 0 && (
+            {data.jenis === "kelulusan" && data.items.length > 0 && (
               <table className="mx-auto w-full max-w-sm text-center text-xs">
                 <thead>
                   <tr className="border-b border-zinc-300 dark:border-zinc-700">

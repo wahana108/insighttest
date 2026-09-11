@@ -131,7 +131,7 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
     "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua",
     "Atestasi: Atestasi Satu",
     "Referensi Dibuka", "Hasil Kelayakan", "Status Prasyarat Materi",
-    "Serial Sertifikat", "Status Sertifikat", "Tanggal Terbit", "Kode Verifikasi",
+    "Serial Sertifikat", "Jenis Sertifikat", "Status Sertifikat", "Tanggal Terbit", "Kode Verifikasi",
   ]);
 });
 
@@ -204,28 +204,45 @@ uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di d
   );
 });
 
-uji("susunBarisRekap: peserta tanpa sertifikat -> empat kolom sertifikat (termasuk Kode Verifikasi) kosong", () => {
+uji("susunBarisRekap: peserta tanpa sertifikat -> lima kolom sertifikat (termasuk Jenis dan Kode Verifikasi) kosong", () => {
   const peserta = pesertaDasar({});
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
-  assert.deepEqual(baris.slice(-4), [undefined, undefined, undefined, undefined]);
+  assert.deepEqual(baris.slice(-5), [undefined, undefined, undefined, undefined, undefined]);
 });
 
-uji("susunBarisRekap: peserta dengan sertifikat berlaku -> Kode Verifikasi ikut terisi", () => {
+uji("susunBarisRekap: peserta dengan sertifikat berlaku (kelulusan) -> Kode Verifikasi dan Jenis ikut terisi", () => {
   const peserta = pesertaDasar({
     sertifikat: {
       serial: "KEG-1/2026/0001",
       status: "berlaku",
       terbitPada: "2026-09-01T00:00:00.000Z",
       kodeVerifikasi: "U6SK21JGWN",
+      jenis: "kelulusan",
     },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
-  assert.deepEqual(baris.slice(-4), [
+  assert.deepEqual(baris.slice(-5), [
     "KEG-1/2026/0001",
+    "Kelulusan",
     "Berlaku",
     "2026-09-01T00:00:00.000Z",
     "U6SK21JGWN",
   ]);
+});
+
+uji("susunBarisRekap: sertifikat keikutsertaan -> kolom Jenis Sertifikat menyebut \"Keikutsertaan\"", () => {
+  const peserta = pesertaDasar({
+    sertifikat: {
+      serial: "KEG-1/2026/0003",
+      status: "berlaku",
+      terbitPada: "2026-09-01T00:00:00.000Z",
+      kodeVerifikasi: "KEIKUT12345",
+      jenis: "keikutsertaan",
+    },
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  const idxJenis = baris.length - 4;
+  assert.equal(baris[idxJenis], "Keikutsertaan");
 });
 
 uji("susunBarisRekap: sertifikat DICABUT tetap punya kode verifikasi di CSV (Slice 9.3b §2b)", () => {
@@ -235,6 +252,7 @@ uji("susunBarisRekap: sertifikat DICABUT tetap punya kode verifikasi di CSV (Sli
       status: "dicabut",
       terbitPada: "2026-09-01T00:00:00.000Z",
       kodeVerifikasi: "ABCDE12345",
+      jenis: "kelulusan",
     },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);

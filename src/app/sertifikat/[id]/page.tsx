@@ -186,7 +186,24 @@ export default function SertifikatPage({
             <p className="mt-1 text-zinc-600 dark:text-zinc-400">{data.judulKegiatan}</p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4 border-y border-zinc-200 py-4 text-sm dark:border-zinc-800 sm:grid-cols-4">
+          {/* Slice 6.3 (BAGIAN e) — jenis disebut TEGAS dan TERLIHAT, bukan
+              catatan kecil di kaki halaman. */}
+          {data.jenis === "keikutsertaan" ? (
+            <p className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-center text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+              Sertifikat Keikutsertaan — menyatakan keikutsertaan dalam kegiatan ini. Dokumen ini
+              TIDAK menyatakan kelulusan atau nilai apa pun.
+            </p>
+          ) : (
+            <p className="rounded-lg border border-green-300 bg-green-50 p-3 text-center text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+              Sertifikat Kelulusan — menyatakan keikutsertaan dan kelulusan dalam kegiatan ini.
+            </p>
+          )}
+
+          <div
+            className={`grid gap-4 border-y border-zinc-200 py-4 text-sm dark:border-zinc-800 ${
+              data.jenis === "keikutsertaan" ? "grid-cols-3" : "grid-cols-2 sm:grid-cols-4"
+            }`}
+          >
             <div>
               <p className="text-zinc-500">Serial</p>
               <p className="font-mono">{data.serial}</p>
@@ -195,10 +212,13 @@ export default function SertifikatPage({
               <p className="text-zinc-500">Tanggal terbit</p>
               <p>{formatDate(data.terbitPada)}</p>
             </div>
-            <div>
-              <p className="text-zinc-500">Nilai akhir</p>
-              <p>{data.nilaiAkhir}</p>
-            </div>
+            {/* BAGIAN e: sertifikat keikutsertaan TIDAK PERNAH mencantumkan nilai akhir. */}
+            {data.jenis === "kelulusan" && (
+              <div>
+                <p className="text-zinc-500">Nilai akhir</p>
+                <p>{data.nilaiAkhir}</p>
+              </div>
+            )}
             <div>
               <p className="text-zinc-500">Status</p>
               <p className={data.status === "berlaku" ? "text-green-600" : "text-red-600"}>
@@ -207,7 +227,9 @@ export default function SertifikatPage({
             </div>
           </div>
 
-          {data.items.length > 0 && (
+          {/* BAGIAN e: tabel modul (Skor/Status lulus) TIDAK PERNAH tercetak
+              untuk keikutsertaan. */}
+          {data.jenis === "kelulusan" && data.items.length > 0 && (
             <table className="w-full text-left text-sm">
               <thead>
                 <tr className="border-b border-zinc-300 dark:border-zinc-700">

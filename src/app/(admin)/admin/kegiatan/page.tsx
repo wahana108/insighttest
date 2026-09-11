@@ -42,6 +42,7 @@ interface FormState {
   syaratNilaiMinimum: string;
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
+  syaratTerbitkanKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
 }
@@ -59,6 +60,7 @@ function emptyForm(): FormState {
     syaratNilaiMinimum: "70",
     syaratWajibBukaReferensi: false,
     syaratAtestasiJadiSyarat: false,
+    syaratTerbitkanKeikutsertaan: false,
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
   };
@@ -121,11 +123,12 @@ export default function AdminKegiatanPage() {
       ditutupJam: isoToTimeValue(kegiatan.ditutupPada),
       syaratJenis: kegiatan.syaratSertifikat.jenis,
       syaratNilaiMinimum: String(kegiatan.syaratSertifikat.nilaiMinimum),
-      // wajibBukaReferensi/atestasiJadiSyarat disunting di
-      // /admin/kegiatan/[id], bukan di sini — dioper apa adanya, sama
-      // seperti templateSertifikat di bawah.
+      // wajibBukaReferensi/atestasiJadiSyarat/terbitkanKeikutsertaan
+      // disunting di /admin/kegiatan/[id], bukan di sini — dioper apa
+      // adanya, sama seperti templateSertifikat di bawah.
       syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
       syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
+      syaratTerbitkanKeikutsertaan: kegiatan.syaratSertifikat.terbitkanKeikutsertaan,
       // Blok "Template sertifikat" disunting di /admin/kegiatan/[id], bukan
       // di sini — dioper apa adanya supaya "Simpan perubahan" di halaman
       // ini tidak menimpanya jadi kosong. Blok "Formulir peserta" (Slice
@@ -154,6 +157,7 @@ export default function AdminKegiatanPage() {
           nilaiMinimum: Number(form.syaratNilaiMinimum) || 0,
           wajibBukaReferensi: form.syaratWajibBukaReferensi,
           atestasiJadiSyarat: form.syaratAtestasiJadiSyarat,
+          terbitkanKeikutsertaan: form.syaratTerbitkanKeikutsertaan,
         },
         templateSertifikat: form.templateSertifikat,
         formulirPeserta: form.formulirPeserta,

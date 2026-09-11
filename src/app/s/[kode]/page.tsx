@@ -1,10 +1,21 @@
 import { getAdminDb } from "@/lib/firebase/admin";
 import { formatDate } from "@/lib/format-date";
 import { normalisasiKodeVerifikasi } from "@/lib/kode-verifikasi";
-import type { ItemSertifikat, SertifikatPublik, StatusSertifikat } from "@/types/sertifikat";
+import type {
+  ItemSertifikat,
+  JenisSertifikat,
+  SertifikatPublik,
+  StatusSertifikat,
+} from "@/types/sertifikat";
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
   return value === "berlaku" || value === "dicabut";
+}
+
+// Slice 6.3 — sertifikat lama tanpa field jenis jatuh ke 'kelulusan', bukan
+// galat (satu-satunya jenis yang pernah terbit sebelum slice ini).
+function isJenisSertifikat(value: unknown): value is JenisSertifikat {
+  return value === "kelulusan" || value === "keikutsertaan";
 }
 
 function mapItems(value: unknown): ItemSertifikat[] {
@@ -55,6 +66,7 @@ async function ambilSertifikatPublik(kode: string): Promise<SertifikatPublik | n
   return {
     namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
     judulKegiatan: typeof data.judulKegiatan === "string" ? data.judulKegiatan : "",
+    jenis: isJenisSertifikat(data.jenis) ? data.jenis : "kelulusan",
     serial: typeof data.serial === "string" ? data.serial : "",
     nilaiAkhir: typeof data.nilaiAkhir === "number" ? data.nilaiAkhir : 0,
     items: mapItems(data.items),
@@ -100,7 +112,25 @@ export default async function VerifikasiSertifikatPage({
         </h1>
         <p className="mt-1 text-zinc-600 dark:text-zinc-400">{sertifikat.judulKegiatan}</p>
 
-        <div className="mt-4 grid grid-cols-2 gap-4 border-y border-zinc-200 py-4 text-left text-sm dark:border-zinc-800 sm:grid-cols-3">
+        {/* Slice 6.3 (BAGIAN e) — jenis disebut TEGAS dan TERLIHAT, bukan
+            catatan kecil di kaki halaman: ini jawaban atas pertanyaan
+            "apa sebenarnya yang dijamin dokumen ini". */}
+        {sertifikat.jenis === "keikutsertaan" ? (
+          <p className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm font-semibold text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+            Sertifikat Keikutsertaan — menyatakan keikutsertaan dalam kegiatan ini. Dokumen ini
+            TIDAK menyatakan kelulusan atau nilai apa pun.
+          </p>
+        ) : (
+          <p className="mt-3 rounded-lg border border-green-300 bg-green-50 p-3 text-sm font-semibold text-green-800 dark:border-green-800 dark:bg-green-950 dark:text-green-200">
+            Sertifikat Kelulusan — menyatakan keikutsertaan dan kelulusan dalam kegiatan ini.
+          </p>
+        )}
+
+        <div
+          className={`mt-4 grid gap-4 border-y border-zinc-200 py-4 text-left text-sm dark:border-zinc-800 ${
+            sertifikat.jenis === "keikutsertaan" ? "grid-cols-2" : "grid-cols-2 sm:grid-cols-3"
+          }`}
+        >
           <div>
             <p className="text-zinc-500">Serial</p>
             <p className="font-mono text-black dark:text-zinc-50">{sertifikat.serial}</p>
@@ -109,13 +139,20 @@ export default async function VerifikasiSertifikatPage({
             <p className="text-zinc-500">Tanggal terbit</p>
             <p className="text-black dark:text-zinc-50">{formatDate(sertifikat.terbitPada)}</p>
           </div>
-          <div>
-            <p className="text-zinc-500">Nilai akhir</p>
-            <p className="text-black dark:text-zinc-50">{sertifikat.nilaiAkhir}</p>
-          </div>
+          {/* BAGIAN e: sertifikat keikutsertaan TIDAK PERNAH mencantumkan
+              nilai akhir — jenis ini tidak mengklaim apa pun tentang nilai. */}
+          {sertifikat.jenis === "kelulusan" && (
+            <div>
+              <p className="text-zinc-500">Nilai akhir</p>
+              <p className="text-black dark:text-zinc-50">{sertifikat.nilaiAkhir}</p>
+            </div>
+          )}
         </div>
 
-        {sertifikat.items.length > 0 && (
+        {/* BAGIAN e: tabel modul (Skor/Status lulus) TIDAK PERNAH tercetak
+            untuk keikutsertaan — mencetak nilai yang tidak lulus di
+            sertifikat mempermalukan orang tanpa manfaat apa pun. */}
+        {sertifikat.jenis === "kelulusan" && sertifikat.items.length > 0 && (
           <table className="mt-4 w-full text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-300 dark:border-zinc-700">

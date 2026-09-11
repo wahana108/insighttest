@@ -3,7 +3,7 @@ import { Timestamp } from "firebase-admin/firestore";
 import type { DocumentData, Firestore } from "firebase-admin/firestore";
 import { LABEL_TINGKAT_ATESTASI, normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import type { HasilUntukNilaiAtestasi, TingkatAtestasi } from "@/lib/atestasi-pernyataan";
-import { evaluasiKelayakan, putuskanPenerbitan } from "@/lib/sertifikat-syarat";
+import { evaluasiKelayakan, putuskanPenerbitan, tentukanJenisSertifikat } from "@/lib/sertifikat-syarat";
 import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import type {
   AmbangKeterlibatan,
@@ -14,6 +14,7 @@ import type {
 import type { HasilModul, ModulSnapshotItem } from "@/types/pendaftaran";
 import type {
   ItemSertifikat,
+  JenisSertifikat,
   RiwayatSertifikat,
   Sertifikat,
   SertifikatDetail,
@@ -65,6 +66,13 @@ export function isStatusSertifikat(value: unknown): value is StatusSertifikat {
   return value === "berlaku" || value === "dicabut";
 }
 
+// Slice 6.3 — sertifikat dari SEBELUM field ini ada tidak punya sama
+// sekali (bukan galat, itu satu-satunya jenis yang pernah terbit). Jatuh
+// ke 'kelulusan', TIDAK ditulis ulang ke dokumen lama.
+export function isJenisSertifikat(value: unknown): value is JenisSertifikat {
+  return value === "kelulusan" || value === "keikutsertaan";
+}
+
 export function mapItemsSertifikat(value: unknown): ItemSertifikat[] {
   if (!Array.isArray(value)) {
     return [];
@@ -109,6 +117,7 @@ export function buildSertifikatDetail(
     kodeVerifikasi: typeof data.kodeVerifikasi === "string" ? data.kodeVerifikasi : "",
     namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
     judulKegiatan: typeof data.judulKegiatan === "string" ? data.judulKegiatan : "",
+    jenis: isJenisSertifikat(data.jenis) ? data.jenis : "kelulusan",
     nilaiAkhir: typeof data.nilaiAkhir === "number" ? data.nilaiAkhir : 0,
     items: mapItemsSertifikat(data.items),
     pernyataanAtestasi: mapPernyataanAtestasi(data.pernyataanAtestasi),
@@ -325,6 +334,9 @@ export async function terbitkanSertifikatUntuk(
     typeof syaratRaw.wajibBukaReferensi === "boolean" ? syaratRaw.wajibBukaReferensi : false;
   const atestasiJadiSyaratSyarat =
     typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
+  // Slice 6.3 — bawaan false SELALU, lihat komentar SyaratSertifikat.terbitkanKeikutsertaan.
+  const terbitkanKeikutsertaanSyarat =
+    typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
 
   // Penandatangan (nama, jabatan, DAN gambar tanda tangannya) DIBEKUKAN di
   // sertifikat — itu pernyataan seseorang, bukan branding. logo/kop TETAP
@@ -374,6 +386,7 @@ export async function terbitkanSertifikatUntuk(
         nilaiMinimum: nilaiMinimumSyarat,
         wajibBukaReferensi: wajibBukaReferensiSyarat,
         atestasiJadiSyarat: atestasiJadiSyaratSyarat,
+        terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
       },
     }
   );
@@ -393,29 +406,46 @@ export async function terbitkanSertifikatUntuk(
     )
     .map((modul) => `${LABEL_TINGKAT_ATESTASI[modul.tingkat]} materi interaktif: ${modul.judul}.`);
 
-  // Prasyarat materi (referensi/atestasi) menggerbang MODE OTOMATIS untuk
-  // SIAPA PUN yang menerbitkan — admin maupun peserta sendiri. Beda dari
-  // gerbang nilai (kelayakan.layak) di bawah, yang cuma menggerbang
-  // self-issue (§10, docs/arsitektur.md: admin boleh mencoret pratinjau
-  // NILAI). "Sudah membuka/menuntaskan materi wajib" adalah fakta
-  // terverifikasi, bukan penilaian subjektif seperti nilai — kalau
-  // kegiatan mensyaratkannya, tidak ada jalur admin yang melewatinya.
-  // Ditolak DI SINI, bukan cuma disembunyikan di tampilan (Slice 7.4 §3):
-  // tombol yang disembunyikan bukan pagar. putuskanPenerbitan() adalah
-  // SATU sumber kebenaran untuk aturan ini, dipakai juga oleh
-  // scripts/periksa-kelayakan.ts dan scripts/uji-atestasi.ts.
-  if (jenisSyarat === "nilai_minimum" && !prasyaratMateri.tuntas) {
-    const { alasan } = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
-    throw new SertifikatRouteError(400, alasan);
-  }
+  // putuskanPenerbitan() adalah SATU sumber kebenaran untuk "apakah nilai +
+  // materi wajib memenuhi syarat kelayakan" — dipakai juga oleh
+  // scripts/periksa-kelayakan.ts dan scripts/uji-atestasi.ts. Slice 6.3:
+  // bisaTerbit dari sini (BUKAN kelayakan.layak sendirian) yang dioper ke
+  // tentukanJenisSertifikat() sebagai "memenuhi syarat kelayakan" —
+  // satu-satunya jalan mendapat jenis 'kelulusan'. Untuk 'manual_admin',
+  // bisaTerbit SELALU true (sistem tidak pernah menilai otomatis di mode
+  // itu), jadi jenis SELALU 'kelulusan' di sana — persis satu-satunya
+  // perilaku yang pernah ada sebelum slice ini.
+  const keputusanKelulusan = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
 
+  // self-issue TIDAK PERNAH menerima 'keikutsertaan' — peserta hanya bisa
+  // menerbitkan sendiri kalau benar-benar memenuhi syarat kelulusan, sama
+  // persis seperti sebelum slice ini. Materi wajib yang belum tuntas
+  // (dulu digerbang terpisah di sini) sekarang ikut tercakup oleh
+  // keputusanKelulusan.bisaTerbit, jadi pesannya tetap sama.
+  let jenis: JenisSertifikat;
   if (isSelfIssue) {
     if (jenisSyarat !== "nilai_minimum") {
       throw new SertifikatRouteError(400, "Kegiatan ini memerlukan penerbitan oleh admin.");
     }
-    if (!kelayakan.layak) {
-      throw new SertifikatRouteError(400, kelayakan.alasan);
+    if (!keputusanKelulusan.bisaTerbit) {
+      throw new SertifikatRouteError(400, keputusanKelulusan.alasan);
     }
+    jenis = "kelulusan";
+  } else {
+    // Admin TIDAK bisa menurunkan orang yang layak jadi keikutsertaan
+    // (bisaTerbit true selalu menang, terlepas dari terbitkanKeikutsertaan)
+    // dan TIDAK bisa menaikkan yang tidak layak jadi kelulusan (satu-
+    // satunya jalan ke 'kelulusan' adalah bisaTerbit true) — jenis
+    // mengikuti kelayakan, kelayakan mengikuti data (Slice 6.3).
+    const hasilJenis = tentukanJenisSertifikat(
+      true, // pendaftaranSnap.exists sudah dipastikan di atas — targetUid TERDAFTAR
+      keputusanKelulusan.bisaTerbit,
+      terbitkanKeikutsertaanSyarat
+    );
+    if (!hasilJenis.bolehTerbit || !hasilJenis.jenis) {
+      throw new SertifikatRouteError(400, hasilJenis.alasan);
+    }
+    jenis = hasilJenis.jenis;
   }
 
   // §10 (docs/arsitektur.md): nomorUrut dialokasikan saat pendaftaran, jadi
@@ -458,6 +488,7 @@ export async function terbitkanSertifikatUntuk(
     kodeVerifikasi,
     namaLengkap,
     judulKegiatan,
+    jenis,
     nilaiAkhir: kelayakan.nilaiAkhir,
     items: kelayakan.items,
     pernyataanAtestasi,

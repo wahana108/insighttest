@@ -1,7 +1,7 @@
 import { LABEL_TINGKAT_ATESTASI, type TingkatAtestasi } from "@/lib/atestasi-pernyataan";
 import type { StatusKelayakan, StatusPrasyaratMateri } from "@/lib/sertifikat-syarat";
 import type { StatusPendaftaran, SumberPendaftaran } from "@/types/pendaftaran";
-import type { StatusSertifikat } from "@/types/sertifikat";
+import type { JenisSertifikat, StatusSertifikat } from "@/types/sertifikat";
 
 /**
  * Satu sel CSV — sengaja termasuk `number` (bukan cuma string), supaya 0
@@ -82,6 +82,8 @@ export interface RekapPesertaBaris {
     status: StatusSertifikat;
     terbitPada: string;
     kodeVerifikasi: string;
+    /** Slice 6.3 — jenis sertifikat yang SUDAH terbit (bukan proyeksi). */
+    jenis: JenisSertifikat;
   } | null;
 }
 
@@ -105,6 +107,11 @@ const LABEL_STATUS_PRASYARAT: Record<StatusPrasyaratMateri, string> = {
 const LABEL_STATUS_SERTIFIKAT: Record<StatusSertifikat, string> = {
   berlaku: "Berlaku",
   dicabut: "Dicabut",
+};
+
+const LABEL_JENIS_SERTIFIKAT: Record<JenisSertifikat, string> = {
+  kelulusan: "Kelulusan",
+  keikutsertaan: "Keikutsertaan",
 };
 
 const LABEL_SUMBER_IDENTITAS = {
@@ -165,6 +172,7 @@ export function susunBarisRekap(
     "Hasil Kelayakan",
     "Status Prasyarat Materi",
     "Serial Sertifikat",
+    "Jenis Sertifikat",
     "Status Sertifikat",
     "Tanggal Terbit",
     "Kode Verifikasi",
@@ -201,6 +209,7 @@ export function susunBarisRekap(
       LABEL_STATUS_KELAYAKAN[peserta.statusKelayakan],
       LABEL_STATUS_PRASYARAT[peserta.statusPrasyaratMateri],
       peserta.sertifikat?.serial,
+      peserta.sertifikat ? LABEL_JENIS_SERTIFIKAT[peserta.sertifikat.jenis] : undefined,
       peserta.sertifikat ? LABEL_STATUS_SERTIFIKAT[peserta.sertifikat.status] : undefined,
       peserta.sertifikat?.terbitPada,
       // Ada untuk status apa pun (berlaku MAUPUN dicabut) — sertifikat yang
