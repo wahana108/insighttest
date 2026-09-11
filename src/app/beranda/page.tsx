@@ -12,6 +12,32 @@ import { formatDate } from "@/lib/format-date";
 
 const ADMIN_ROLES = ["admin", "superadmin"];
 
+/**
+ * Slice 6.2b — status panitia punya DUA lapis: peran global
+ * users/{uid}.role (sudah dimuat di profile, gratis) DAN keanggotaan pada
+ * kegiatan/{id}.panitiaUids (per dokumen kegiatan, lihat izinPanitia() di
+ * src/lib/izin-panitia.ts — keduanya disyaratkan sebelum kemampuan apa pun
+ * diberikan). Komponen ini SENGAJA dipisah dan hanya di-mount saat
+ * profile.role === 'panitia' (lihat pemanggilnya) — bukan sekadar
+ * mengecek role, tapi benar-benar menanyakan "ditugaskan di kegiatan
+ * mana pun?" lewat query yang SAMA dengan yang sudah dijalankan
+ * /admin/kegiatan (where('panitiaUids','array-contains',uid), terindeks,
+ * murah — jumlah dokumen yang cocok, bukan pemindaian seluruh koleksi).
+ * TIDAK ADA flag "isPanitia" yang disalin ke profil — status ini selalu
+ * ditanyakan live ke kegiatan, satu sumber kebenaran.
+ */
+function TautanPanelPanitia({ uid }: { uid: string }) {
+  const { items } = useKegiatanList({ untukPanitiaUid: uid });
+  if (items.length === 0) {
+    return null;
+  }
+  return (
+    <Link href="/admin" className="font-medium text-black underline dark:text-zinc-50">
+      Panel Panitia
+    </Link>
+  );
+}
+
 export default function BerandaPage() {
   const router = useRouter();
   const { user, profile, loading } = useAuth();
@@ -116,6 +142,11 @@ export default function BerandaPage() {
             Panel Admin
           </Link>
         )}
+        {/* Label BEDA dari admin — panitia tidak boleh mengira ia punya
+            kuasa yang tidak ia punya (Slice 6.2b). Hanya di-mount (bukan
+            cuma disembunyikan) untuk role 'panitia' — lihat komentar
+            TautanPanelPanitia soal kenapa query-nya aman di sini. */}
+        {profile?.role === "panitia" && <TautanPanelPanitia uid={user.uid} />}
       </div>
 
       <div className="w-full max-w-sm space-y-2 rounded-lg border border-zinc-200 bg-white p-6 text-sm dark:border-zinc-800 dark:bg-zinc-950">

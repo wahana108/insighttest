@@ -1,6 +1,6 @@
 import { LABEL_TINGKAT_ATESTASI, type TingkatAtestasi } from "@/lib/atestasi-pernyataan";
 import type { StatusKelayakan, StatusPrasyaratMateri } from "@/lib/sertifikat-syarat";
-import type { StatusPendaftaran } from "@/types/pendaftaran";
+import type { StatusPendaftaran, SumberPendaftaran } from "@/types/pendaftaran";
 import type { StatusSertifikat } from "@/types/sertifikat";
 
 /**
@@ -42,6 +42,14 @@ export interface RekapPesertaBaris {
    * (pelajaran Slice 8.3a — sel yang ambigu sudah pernah menggigit).
    */
   identitasDariProfil: boolean;
+  /**
+   * Slice 6.2: dari mana pendaftaran ini berasal — 'mandiri' (peserta
+   * sendiri) atau 'impor' (dibuatkan admin lewat impor daftar hadir).
+   * Penting untuk 6.3: peserta yang diimpor karena hadir belum tentu
+   * mengerjakan evaluasi, dan CSV harus mengatakannya, bukan menyiratkan
+   * mereka "belum mengerjakan" seolah mereka sama dengan yang mandiri.
+   */
+  sumber: SumberPendaftaran;
   status: StatusPendaftaran;
   nilaiAkhir: number;
   /**
@@ -104,6 +112,11 @@ const LABEL_SUMBER_IDENTITAS = {
   profil: "Profil saat ini (belum dibekukan)",
 };
 
+const LABEL_SUMBER_PENDAFTARAN: Record<SumberPendaftaran, string> = {
+  mandiri: "Mandiri",
+  impor: "Impor daftar hadir",
+};
+
 /**
  * Fungsi murni — tidak menyentuh Firestore. Kolom modul evaluasi/atestasi
  * ditentukan dari kegiatan.modul (urutan SAAT INI), bukan dari gabungan
@@ -143,6 +156,7 @@ export function susunBarisRekap(
     "Nomor Identitas",
     "No. Telepon",
     "Sumber Identitas",
+    "Sumber Pendaftaran",
     "Status Pendaftaran",
     "Nilai Akhir",
     ...modulEvaluasi.flatMap((m) => [`Skor: ${m.judul}`, `Lulus: ${m.judul}`]),
@@ -178,6 +192,7 @@ export function susunBarisRekap(
       peserta.nomorIdentitas,
       peserta.noTelepon,
       peserta.identitasDariProfil ? LABEL_SUMBER_IDENTITAS.profil : LABEL_SUMBER_IDENTITAS.beku,
+      LABEL_SUMBER_PENDAFTARAN[peserta.sumber],
       LABEL_STATUS_PENDAFTARAN[peserta.status],
       peserta.nilaiAkhir,
       ...kolomEvaluasi,

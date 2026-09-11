@@ -2079,3 +2079,33 @@ ratusan tulis, bukan puluhan ribu — sama seperti pelajaran kuota di tahap 7.
 
 Karena menyentuh bentuk `attempt`, rules, dan kuota sekaligus, ini tahap tersendiri —
 bukan tempelan pada tahap 6.
+
+#### Tambahan rencana tahap 10 — pendaftaran tanpa kolom kata sandi (usul pengguna, 11 Sep 2026)
+
+Muncul saat menguji impor daftar hadir. Usulnya: **parameter** yang, pada mode pendaftaran
+terbuka, **menyembunyikan kolom kata sandi** di `/daftar`. Orang mendaftar dengan email dan
+nama saja; setelah itu ia menekan tautan bertuliskan *"Buat kata sandi"* — yang secara teknis
+adalah alur setel ulang (6.0) dengan kalimat berbeda.
+
+Kenapa ini lebih dari sekadar kosmetik: **orang baru punya akun yang bisa dipakai setelah
+membuktikan ia memiliki emailnya.** Itu verifikasi email yang dilipat ke dalam pendaftaran,
+bukan ditempel sesudahnya — dan mekanismenya sudah ada dan sudah terbukti, sama persis
+dengan yang dipakai jalur impor.
+
+Harganya jujur: pendaftaran jadi dua langkah, dan surel yang mendarat di folder spam menjadi
+titik gagal baru. Karena itu ia **parameter, bawaannya mati** — konsisten dengan prinsip
+proyek ini.
+
+Masuk akal digabung dengan `wajibVerifikasiEmail` di tahap 10 sebagai satu keluarga
+pilihan tentang *kapan sebuah akun dianggap sah*:
+
+| Pilihan | Yang dibuktikan sebelum akun berguna |
+|---|---|
+| Sekarang (bawaan) | Tidak ada — siapa pun bisa mendaftar dengan email siapa pun |
+| Verifikasi email wajib | Kepemilikan email, sebelum mendaftar ke kegiatan |
+| Pendaftaran tanpa kata sandi | Kepemilikan email, sebelum bisa masuk sama sekali |
+| Masuk lewat Google | Kepemilikan email, dijamin Google, tanpa surel tambahan |
+
+> Catatan pengguna yang benar: **masuk lewat Google adalah yang paling aman dari keempatnya**
+> dan sudah tersedia sejak tahap 1 — tanpa kata sandi untuk dicuri, tanpa surel untuk
+> tersesat.

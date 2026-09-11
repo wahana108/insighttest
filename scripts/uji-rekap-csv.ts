@@ -105,6 +105,7 @@ function pesertaDasar(override: Partial<RekapPesertaBaris>): RekapPesertaBaris {
     nomorIdentitas: "",
     noTelepon: "",
     identitasDariProfil: false,
+    sumber: "mandiri",
     status: "terdaftar",
     nilaiAkhir: 0,
     // Bawaan: kedua modul evaluasi SUDAH ada di snapshot peserta ini —
@@ -125,7 +126,7 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
   const [header] = susunBarisRekap(KEGIATAN, []);
   assert.deepEqual(header, [
     "No.", "Nama", "Email", "Institusi", "Nomor Identitas", "No. Telepon", "Sumber Identitas",
-    "Status Pendaftaran", "Nilai Akhir",
+    "Sumber Pendaftaran", "Status Pendaftaran", "Nilai Akhir",
     "Skor: Evaluasi Satu", "Lulus: Evaluasi Satu",
     "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua",
     "Atestasi: Atestasi Satu",
@@ -138,10 +139,10 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
 // evaluasi — HARUS bisa dibedakan dari CSV-nya saja, tanpa membuka
 // pendaftaran mentahnya. Indeks kolom: 8 = Skor eval-1, 9 = Lulus eval-1,
 // 10 = Skor eval-2, 11 = Lulus eval-2 (setelah 8 kolom tetap di depan).
-const IDX_SKOR_EVAL_1 = 9;
-const IDX_LULUS_EVAL_1 = 10;
-const IDX_SKOR_EVAL_2 = 11;
-const IDX_LULUS_EVAL_2 = 12;
+const IDX_SKOR_EVAL_1 = 10;
+const IDX_LULUS_EVAL_1 = 11;
+const IDX_SKOR_EVAL_2 = 12;
+const IDX_LULUS_EVAL_2 = 13;
 
 uji("susunBarisRekap: modul TIDAK ADA di modulSnapshot peserta -> sel \"-\" (bukan kosong, bukan 0)", () => {
   const peserta = pesertaDasar({
@@ -194,7 +195,7 @@ uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di d
 
   const [, barisTanpa] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaTanpaAtestasi]);
   const [, barisBelum] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaBelumTuntasAtestasi]);
-  const idxAtestasi = 9; // setelah 9 kolom tetap, kegiatan ini tidak punya modul evaluasi
+  const idxAtestasi = 10; // setelah 10 kolom tetap, kegiatan ini tidak punya modul evaluasi
   assert.equal(barisTanpa[idxAtestasi], "-", "at-1 tidak ada di snapshot peserta -> \"-\"");
   assert.equal(
     barisBelum[idxAtestasi],
@@ -304,6 +305,32 @@ uji("susunBarisRekap: campuran pendaftaran beku dan lama dalam SATU kegiatan -> 
     barisLama[IDX_SUMBER_IDENTITAS],
     "dua peserta dalam kegiatan yang sama harus bisa punya sumber identitas berbeda"
   );
+});
+
+// ---------------------------------------------------------------------
+// Slice 6.2: kolom "Sumber Pendaftaran" — penting untuk 6.3 (peserta yang
+// diimpor karena hadir belum tentu mengerjakan evaluasi).
+// ---------------------------------------------------------------------
+const IDX_SUMBER_PENDAFTARAN = 7;
+
+uji("susunBarisRekap: sumber 'mandiri' -> \"Mandiri\"", () => {
+  const peserta = pesertaDasar({ sumber: "mandiri" });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_SUMBER_PENDAFTARAN], "Mandiri");
+});
+
+uji("susunBarisRekap: sumber 'impor' -> \"Impor daftar hadir\"", () => {
+  const peserta = pesertaDasar({ sumber: "impor" });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_SUMBER_PENDAFTARAN], "Impor daftar hadir");
+});
+
+uji("susunBarisRekap: campuran mandiri dan impor dalam satu kegiatan -> tiap baris menandai sumbernya sendiri", () => {
+  const pesertaMandiri = pesertaDasar({ namaLengkap: "A", sumber: "mandiri" });
+  const pesertaImpor = pesertaDasar({ namaLengkap: "B", sumber: "impor" });
+  const [, barisMandiri, barisImpor] = susunBarisRekap(KEGIATAN, [pesertaMandiri, pesertaImpor]);
+  assert.equal(barisMandiri[IDX_SUMBER_PENDAFTARAN], "Mandiri");
+  assert.equal(barisImpor[IDX_SUMBER_PENDAFTARAN], "Impor daftar hadir");
 });
 
 console.log(`\n${lulus} lulus, ${gagal} gagal.`);

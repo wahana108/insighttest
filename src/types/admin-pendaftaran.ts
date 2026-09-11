@@ -1,5 +1,5 @@
 import type { PrasyaratMateri, StatusKelayakan } from "@/lib/sertifikat-syarat";
-import type { HasilModul, StatusPendaftaran } from "@/types/pendaftaran";
+import type { HasilModul, StatusPendaftaran, SumberPendaftaran } from "@/types/pendaftaran";
 import type { ItemSertifikat, StatusSertifikat } from "@/types/sertifikat";
 
 /**
@@ -26,6 +26,13 @@ export interface PesertaAdminRingkas {
   namaLengkap: string;
   email: string;
   institusi: string;
+  /**
+   * Slice 6.2: 'mandiri' | 'impor' — dari mana pendaftaran ini berasal.
+   * Pendaftaran lama tanpa field sumber (sebelum slice ini) dibaca sebagai
+   * 'mandiri', bukan galat — lihat komentar Pendaftaran.sumber di
+   * src/types/pendaftaran.ts.
+   */
+  sumber: SumberPendaftaran;
   nomorUrut: number;
   status: StatusPendaftaran;
   hasilModul: Record<string, HasilModul>;

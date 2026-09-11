@@ -16,7 +16,12 @@ import type {
   KategoriModul,
   ModeAmbangKeterlibatan,
 } from "@/types/kegiatan";
-import type { HasilModul, ModulSnapshotItem, StatusPendaftaran } from "@/types/pendaftaran";
+import type {
+  HasilModul,
+  ModulSnapshotItem,
+  StatusPendaftaran,
+  SumberPendaftaran,
+} from "@/types/pendaftaran";
 import type { StatusSertifikat } from "@/types/sertifikat";
 
 class RekapRouteError extends Error {
@@ -43,6 +48,12 @@ function isStatusPendaftaran(value: unknown): value is StatusPendaftaran {
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
   return value === "berlaku" || value === "dicabut";
+}
+
+// Slice 6.2 — pendaftaran lama tanpa field sumber jatuh ke 'mandiri',
+// bukan galat (satu-satunya jalur yang ada sebelum impor daftar hadir).
+function isSumberPendaftaran(value: unknown): value is SumberPendaftaran {
+  return value === "mandiri" || value === "impor";
 }
 
 function isModeAmbangKeterlibatan(value: unknown): value is ModeAmbangKeterlibatan {
@@ -286,6 +297,7 @@ export async function GET(
           : identitas?.nomorIdentitas ?? "",
         noTelepon: noTeleponBeku ? (data.noTelepon as string) : identitas?.noTelepon ?? "",
         identitasDariProfil: !nomorIdentitasBeku || !noTeleponBeku,
+        sumber: isSumberPendaftaran(data.sumber) ? data.sumber : "mandiri",
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",
         nilaiAkhir: kelayakan.nilaiAkhir,
         modulEvaluasiDiSnapshot,

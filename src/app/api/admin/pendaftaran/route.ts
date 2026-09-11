@@ -9,7 +9,12 @@ import type {
   KategoriModul,
   ModeAmbangKeterlibatan,
 } from "@/types/kegiatan";
-import type { HasilModul, ModulSnapshotItem, StatusPendaftaran } from "@/types/pendaftaran";
+import type {
+  HasilModul,
+  ModulSnapshotItem,
+  StatusPendaftaran,
+  SumberPendaftaran,
+} from "@/types/pendaftaran";
 import type { StatusSertifikat } from "@/types/sertifikat";
 import type { PesertaAdminRingkas } from "@/types/admin-pendaftaran";
 
@@ -33,6 +38,13 @@ function isKategoriModul(value: unknown): value is KategoriModul {
 
 function isStatusPendaftaran(value: unknown): value is StatusPendaftaran {
   return value === "terdaftar" || value === "selesai";
+}
+
+// Slice 6.2 — pendaftaran dari SEBELUM field ini ada tidak punya sama
+// sekali (bukan galat, itu satu-satunya jalur yang ada dulu); jatuh ke
+// 'mandiri', jangan ditulis ulang.
+function isSumberPendaftaran(value: unknown): value is SumberPendaftaran {
+  return value === "mandiri" || value === "impor";
 }
 
 function isStatusSertifikat(value: unknown): value is StatusSertifikat {
@@ -206,6 +218,7 @@ export async function GET(request: Request) {
         namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
         email: typeof data.email === "string" ? data.email : "",
         institusi: typeof data.institusi === "string" ? data.institusi : "",
+        sumber: isSumberPendaftaran(data.sumber) ? data.sumber : "mandiri",
         nomorUrut: typeof data.nomorUrut === "number" ? data.nomorUrut : 0,
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",
         hasilModul,

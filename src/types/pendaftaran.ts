@@ -2,6 +2,8 @@ import type { AmbangKeterlibatan, KategoriModul } from "@/types/kegiatan";
 
 export type StatusPendaftaran = "terdaftar" | "selesai";
 
+export type SumberPendaftaran = "mandiri" | "impor";
+
 /**
  * KA-5 (docs/arsitektur.md): cuplikan modul saat peserta mendaftar — bukan
  * rujukan hidup ke kegiatan/{id}/modul. Mengedit modul setelahnya tidak
@@ -56,6 +58,17 @@ export interface Pendaftaran {
    */
   nomorIdentitas: string;
   noTelepon: string;
+  /**
+   * Slice 6.2: 'mandiri' = peserta mendaftar sendiri; 'impor' = dibuatkan
+   * admin lewat impor daftar hadir (src/app/api/admin/kegiatan/[kegiatanId]/impor-hadir/route.ts).
+   * Pendaftaran dari SEBELUM field ini ada dibaca dengan default 'mandiri'
+   * (satu-satunya jalur yang ada sebelum slice ini) — TIDAK ditulis ulang,
+   * TIDAK ada migrasi. diimporOleh/diimporPada hanya terisi kalau sumber
+   * 'impor'.
+   */
+  sumber: SumberPendaftaran;
+  diimporOleh: string | null;
+  diimporPada: string | null;
   nomorUrut: number;
   modulSnapshot: ModulSnapshotItem[];
   status: StatusPendaftaran;

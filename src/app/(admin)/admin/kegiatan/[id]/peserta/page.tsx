@@ -8,8 +8,17 @@ import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { izinPanitia } from "@/lib/izin-panitia";
 import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
 import type { PesertaAdminRingkas } from "@/types/admin-pendaftaran";
+import type { SumberPendaftaran } from "@/types/pendaftaran";
 
 const UKURAN_POTONGAN = 25;
+
+// Slice 6.2 — penting untuk 6.3: peserta yang diimpor karena hadir belum
+// tentu mengerjakan evaluasi, jadi asalnya harus terlihat, bukan
+// tersembunyi di antara peserta mandiri.
+const LABEL_SUMBER_PENDAFTARAN: Record<SumberPendaftaran, string> = {
+  mandiri: "Mandiri",
+  impor: "Impor",
+};
 
 /**
  * Kalimat ringkas keadaan materi untuk kolom Kelayakan (Slice 7.4 §3).
@@ -332,6 +341,20 @@ export default function AdminPesertaPage({
         </p>
       </div>
 
+      {/* Slice 6.2 — hanya admin/superadmin, TIDAK PERNAH panitia, sekalipun
+          punya izin.terbitkanSertifikat/lihatPeserta untuk kegiatan ini.
+          Membuat akun atas nama orang lain adalah kuasa yang lebih besar
+          daripada menyunting kegiatan — penegakan sesungguhnya ada di
+          Route Handler (403), ini cuma menyembunyikan menunya. */}
+      {isAdminOrSuper && (
+        <Link
+          href={`/admin/kegiatan/${kegiatanId}/peserta/impor`}
+          className="inline-flex min-h-11 items-center text-sm font-medium text-black underline dark:text-zinc-50"
+        >
+          Impor daftar hadir
+        </Link>
+      )}
+
       {!loading && !error && (
         <div className="grid grid-cols-2 gap-3 rounded-lg border border-zinc-200 bg-white p-4 text-sm sm:grid-cols-3 lg:grid-cols-6 dark:border-zinc-800 dark:bg-zinc-950">
           <div>
@@ -545,6 +568,10 @@ export default function AdminPesertaPage({
                 {item.institusi || "-"}
               </p>
               <p className="text-zinc-700 dark:text-zinc-300">
+                <span className="text-zinc-500">Asal: </span>
+                {LABEL_SUMBER_PENDAFTARAN[item.sumber]}
+              </p>
+              <p className="text-zinc-700 dark:text-zinc-300">
                 <span className="text-zinc-500">Status: </span>
                 {item.status}
               </p>
@@ -668,6 +695,7 @@ export default function AdminPesertaPage({
               <th className="px-3 py-2 font-medium">Nama</th>
               <th className="px-3 py-2 font-medium">Email</th>
               <th className="px-3 py-2 font-medium">Institusi</th>
+              <th className="px-3 py-2 font-medium">Asal</th>
               <th className="px-3 py-2 font-medium">Status</th>
               <th className="px-3 py-2 font-medium">Nilai</th>
               <th className="px-3 py-2 font-medium">Modul lulus</th>
@@ -700,6 +728,9 @@ export default function AdminPesertaPage({
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.email}</td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
                     {item.institusi || "-"}
+                  </td>
+                  <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                    {LABEL_SUMBER_PENDAFTARAN[item.sumber]}
                   </td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.status}</td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.nilaiAkhir}</td>
