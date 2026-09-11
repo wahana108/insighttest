@@ -9,6 +9,7 @@ export const DEFAULT_SYSTEM_PARAMETER: SystemParameter = {
   modePendaftaran: "terbuka",
   pesanBeranda: "",
   urlPublik: "",
+  batasPendaftaranBaruPerHari: 0,
   updatedAt: null,
   updatedBy: null,
 };
@@ -28,6 +29,8 @@ function mapSystemParameter(data: DocumentData): SystemParameter {
       : DEFAULT_SYSTEM_PARAMETER.modePendaftaran,
     pesanBeranda: typeof data.pesanBeranda === "string" ? data.pesanBeranda : "",
     urlPublik: typeof data.urlPublik === "string" ? data.urlPublik : "",
+    batasPendaftaranBaruPerHari:
+      typeof data.batasPendaftaranBaruPerHari === "number" ? data.batasPendaftaranBaruPerHari : 0,
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
   };
@@ -49,8 +52,18 @@ export async function getSystemParameter(): Promise<SystemParameter> {
   return mapSystemParameter(snapshot.data());
 }
 
+/**
+ * PENTING: setDoc() di bawah TIDAK memakai {merge:true} — ia menimpa
+ * SELURUH dokumen parameter/global. Karena itu `next` di sini WAJIB
+ * menyertakan batasPendaftaranBaruPerHari (bukan opsional) — kalau field
+ * ini pernah lupa disertakan, ia akan lenyap setiap kali admin menyimpan
+ * pengaturan lain, walau tidak pernah dimaksudkan berubah.
+ */
 export async function updateSystemParameter(
-  next: Pick<SystemParameter, "namaPlatform" | "modePendaftaran" | "pesanBeranda" | "urlPublik">,
+  next: Pick<
+    SystemParameter,
+    "namaPlatform" | "modePendaftaran" | "pesanBeranda" | "urlPublik" | "batasPendaftaranBaruPerHari"
+  >,
   updatedBy: string
 ): Promise<void> {
   await setDoc(doc(db, "parameter", PARAMETER_DOC_ID), {

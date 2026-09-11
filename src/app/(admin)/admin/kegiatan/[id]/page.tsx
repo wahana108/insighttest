@@ -83,6 +83,7 @@ interface KegiatanFormState {
   syaratTerbitkanKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
+  kuotaPeserta: string;
 }
 
 interface ModulFormState {
@@ -551,6 +552,7 @@ export default function AdminKegiatanDetailPage({
           syaratTerbitkanKeikutsertaan: kegiatan.syaratSertifikat.terbitkanKeikutsertaan,
           templateSertifikat: kegiatan.templateSertifikat,
           formulirPeserta: kegiatan.formulirPeserta,
+          kuotaPeserta: String(kegiatan.kuotaPeserta),
         }
       : null);
 
@@ -629,6 +631,7 @@ export default function AdminKegiatanDetailPage({
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
         formulirPeserta: editingKegiatanForm.formulirPeserta,
+        kuotaPeserta: Number(editingKegiatanForm.kuotaPeserta) || 0,
       };
       // kodeSaatIni: kode YANG SUDAH TERSIMPAN di dokumen ini sebelum
       // disunting — untuk panitia field ini `disabled` (lihat "det-kode"
@@ -1284,6 +1287,39 @@ export default function AdminKegiatanDetailPage({
                     </select>
                   </div>
                 ))}
+              </div>
+            </div>
+
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Kuota peserta
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Berlaku untuk SEMUA jalur masuk — pendaftaran mandiri maupun impor daftar
+                  hadir oleh admin.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="det-kuota"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Jumlah kuota
+                </label>
+                <input
+                  id="det-kuota"
+                  type="number"
+                  min={0}
+                  value={editingKegiatanForm.kuotaPeserta}
+                  onChange={(event) =>
+                    setKegiatanForm({ ...editingKegiatanForm, kuotaPeserta: event.target.value })
+                  }
+                  className="mt-1 w-full max-w-[160px] rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  0 berarti tak terbatas. Saat ini terisi {kegiatan.nomorUrutTerakhir} orang.
+                </p>
               </div>
             </div>
 

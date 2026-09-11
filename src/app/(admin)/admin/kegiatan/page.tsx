@@ -45,6 +45,7 @@ interface FormState {
   syaratTerbitkanKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
+  kuotaPeserta: string;
 }
 
 function emptyForm(): FormState {
@@ -63,6 +64,7 @@ function emptyForm(): FormState {
     syaratTerbitkanKeikutsertaan: false,
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
+    kuotaPeserta: "0",
   };
 }
 
@@ -135,6 +137,7 @@ export default function AdminKegiatanPage() {
       // 6.1) sama — disunting di /admin/kegiatan/[id].
       templateSertifikat: kegiatan.templateSertifikat,
       formulirPeserta: kegiatan.formulirPeserta,
+      kuotaPeserta: String(kegiatan.kuotaPeserta),
     });
   }
 
@@ -161,6 +164,7 @@ export default function AdminKegiatanPage() {
         },
         templateSertifikat: form.templateSertifikat,
         formulirPeserta: form.formulirPeserta,
+        kuotaPeserta: Number(form.kuotaPeserta) || 0,
       };
 
       if (editingId) {
@@ -417,6 +421,26 @@ export default function AdminKegiatanPage() {
               />
             </div>
           )}
+        </div>
+
+        <div>
+          <label
+            htmlFor="kuotaPeserta"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Kuota peserta
+          </label>
+          <input
+            id="kuotaPeserta"
+            type="number"
+            min={0}
+            value={form.kuotaPeserta}
+            onChange={(event) => setForm((f) => ({ ...f, kuotaPeserta: event.target.value }))}
+            className="mt-1 w-full max-w-[160px] rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <p className="mt-1 text-xs text-zinc-500">
+            0 berarti tak terbatas. Berlaku untuk pendaftaran mandiri maupun impor daftar hadir.
+          </p>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

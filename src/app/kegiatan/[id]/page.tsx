@@ -219,6 +219,14 @@ export default function KegiatanDetailPage({
   const namaLengkapKosong = !profile?.namaLengkap?.trim();
   const jendelaStatus = statusJendelaKegiatan(kegiatan);
 
+  // Slice "kuota-peserta" §LAPIS 1 — kuotaPeserta 0 berarti tak terbatas,
+  // blok ini tidak tampil sama sekali. nomorUrutTerakhir adalah penghitung
+  // pendaftar kumulatif yang SUDAH ADA (lihat komentar di
+  // src/types/kegiatan.ts), bukan hasil query baru. Penjaga di sini HANYA
+  // kenyamanan — penegakan sesungguhnya ada di server (POST /api/pendaftaran).
+  const kuotaPenuh =
+    kegiatan.kuotaPeserta > 0 && kegiatan.nomorUrutTerakhir >= kegiatan.kuotaPeserta;
+
   // Slice 6.1: field mana yang diminta kegiatan INI (bukan semua kegiatan)
   // — bawaan 'tidak' untuk kegiatan lama membuat blok ini tidak tampil
   // sama sekali (lihat FORMULIR_PESERTA_DEFAULT). Nilainya datang dari
@@ -262,6 +270,11 @@ export default function KegiatanDetailPage({
         {jendelaStatus === "sudah_ditutup" && (
           <p className="mt-1 text-sm font-medium text-zinc-500">
             Pendaftaran sudah ditutup pada {formatDateTime(kegiatan.ditutupPada as string)}.
+          </p>
+        )}
+        {kegiatan.kuotaPeserta > 0 && (
+          <p className={`mt-1 text-sm font-medium ${kuotaPenuh ? "text-red-600" : "text-zinc-500"}`}>
+            Kuota: {kegiatan.nomorUrutTerakhir} dari {kegiatan.kuotaPeserta} terisi
           </p>
         )}
       </div>
@@ -458,14 +471,22 @@ export default function KegiatanDetailPage({
                 .
               </p>
             )}
+            {kuotaPenuh && (
+              <p className="text-sm text-red-600">Kuota peserta kegiatan ini sudah penuh.</p>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
             {sukses && <p className="text-sm text-green-600">{sukses}</p>}
             <button
               type="button"
               onClick={handleDaftar}
               disabled={
-                mendaftar || namaLengkapKosong || !hasilFormulir.valid || Boolean(sukses)
+                mendaftar ||
+                namaLengkapKosong ||
+                !hasilFormulir.valid ||
+                Boolean(sukses) ||
+                kuotaPenuh
               }
+              title={kuotaPenuh ? "Kuota peserta kegiatan ini sudah penuh." : undefined}
               className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
             >
               {mendaftar ? "Mendaftar..." : "Daftar"}

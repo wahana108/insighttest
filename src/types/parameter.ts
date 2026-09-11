@@ -10,6 +10,14 @@ export interface SystemParameter {
    * sertifikat tidak boleh diambil dari window.location.
    */
   urlPublik: string;
+  /**
+   * Slice "kuota-peserta" §LAPIS 2 — 0 berarti tak terbatas (BAWAAN).
+   * Menghitung pendaftaran BARU KE KEGIATAN (bukan pembuatan akun) lewat
+   * jalur mandiri saja — impor daftar hadir admin dikecualikan (lihat
+   * komentar di POST /api/pendaftaran). Melindungi kuota Firestore paket
+   * Spark (§5, docs/arsitektur.md).
+   */
+  batasPendaftaranBaruPerHari: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }

@@ -3,6 +3,7 @@ import { bacaLookupImporHadir, buatAkunDanProfilImpor } from "@/lib/api/impor-ha
 import { buatModulSnapshot } from "@/lib/api/pendaftaran-server";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { mapFormulirPeserta } from "@/lib/formulir-peserta";
+import { putuskanKuotaKegiatan } from "@/lib/kuota-peserta";
 import {
   gabungkanIdentitas,
   tandaiBarisImpor,
@@ -182,6 +183,20 @@ export async function POST(
                 ? kegiatanDataTx.nomorUrutTerakhir
                 : 0;
             const nomorUrut = nomorUrutTerakhir + 1;
+
+            // LAPIS 1 (docs/kickoff.md §R) — SAMA seperti POST /api/pendaftaran:
+            // kuota per kegiatan berlaku untuk jalur impor admin juga, bukan
+            // hanya mandiri. LAPIS 2 (batas harian global) SENGAJA TIDAK
+            // diperiksa di sini — itu hanya untuk pendaftaran mandiri, admin
+            // yang mengimpor daftar hadir bukan ancaman kuota yang dijaga
+            // LAPIS 2.
+            const kuotaPeserta =
+              typeof kegiatanDataTx.kuotaPeserta === "number" ? kegiatanDataTx.kuotaPeserta : 0;
+            const hasilKuota = putuskanKuotaKegiatan(kuotaPeserta, nomorUrut);
+            if (!hasilKuota.ok) {
+              throw new Error(hasilKuota.pesan ?? "Kuota peserta kegiatan ini sudah penuh.");
+            }
+
             const now = new Date().toISOString();
 
             tx.update(kegiatanRef, { nomorUrutTerakhir: nomorUrut });

@@ -160,6 +160,9 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     syaratSertifikat: mapSyaratSertifikat(data.syaratSertifikat),
     templateSertifikat: mapTemplateSertifikat(data.templateSertifikat),
     formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
+    kuotaPeserta: typeof data.kuotaPeserta === "number" ? data.kuotaPeserta : 0,
+    nomorUrutTerakhir:
+      typeof data.nomorUrutTerakhir === "number" ? data.nomorUrutTerakhir : 0,
     panitiaUids: mapPanitiaUids(data.panitiaUids),
     panitiaIzin: mapPanitiaIzin(data.panitiaIzin),
     createdAt: typeof data.createdAt === "string" ? data.createdAt : "",
@@ -178,6 +181,7 @@ export interface KegiatanWriteInput {
   syaratSertifikat: SyaratSertifikat;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
+  kuotaPeserta: number;
 }
 
 /**
@@ -216,6 +220,9 @@ async function validasiKegiatan(
   if (input.dibukaPada && input.ditutupPada && input.dibukaPada > input.ditutupPada) {
     throw new KegiatanError("Tanggal buka tidak boleh setelah tanggal tutup.");
   }
+  if (input.kuotaPeserta < 0) {
+    throw new KegiatanError("Kuota peserta tidak boleh negatif.");
+  }
 
   const kode = normalizeKodeKegiatan(input.kode);
   if (kode !== kodeSaatIni && (await kodeSudahDipakai(kode, excludeId))) {
@@ -253,6 +260,8 @@ export async function createKegiatan(
     syaratSertifikat: input.syaratSertifikat,
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     formulirPeserta: input.formulirPeserta,
+    kuotaPeserta: input.kuotaPeserta,
+    nomorUrutTerakhir: 0,
     panitiaUids: [],
     panitiaIzin: {},
     createdAt: now,
@@ -286,6 +295,7 @@ export async function updateKegiatan(
     syaratSertifikat: input.syaratSertifikat,
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     formulirPeserta: input.formulirPeserta,
+    kuotaPeserta: input.kuotaPeserta,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });

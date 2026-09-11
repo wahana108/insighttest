@@ -111,6 +111,17 @@ export default function KegiatanKatalogPage() {
                 : "Tanpa batas waktu"}
             </p>
             <CatatanJendela kegiatan={kegiatan} />
+            {kegiatan.kuotaPeserta > 0 && (
+              <p
+                className={`mt-1 text-xs font-medium ${
+                  kegiatan.nomorUrutTerakhir >= kegiatan.kuotaPeserta
+                    ? "text-red-600"
+                    : "text-zinc-500"
+                }`}
+              >
+                Kuota: {kegiatan.nomorUrutTerakhir} dari {kegiatan.kuotaPeserta} terisi
+              </p>
+            )}
           </Link>
         ))}
       </div>

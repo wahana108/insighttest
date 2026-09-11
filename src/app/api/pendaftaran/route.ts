@@ -2,6 +2,11 @@ import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { buatModulSnapshot } from "@/lib/api/pendaftaran-server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { mapFormulirPeserta, periksaFormulirPeserta } from "@/lib/formulir-peserta";
+import {
+  putuskanBatasHarian,
+  putuskanKuotaKegiatan,
+  tanggalJakarta,
+} from "@/lib/kuota-peserta";
 
 class PendaftaranRouteError extends Error {
   status: number;
@@ -103,7 +108,62 @@ export async function POST(request: Request) {
       const nomorUrut = nomorUrutTerakhir + 1;
       nomorUrutHasil = nomorUrut;
 
+      // LAPIS 1 (docs/kickoff.md §R) — berlaku untuk jalur mandiri MAUPUN
+      // impor admin (lihat pemeriksaan yang sama di .../impor-hadir/route.ts).
+      // kuotaPeserta 0 = tak terbatas.
+      const kuotaPeserta =
+        typeof kegiatanData.kuotaPeserta === "number" ? kegiatanData.kuotaPeserta : 0;
+      const hasilKuota = putuskanKuotaKegiatan(kuotaPeserta, nomorUrut);
+      if (!hasilKuota.ok) {
+        throw new PendaftaranRouteError(
+          409,
+          hasilKuota.pesan ?? "Kuota peserta kegiatan ini sudah penuh."
+        );
+      }
+
+      // LAPIS 2 — HANYA jalur mandiri (impor admin sengaja dikecualikan,
+      // docs/kickoff.md §R). parameter/global dibaca DI DALAM transaksi ini
+      // (bukan getSystemParameter(), yang memakai client SDK) supaya
+      // konsisten dengan pembacaan lain dalam transaksi yang sama.
+      const parameterRef = db.collection("parameter").doc("global");
+      const parameterSnap = await tx.get(parameterRef);
+      const parameterData = parameterSnap.data() ?? {};
+      const batasHarian =
+        typeof parameterData.batasPendaftaranBaruPerHari === "number"
+          ? parameterData.batasPendaftaranBaruPerHari
+          : 0;
+
+      // Kunci tanggal Asia/Jakarta — BUKAN UTC (lihat komentar
+      // tanggalJakarta(), src/lib/kuota-peserta.ts: UTC mereset kuota
+      // harian pukul 07.00 pagi WIB dan tidak ada yang akan mengerti
+      // kenapa) — dibaca DI DALAM transaksi yang sama supaya penghitungnya
+      // konsisten dengan pembuatan pendaftaran: gagal mendaftar berarti
+      // TIDAK ikut menaikkan penghitung harian.
+      const tanggalHariIni = tanggalJakarta(now);
+      const kuotaHarianRef = db.collection("kuota_harian").doc(tanggalHariIni);
+      const kuotaHarianSnap = await tx.get(kuotaHarianRef);
+      const jumlahHariIniSaatIni =
+        typeof kuotaHarianSnap.data()?.jumlah === "number" ? kuotaHarianSnap.data()!.jumlah : 0;
+      const jumlahHariIniBaru = jumlahHariIniSaatIni + 1;
+
+      const hasilBatasHarian = putuskanBatasHarian(batasHarian, jumlahHariIniBaru);
+      if (!hasilBatasHarian.ok) {
+        throw new PendaftaranRouteError(
+          429,
+          hasilBatasHarian.pesan ?? "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok."
+        );
+      }
+
       tx.update(kegiatanRef, { nomorUrutTerakhir: nomorUrut });
+      // PERINGATAN (jebakan 5.0c, docs/kickoff.md §R): jumlahHariIniBaru
+      // ditulis SEBAGAI NILAI EKSPLISIT dibaca dari tx.get() di atas — TIDAK
+      // memakai FieldValue.increment(), yang di dalam set() non-merge
+      // dijalankan SETELAH dokumen direset dan akan mulai dari nol lagi.
+      tx.set(
+        kuotaHarianRef,
+        { tanggal: tanggalHariIni, jumlah: jumlahHariIniBaru },
+        { merge: true }
+      );
       tx.set(pendaftaranRef, {
         kegiatanId,
         uid: user.uid,

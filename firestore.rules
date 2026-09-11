@@ -64,19 +64,23 @@ service cloud.firestore {
     // panitia lewat suntingKegiatan — "yang berkaitan dengan penyelenggaraan"
     // (docs/kickoff.md): judul, deskripsi, jendela waktu, syarat sertifikat
     // (beserta ambang dan centang prasyaratnya — satu field map, ditulis
-    // sebagai satu kesatuan oleh updateKegiatan()), template sertifikat, dan
+    // sebagai satu kesatuan oleh updateKegiatan()), template sertifikat,
     // (Slice 6.1) formulirPeserta — pengaturan field mana yang diminta saat
-    // peserta mendaftar. updatedAt/updatedBy ikut karena updateKegiatan()
-    // SELALU menulis keduanya bersama field lain. TIDAK PERNAH menambah
-    // kode, isPublished, isArchived, nomorUrutTerakhir, panitiaUids, atau
-    // panitiaIzin di sini — itu justru maksudnya: apa pun yang tidak
-    // disebut secara eksplisit di daftar ini tertolak oleh hasOnly() di
-    // allow update, termasuk field yang belum ada hari ini.
+    // peserta mendaftar — dan (Slice "kuota-peserta") kuotaPeserta — kuota
+    // per kegiatan, berlaku untuk jalur mandiri MAUPUN impor admin.
+    // updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
+    // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
+    // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
+    // daftar ini tertolak oleh hasOnly() di allow update, termasuk field
+    // yang belum ada hari ini maupun yang ditambahkan nanti dan lupa
+    // dipikirkan (persis jebakan yang sudah dua kali menggigit — lihat
+    // docs/kickoff.md §R).
     function panitiaKegiatanKunciDiizinkan() {
       return [
         'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
         'syaratSertifikat', 'templateSertifikat', 'formulirPeserta',
-        'updatedAt', 'updatedBy'
+        'kuotaPeserta', 'updatedAt', 'updatedBy'
       ];
     }
 
@@ -369,6 +373,16 @@ service cloud.firestore {
     match /parameter/global {
       allow read: if true;
       allow write: if isSuperAdmin();
+    }
+
+    // kuota_harian/{tanggal}: penghitung pendaftaran mandiri BARU per hari
+    // (LAPIS 2, docs/kickoff.md §R) — id dokumen = tanggal Asia/Jakarta
+    // (YYYY-MM-DD, lihat tanggalJakarta() di src/lib/kuota-peserta.ts).
+    // SERVER SAJA, tanpa kecuali — dinaikkan Admin SDK di dalam transaksi
+    // pembuatan pendaftaran (POST /api/pendaftaran), tidak pernah dibaca
+    // atau ditulis klien langsung.
+    match /kuota_harian/{tanggal} {
+      allow read, write: if false;
     }
 
     match /{document=**} {

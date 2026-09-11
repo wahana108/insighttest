@@ -111,6 +111,26 @@ export interface Kegiatan {
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   /**
+   * Slice "kuota-peserta" §LAPIS 1 — 0 berarti tak terbatas (BAWAAN, KA-4).
+   * Berlaku untuk SEMUA jalur masuk (mandiri maupun impor admin) —
+   * ditegakkan di server di dalam transaksi pembuatan pendaftaran
+   * (src/lib/kuota-peserta.ts), bukan cuma di sini. Field baru pada
+   * dokumen kegiatan — WAJIB ada di panitiaKegiatanKunciDiizinkan()
+   * (firestore.rules), persis jebakan hasOnly yang sama dengan
+   * formulirPeserta di atas.
+   */
+  kuotaPeserta: number;
+  /**
+   * Slice "kuota-peserta" — jumlah pendaftar kumulatif kegiatan ini,
+   * dipetakan dari field `nomorUrutTerakhir` yang SUDAH ADA sejak awal
+   * (dinaikkan tepat +1 di dalam transaksi pendaftaran, pendaftaran tidak
+   * pernah dihapus — lihat POST /api/pendaftaran). Dipetakan ke sini HANYA
+   * untuk ditampilkan ("Kuota: 12 dari 20 terisi") — bukan penghitung baru,
+   * dan TIDAK PERNAH ditulis dari klien (tidak ada di
+   * panitiaKegiatanKunciDiizinkan(), sengaja).
+   */
+  nomorUrutTerakhir: number;
+  /**
    * panitiaUids DAN panitiaIzin selalu ditulis bersamaan (lihat
    * tetapkanPanitia()/ubahIzinPanitia()/cabutPanitia() di
    * src/lib/services/kegiatan.ts) — panitiaUids untuk pemeriksaan

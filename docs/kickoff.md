@@ -2216,3 +2216,63 @@ Tiga pelajaran yang berlaku di luar proyek ini, dan semuanya varian dari satu ha
 
 Yang tertulis dan belum dikerjakan: tahap 10 (keamanan akun), tahap 11 (ujian berbatas waktu),
 dan dokumen Arah Pengembangan.
+
+---
+
+## R. Rencana lima slice menuju "siap pakai" (disepakati 11 Sep 2026)
+
+Menggantikan urutan yang tertulis di catatan tahap 10 dan 11 di atas — isinya tetap berlaku,
+urutannya yang berubah. Definisi **siap pakai** yang disepakati: platform bisa dibuka untuk
+kerabat dan jaringan tanpa mode undangan, terasa **selesai** dan bukan setengah jadi, dan
+bertahan lama di paket Spark.
+
+**Prinsip yang mengikat semuanya: setiap batas adalah parameter.** Saat ini disetel untuk
+bertahan di Spark; saat apresiasi datang dan paket dinaikkan ke Blaze, batasnya tinggal
+dilonggarkan tanpa menyentuh kode. Kartu sudah terdaftar di akun; menaikkan paket adalah
+keputusan, bukan pekerjaan.
+
+| # | Slice | Inti |
+|---|---|---|
+| 1 | **Kuota dua lapis** | `kuotaPeserta` per kegiatan + `batasPendaftaranBaruPerHari` global. Ditegakkan di server. Pintu tertutup sendiri saat penuh, terbuka lagi besok |
+| 2 | **Pendaftaran tanpa kata sandi** | `/daftar` hanya email + nama; akun dibuat dengan kata sandi acak yang langsung dibuang; tautan "Buat kata sandi" lewat alur 6.0 |
+| 3 | **Ujian berjendela waktu** | Popup + kirim paksa di klien (lunak); cap waktu server menandai kiriman **kedaluwarsa** (keras). Hanya lapis keras yang berkuasa |
+| 4 | **Kegiatan berkode akses + jadwal publikasi** | Pengganti sistem hak-akses berbayar |
+| 5 | **Teks penafsiran di halaman hasil** | Untuk kuis refleksi diri; privat, bukan di halaman verifikasi publik |
+
+### Kenapa Saweria TIDAK butuh sistem hak akses
+
+Kebutuhannya: penyumbang mendapat akses sebulan ke modul khusus, sekali kerjakan, dan bisa
+mengulang di edisi bulan berikutnya.
+
+Godaannya adalah membangun koleksi `akses/{kegiatanId}_{uid}` dengan `berlakuSampai`,
+entitlement, dan kedaluwarsa. **Tidak perlu satu pun.** Semuanya sudah ada dalam bentuk lain:
+
+| Kebutuhan | Sudah ada sebagai |
+|---|---|
+| Akses berlaku sebulan | `dibukaPada` / `ditutupPada` pada kegiatan |
+| Sekali kerjakan saja | `maksPercobaan: 1` pada modul |
+| Edisi bulan berikutnya | **Kegiatan baru** |
+| Gerbang bagi penyumbang | Satu field `kodeAkses` pada kegiatan |
+
+> **Bulannya adalah kegiatannya.** Kode dipasang di pesan terima kasih Saweria, dirotasi tiap
+> edisi. Bocornya kode terbatas pada satu edisi, dan taruhannya rendah — ini donasi, bukan
+> paywall. Yang perlu dibangun hanya satu field dan satu pemeriksaan di Route Handler
+> pendaftaran.
+
+Saweria **tidak punya webhook resmi** (diperiksa 8 Sep 2026), jadi rancangan ini juga satu-
+satunya yang tidak bisa mati mendadak karena pihak ketiga mengubah sesuatu.
+
+### Batas yang mudah terlupakan
+
+Firebase membatasi jumlah surel yang dikirim pengirim bawaannya per hari. Begitu pendaftaran
+tanpa kata sandi jadi jalur utama, **setiap pendaftar memicu satu surel** — dan batas itu bisa
+tersentuh sebelum kuota Firestore. `batasPendaftaranBaruPerHari` dari slice 1 karena itu
+melindungi dua hal sekaligus, bukan satu.
+
+### Saat paket dinaikkan ke Blaze
+
+Di Spark tidak ada kemungkinan tagihan sama sekali — kuota habis berarti layanan berhenti
+sampai besok. Pada hari paket dinaikkan, dua hal wajib dipasang **sebelum** apa pun yang lain,
+dan keduanya di Google Cloud Billing, bukan di kode: **anggaran dengan peringatan**, dan
+**batas harian** pada Firestore. Kode tidak bisa melindungi dari tagihan; setelan penagihan
+bisa.

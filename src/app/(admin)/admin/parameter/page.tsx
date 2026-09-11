@@ -56,6 +56,7 @@ function AdminParameterPageIsi() {
           modePendaftaran: parameter.modePendaftaran,
           pesanBeranda: parameter.pesanBeranda,
           urlPublik: parameter.urlPublik,
+          batasPendaftaranBaruPerHari: parameter.batasPendaftaranBaruPerHari,
         },
         user.uid
       );
@@ -162,6 +163,35 @@ function AdminParameterPageIsi() {
             Dipakai untuk alamat verifikasi (QR/teks) di sertifikat HANYA kalau env
             NEXT_PUBLIC_SITE_URL belum diisi saat deploy. Tidak pernah diambil dari alamat
             tempat halaman kebetulan dibuka.
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="batasPendaftaranBaruPerHari"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Batas pendaftaran baru per hari
+          </label>
+          <input
+            id="batasPendaftaranBaruPerHari"
+            type="number"
+            min={0}
+            value={parameter.batasPendaftaranBaruPerHari}
+            onChange={(event) =>
+              setParameter((prev) => ({
+                ...prev,
+                batasPendaftaranBaruPerHari: Number(event.target.value) || 0,
+              }))
+            }
+            disabled={!canSave}
+            className="mt-1 w-full max-w-[160px] rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+          <p className="mt-1 text-xs text-zinc-500">
+            0 berarti tak terbatas. Menghitung pendaftaran BARU ke kegiatan lewat jalur mandiri
+            saja (impor daftar hadir oleh admin tidak dihitung) — melindungi kuota Firestore
+            paket Spark. Naikkan hanya kalau sudah pindah ke paket Blaze dan tahu berapa
+            anggarannya.
           </p>
         </div>
 
