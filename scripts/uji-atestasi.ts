@@ -272,7 +272,7 @@ function modulAtestasi(
 }
 
 function hasilEvaluasi(skorTertinggi: number, lulusFlag: boolean): HasilModul {
-  return { skorTertinggi, lulus: lulusFlag, percobaan: 1 };
+  return { skorTertinggi, lulus: lulusFlag, percobaan: 1, kedaluwarsa: false };
 }
 
 function syarat(override: Partial<SyaratSertifikat> = {}): SyaratSertifikat {

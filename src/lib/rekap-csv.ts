@@ -64,8 +64,16 @@ export interface RekapPesertaBaris {
    * tidak dihitung sama sekali.
    */
   modulEvaluasiDiSnapshot: string[];
-  /** Kunci = modulId modul evaluasi. Tidak ada entri = peserta belum pernah mengerjakan modul itu (tapi lihat modulEvaluasiDiSnapshot untuk tahu apakah modulnya ada di snapshotnya). */
-  hasilEvaluasi: Record<string, { skor: number; lulus: boolean }>;
+  /**
+   * Kunci = modulId modul evaluasi. Tidak ada entri = peserta belum pernah
+   * mengerjakan modul itu (tapi lihat modulEvaluasiDiSnapshot untuk tahu
+   * apakah modulnya ada di snapshotnya). kedaluwarsa (Slice "ujian-berwaktu"):
+   * true kalau attempt yang menentukan skor ini dikirim setelah ditutupPada
+   * kegiatan — admin harus melihat ini SEBELUM memutuskan menerbitkan,
+   * karena `lulus` di sini sudah TIDAK dipercaya evaluasiKelayakan() untuk
+   * kelayakan otomatis walau nilainya di atas ambang.
+   */
+  hasilEvaluasi: Record<string, { skor: number; lulus: boolean; kedaluwarsa: boolean }>;
   /**
    * Kunci = modulId modul atestasi. Beda dari hasilEvaluasi: entrinya
    * SELALU ada untuk setiap modul atestasi di modulSnapshot peserta,
@@ -166,7 +174,11 @@ export function susunBarisRekap(
     "Sumber Pendaftaran",
     "Status Pendaftaran",
     "Nilai Akhir",
-    ...modulEvaluasi.flatMap((m) => [`Skor: ${m.judul}`, `Lulus: ${m.judul}`]),
+    ...modulEvaluasi.flatMap((m) => [
+      `Skor: ${m.judul}`,
+      `Lulus: ${m.judul}`,
+      `Kedaluwarsa: ${m.judul}`,
+    ]),
     ...modulAtestasi.map((m) => `Atestasi: ${m.judul}`),
     "Referensi Dibuka",
     "Hasil Kelayakan",
@@ -183,9 +195,17 @@ export function susunBarisRekap(
     const kolomEvaluasi = modulEvaluasi.flatMap((m) => {
       const hasil = peserta.hasilEvaluasi[m.id];
       if (hasil) {
-        return [hasil.skor, hasil.lulus ? "Ya" : "Tidak"];
+        return [
+          hasil.skor,
+          hasil.lulus ? "Ya" : "Tidak",
+          // Slice "ujian-berwaktu" — SENGAJA cuma "Ya"/kosong, bukan
+          // "Ya"/"Tidak": kolom "Tidak ada" untuk modul yang tidak pernah
+          // kedaluwarsa akan penuh kata "Tidak" di semua baris dan
+          // menenggelamkan yang benar-benar perlu perhatian admin.
+          hasil.kedaluwarsa ? "Ya" : "",
+        ];
       }
-      return modulEvaluasiSnapshot.has(m.id) ? [undefined, undefined] : ["-", "-"];
+      return modulEvaluasiSnapshot.has(m.id) ? [undefined, undefined, undefined] : ["-", "-", "-"];
     });
     const kolomAtestasi = modulAtestasi.map((m) => {
       const tingkat = peserta.hasilAtestasi[m.id];

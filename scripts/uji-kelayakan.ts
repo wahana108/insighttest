@@ -63,8 +63,8 @@ function modulReferensi(modulId: string, wajib = true): ModulSnapshotItem {
   };
 }
 
-function hasil(skorTertinggi: number, lulusFlag: boolean): HasilModul {
-  return { skorTertinggi, lulus: lulusFlag, percobaan: 1 };
+function hasil(skorTertinggi: number, lulusFlag: boolean, kedaluwarsa = false): HasilModul {
+  return { skorTertinggi, lulus: lulusFlag, percobaan: 1, kedaluwarsa };
 }
 
 function syarat(override: Partial<SyaratSertifikat> = {}): SyaratSertifikat {
@@ -288,6 +288,73 @@ uji(
       true,
       "referensi sudah dibuka semua — prasyaratMateri.tuntas harus true TERLEPAS dari kelayakan.status (dua hal terpisah, Slice 7.4 §3)"
     );
+  }
+);
+
+// ---------------------------------------------------------------------
+// Slice "ujian-berwaktu" §BAGIAN b — hasil kedaluwarsa TIDAK melayakkan
+// otomatis, walau skornya di atas ambang dan hasilModul.lulus tersimpan
+// true. Skor sendiri TIDAK disentuh (tetap tampil di items[].skor).
+// ---------------------------------------------------------------------
+
+uji(
+  "modul wajib dengan hasilModul.lulus=true TAPI kedaluwarsa=true → kelayakan belum_layak (lulus dipaksa false untuk otomatis), skor TETAP tercatat di items",
+  () => {
+    const { kelayakan } = evaluasiKelayakan(
+      {
+        modulSnapshot: [modulEvaluasi("ev1")],
+        hasilModul: { ev1: hasil(95, true, true) },
+        referensiDibuka: [],
+        atestasi: {},
+      },
+      { syaratSertifikat: syarat() }
+    );
+    assert.equal(
+      kelayakan.status,
+      "belum_layak",
+      `Hasil kedaluwarsa tidak boleh melayakkan otomatis walau skor 95 ≥ ambang, dapat "${kelayakan.status}"`
+    );
+    assert.equal(kelayakan.items[0].skor, 95, "Skor TIDAK boleh dihapus/diubah walau kedaluwarsa");
+    assert.equal(
+      kelayakan.items[0].lulus,
+      false,
+      "items[].lulus harus dipaksa false untuk keputusan otomatis walau hasilModul.lulus tersimpan true"
+    );
+  }
+);
+
+uji(
+  "modul wajib dengan hasilModul.lulus=true DAN kedaluwarsa=false (bawaan) → kelayakan layak seperti biasa (tidak ada regresi)",
+  () => {
+    const { kelayakan } = evaluasiKelayakan(
+      {
+        modulSnapshot: [modulEvaluasi("ev1")],
+        hasilModul: { ev1: hasil(95, true, false) },
+        referensiDibuka: [],
+        atestasi: {},
+      },
+      { syaratSertifikat: syarat() }
+    );
+    assert.equal(kelayakan.status, "layak");
+    assert.equal(kelayakan.items[0].lulus, true);
+  }
+);
+
+uji(
+  "modul wajib TIDAK lulus (skor rendah) DAN kedaluwarsa=true → tetap belum_layak (kedua alasan konsisten, bukan saling menutupi)",
+  () => {
+    const { kelayakan } = evaluasiKelayakan(
+      {
+        modulSnapshot: [modulEvaluasi("ev1")],
+        hasilModul: { ev1: hasil(40, false, true) },
+        referensiDibuka: [],
+        atestasi: {},
+      },
+      { syaratSertifikat: syarat() }
+    );
+    assert.equal(kelayakan.status, "belum_layak");
+    assert.equal(kelayakan.items[0].skor, 40);
+    assert.equal(kelayakan.items[0].lulus, false);
   }
 );
 

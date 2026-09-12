@@ -131,7 +131,7 @@ async function main(): Promise<void> {
   // yang dibedakan antar ketiga pendaftaran ini.
   const hasilModul: Record<string, HasilModul> = {};
   for (const modul of modulEvaluasiWajib) {
-    hasilModul[modul.modulId] = { skorTertinggi: 100, lulus: true, percobaan: 1 };
+    hasilModul[modul.modulId] = { skorTertinggi: 100, lulus: true, percobaan: 1, kedaluwarsa: false };
   }
 
   const now = new Date().toISOString();

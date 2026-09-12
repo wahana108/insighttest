@@ -7,7 +7,7 @@
     "build": "npm run lint && next build",
     "start": "next start",
     "lint": "eslint",
-    "uji": "npx tsx scripts/uji-kelayakan.ts && npx tsx scripts/uji-validasi-url-atestasi.ts && npx tsx scripts/uji-atestasi.ts && npx tsx scripts/uji-jawaban-tersimpan.ts && npx tsx scripts/uji-peran.ts && npx tsx scripts/uji-izin-soal.ts && npx tsx scripts/uji-rekap-csv.ts && npx tsx scripts/uji-kode-verifikasi.ts && npx tsx scripts/uji-formulir-peserta.ts && npx tsx scripts/uji-impor-hadir.ts && npx tsx scripts/uji-jenis-sertifikat.ts && npx tsx scripts/uji-kuota-peserta.ts && npx tsx scripts/uji-pendaftaran-tanpa-sandi.ts"
+    "uji": "npx tsx scripts/uji-kelayakan.ts && npx tsx scripts/uji-validasi-url-atestasi.ts && npx tsx scripts/uji-atestasi.ts && npx tsx scripts/uji-jawaban-tersimpan.ts && npx tsx scripts/uji-peran.ts && npx tsx scripts/uji-izin-soal.ts && npx tsx scripts/uji-rekap-csv.ts && npx tsx scripts/uji-kode-verifikasi.ts && npx tsx scripts/uji-formulir-peserta.ts && npx tsx scripts/uji-impor-hadir.ts && npx tsx scripts/uji-jenis-sertifikat.ts && npx tsx scripts/uji-kuota-peserta.ts && npx tsx scripts/uji-pendaftaran-tanpa-sandi.ts && npx tsx scripts/uji-ujian-berwaktu.ts"
   },
   "dependencies": {
     "@types/qrcode": "^1.5.6",

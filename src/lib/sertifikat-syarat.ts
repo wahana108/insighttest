@@ -163,7 +163,12 @@ export function evaluasiKelayakan(
       modulId: modul.modulId,
       judul: modul.judul,
       skor: hasil?.skorTertinggi ?? 0,
-      lulus: hasil?.lulus ?? false,
+      // Slice "ujian-berwaktu": hasil kedaluwarsa (dikirim setelah
+      // ditutupPada kegiatan) TIDAK PERNAH melayakkan otomatis — dipaksa
+      // false di sini walau field lulus yang tersimpan true, persis
+      // semangat mode manual_admin (keputusan berpindah ke admin). Skor di
+      // atas TIDAK disentuh — tetap tercatat dan tetap tampil.
+      lulus: (hasil?.lulus ?? false) && !(hasil?.kedaluwarsa ?? false),
     };
   });
 

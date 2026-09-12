@@ -1,6 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { AttemptRouteError } from "@/lib/api/attempt-server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { periksaJendelaUjian } from "@/lib/ujian-berwaktu";
 import type { JawabanAttempt, SubmitAttemptResponse } from "@/types/attempt";
 
 function isJawabanArray(value: unknown): value is JawabanAttempt[] {
@@ -72,11 +73,16 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       const kegiatanId = typeof attemptData.kegiatanId === "string" ? attemptData.kegiatanId : "";
       const modulId = typeof attemptData.modulId === "string" ? attemptData.modulId : "";
       const pendaftaranRef = db.collection("pendaftaran").doc(`${kegiatanId}_${user.uid}`);
-      const pendaftaranSnap = await tx.get(pendaftaranRef);
+      const kegiatanRef = db.collection("kegiatan").doc(kegiatanId);
+      const [pendaftaranSnap, kegiatanSnap] = await Promise.all([
+        tx.get(pendaftaranRef),
+        tx.get(kegiatanRef),
+      ]);
       if (!pendaftaranSnap.exists) {
         throw new AttemptRouteError(404, "Pendaftaran tidak ditemukan.");
       }
       const pendaftaranData = pendaftaranSnap.data() ?? {};
+      const kegiatanData = kegiatanSnap.exists ? (kegiatanSnap.data() ?? {}) : {};
 
       // Ambang lulus dari snapshot modul di pendaftaran (KA-5) — bukan dari
       // modul yang bisa berubah setelah pendaftaran. Kalau entah kenapa
@@ -119,6 +125,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         typeof attemptData.kadaluarsaPada === "string" ? new Date(attemptData.kadaluarsaPada) : null;
       const sudahKadaluarsa = kadaluarsaPada !== null && now > kadaluarsaPada;
 
+      // LAPIS KERAS (docs/kickoff.md §R, SLICE 3) — dibandingkan dengan
+      // ditutupPada KEGIATAN, BUKAN dengan kadaluarsaPada attempt di atas
+      // (itu batas waktu per-modul, sudah ada sebelumnya; ini jendela
+      // resmi kegiatan, konsep terpisah). Jawaban TETAP dinilai dan
+      // TETAP disimpan apa pun hasilnya — lihat komentar
+      // periksaJendelaUjian() untuk kenapa "diterima tapi tidak
+      // melayakkan" jauh lebih baik daripada menolak kiriman.
+      const ditutupPadaKegiatan =
+        typeof kegiatanData.ditutupPada === "string" ? new Date(kegiatanData.ditutupPada) : null;
+      const kedaluwarsaJendela = periksaJendelaUjian(ditutupPadaKegiatan, now).kedaluwarsa;
+
       tx.update(attemptRef, {
         status: sudahKadaluarsa ? "kadaluarsa" : "selesai",
         selesaiPada: now.toISOString(),
@@ -127,6 +144,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         total,
         skor,
         lulus,
+        kedaluwarsa: kedaluwarsaJendela,
       });
 
       const hasilModul =
@@ -141,8 +159,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         hasilSebelumnya && typeof hasilSebelumnya.skorTertinggi === "number"
           ? hasilSebelumnya.skorTertinggi
           : 0;
-      const skorTertinggi = Math.max(skorTertinggiSebelumnya, skor);
+      const kedaluwarsaSebelumnya =
+        hasilSebelumnya && typeof hasilSebelumnya.kedaluwarsa === "boolean"
+          ? hasilSebelumnya.kedaluwarsa
+          : false;
       const percobaan = typeof attemptData.attemptKe === "number" ? attemptData.attemptKe : 1;
+
+      // "Skor tertinggi menang" (ARSITEKTUR §11) — tapi kedaluwarsa HARUS
+      // ikut pindah kepemilikan bersama skornya, bukan menempel selamanya
+      // pada modul. Kalau attempt INI yang jadi (atau tetap) rekornya,
+      // kedaluwarsa-nya JUGA milik attempt ini. Kalau attempt ini TIDAK
+      // mengubah rekor, rekor lama (dan kedaluwarsa lamanya) dipertahankan
+      // apa adanya — bukan ditimpa oleh attempt yang skornya lebih rendah.
+      const attemptIniJadiRekor = skor >= skorTertinggiSebelumnya;
+      const skorTertinggi = attemptIniJadiRekor ? skor : skorTertinggiSebelumnya;
+      const kedaluwarsaRekor = attemptIniJadiRekor ? kedaluwarsaJendela : kedaluwarsaSebelumnya;
 
       tx.set(
         pendaftaranRef,
@@ -152,13 +183,14 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
               skorTertinggi,
               lulus: skorTertinggi >= ambangLulus,
               percobaan,
+              kedaluwarsa: kedaluwarsaRekor,
             },
           },
         },
         { merge: true }
       );
 
-      const response: SubmitAttemptResponse = { skor, benar, total, lulus };
+      const response: SubmitAttemptResponse = { skor, benar, total, lulus, kedaluwarsa: kedaluwarsaJendela };
       return response;
     });
 

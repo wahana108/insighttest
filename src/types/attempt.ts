@@ -28,6 +28,16 @@ export interface Attempt {
   benar: number | null;
   total: number | null;
   lulus: boolean | null;
+  /**
+   * Slice "ujian-berwaktu" — true kalau jawaban tiba di server SETELAH
+   * ditutupPada kegiatan + KELONGGARAN_JARINGAN_DETIK (src/lib/ujian-berwaktu.ts).
+   * BERBEDA dari status 'kadaluarsa' (itu batasWaktuMenit PER-MODUL) — field
+   * ini tentang jendela KEGIATAN. selesaiPada di atas adalah waktu kirim
+   * sebenarnya, dicatat server; tidak perlu field waktu terpisah. Jawaban
+   * TETAP dinilai dan skor TETAP tersimpan seperti biasa — lihat komentar
+   * evaluasiKelayakan() untuk akibatnya pada kelayakan otomatis.
+   */
+  kedaluwarsa: boolean;
 }
 
 export interface SoalUntukAttempt {
@@ -52,6 +62,7 @@ export interface AttemptDetailResponse {
   benar: number | null;
   total: number | null;
   lulus: boolean | null;
+  kedaluwarsa: boolean;
 }
 
 export interface SubmitAttemptResponse {
@@ -59,4 +70,5 @@ export interface SubmitAttemptResponse {
   benar: number;
   total: number;
   lulus: boolean;
+  kedaluwarsa: boolean;
 }

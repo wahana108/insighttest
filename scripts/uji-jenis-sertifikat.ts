@@ -121,7 +121,7 @@ uji("integrasi: kegiatan lama (bawaan terbitkanKeikutsertaan=false) + peserta ti
     },
   ];
   const hasilModul: Record<string, HasilModul> = {
-    "eval-1": { skorTertinggi: 40, lulus: false, percobaan: 1 },
+    "eval-1": { skorTertinggi: 40, lulus: false, percobaan: 1, kedaluwarsa: false },
   };
   const { kelayakan, prasyaratMateri } = evaluasiKelayakan(
     { modulSnapshot, hasilModul, referensiDibuka: [], atestasi: {} },

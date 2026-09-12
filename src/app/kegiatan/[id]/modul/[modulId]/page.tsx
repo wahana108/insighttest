@@ -706,6 +706,14 @@ export default function ModulAttemptPage({
   const [mengirim, setMengirim] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // LAPIS LUNAK (docs/kickoff.md §R, SLICE 3) — popup + kirim otomatis
+  // saat batasWaktuMenit PER-MODUL habis. Ini KESOPANAN bagi peserta jujur,
+  // TIDAK PERNAH menentukan kelayakan — itu wewenang LAPIS KERAS di server
+  // (perbandingan dengan ditutupPada kegiatan, src/lib/ujian-berwaktu.ts),
+  // konsep yang berbeda dari batasWaktuMenit di sini. Ref (bukan state)
+  // supaya pemicu-sekali ini tidak ikut memicu render ulang.
+  const autoKirimDipicu = useRef(false);
+
   // Jam berdetak untuk penghitung mundur (Slice 3.4b, tertunda) — cuma
   // dijalankan saat benar-benar mengerjakan attempt berbatas waktu, supaya
   // layar lain tidak me-render ulang tiap detik tanpa alasan.
@@ -717,6 +725,27 @@ export default function ModulAttemptPage({
     const id = setInterval(() => setSekarang(Date.now()), 1000);
     return () => clearInterval(id);
   }, [layar, kadaluarsaPada]);
+
+  // LAPIS LUNAK — begitu batasWaktuMenit habis, kirim OTOMATIS (bukan cuma
+  // menampilkan pesan pasif seperti sebelumnya). autoKirimDipicu memastikan
+  // ini terjadi SEKALI saja walau efek ini ikut berjalan ulang tiap detik
+  // (dependensinya `sekarang`, yang berdetak tiap detik lewat efek di atas).
+  useEffect(() => {
+    if (layar !== "mengerjakan" || !kadaluarsaPada || autoKirimDipicu.current) {
+      return;
+    }
+    const sudahHabis = sekarang >= new Date(kadaluarsaPada).getTime();
+    if (!sudahHabis) {
+      return;
+    }
+    autoKirimDipicu.current = true;
+    // Kirim LANGSUNG tanpa menunggu langkah konfirmasi manual — waktu
+    // habis SUDAH menjadi konfirmasinya. Kalau peserta kebetulan sedang
+    // di layar konfirmasi ("Yakin?"), itu tidak masalah — handleKirimFinal()
+    // tidak bergantung pada state mengonfirmasi sama sekali.
+    handleKirimFinal();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- handleKirimFinal dibuat ulang tiap render (menutup atas jawaban terbaru), sengaja tidak dimasukkan supaya efek ini tidak mengulang setiap render biasa.
+  }, [layar, kadaluarsaPada, sekarang]);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -780,6 +809,7 @@ export default function ModulAttemptPage({
             benar: data.benar ?? 0,
             total: data.total ?? 0,
             lulus: data.lulus ?? false,
+            kedaluwarsa: data.kedaluwarsa,
           });
           setLayar("hasil");
         }
@@ -1059,7 +1089,9 @@ export default function ModulAttemptPage({
             >
               {sisaDetik !== null ? (
                 waktuHabis ? (
-                  "Waktu habis — jawaban tetap dinilai kalau dikirim, segera kirim"
+                  error
+                    ? "Waktu habis — pengiriman otomatis gagal. Jawaban tetap tersimpan, kirim manual di bawah."
+                    : "Waktu habis. Jawaban Anda akan dikirim sekarang..."
                 ) : (
                   <>Sisa waktu: {formatSisaWaktu(sisaDetik)}</>
                 )
@@ -1164,6 +1196,12 @@ export default function ModulAttemptPage({
           >
             {hasil.lulus ? "Lulus" : "Belum lulus"}
           </p>
+          {hasil.kedaluwarsa && (
+            <p className="rounded border border-amber-200 bg-amber-50 p-3 text-xs text-amber-700 dark:border-amber-900 dark:bg-amber-950 dark:text-amber-400">
+              Jawaban ini dikirim setelah jendela kegiatan ditutup. Nilai di atas tetap tercatat,
+              tapi tidak otomatis melayakkan sertifikat — keputusannya ada di admin kegiatan ini.
+            </p>
+          )}
           <Link
             href={`/kegiatan/${kegiatanId}`}
             className="block w-full rounded bg-black px-4 py-3 text-sm font-medium text-white dark:bg-white dark:text-black"

@@ -35,6 +35,18 @@ export interface HasilModul {
   skorTertinggi: number;
   lulus: boolean;
   percobaan: number;
+  /**
+   * Slice "ujian-berwaktu" — true kalau ATTEMPT yang menentukan skorTertinggi
+   * saat ini dikirim setelah ditutupPada kegiatan (+ kelonggaran jaringan).
+   * Diperbarui HANYA saat sebuah attempt baru MENYAMAI ATAU MELAMPAUI
+   * skorTertinggi sebelumnya (lihat POST /api/attempt/[id]/submit) — kalau
+   * attempt yang lebih baru tidak mengubah rekor, kedaluwarsa lama
+   * dipertahankan apa adanya, bukan ditimpa. Dipakai evaluasiKelayakan()
+   * untuk MENOLAK item ini melayakkan sertifikat otomatis — skor/lulus di
+   * sini TIDAK diubah/dihapus, cuma tidak dipercaya untuk kelayakan
+   * otomatis (persis seperti mode manual_admin).
+   */
+  kedaluwarsa: boolean;
 }
 
 export interface Pendaftaran {

@@ -272,6 +272,13 @@ export default function KegiatanDetailPage({
             Pendaftaran sudah ditutup pada {formatDateTime(kegiatan.ditutupPada as string)}.
           </p>
         )}
+        {kegiatan.ditutupPada && (
+          <p className="mt-1 text-xs text-zinc-500">
+            Jawaban evaluasi yang dikirim setelah kegiatan ditutup tetap dinilai dan tetap
+            tersimpan, tapi tidak otomatis melayakkan sertifikat — keputusannya berpindah ke
+            admin kegiatan ini.
+          </p>
+        )}
         {kegiatan.kuotaPeserta > 0 && (
           <p className={`mt-1 text-sm font-medium ${kuotaPenuh ? "text-red-600" : "text-zinc-500"}`}>
             Kuota: {kegiatan.nomorUrutTerakhir} dari {kegiatan.kuotaPeserta} terisi

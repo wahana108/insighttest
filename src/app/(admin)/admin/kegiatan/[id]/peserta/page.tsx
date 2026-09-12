@@ -76,6 +76,26 @@ function deskripsiMateriAdmin(p: PrasyaratMateri): string | null {
   return bagian.length > 0 ? bagian.join(" · ") : null;
 }
 
+/**
+ * Slice "ujian-berwaktu" (BAGIAN d) — admin HARUS melihat ini sebelum
+ * memutuskan menerbitkan: modul yang jawabannya tiba setelah ditutupPada
+ * kegiatan tidak lagi melayakkan otomatis (lihat evaluasiKelayakan()),
+ * walau nilai mentahnya di item.skor/hasilModul tetap ada dan tetap
+ * ditampilkan di tempat lain. null kalau tidak ada satu pun modul wajib
+ * yang kedaluwarsa.
+ */
+function deskripsiKedaluwarsaAdmin(item: PesertaAdminRingkas): string | null {
+  const modulKedaluwarsa = item.items.filter(
+    (modul) => item.hasilModul[modul.modulId]?.kedaluwarsa === true
+  );
+  if (modulKedaluwarsa.length === 0) {
+    return null;
+  }
+  return `Dikirim setelah jendela kegiatan ditutup: ${modulKedaluwarsa
+    .map((m) => m.judul)
+    .join(", ")}.`;
+}
+
 interface HasilBarisTerbitkan {
   uid: string;
   ok: boolean;
@@ -610,6 +630,7 @@ export default function AdminPesertaPage({
         {items.map((item) => {
           const terkunci = item.sertifikat?.status === "berlaku";
           const materiAdmin = deskripsiMateriAdmin(item.prasyaratMateri);
+          const kedaluwarsaAdmin = deskripsiKedaluwarsaAdmin(item);
           return (
             <li
               key={item.uid}
@@ -675,6 +696,9 @@ export default function AdminPesertaPage({
                   </p>
                 )}
                 {materiAdmin && <p className="text-xs text-zinc-400">{materiAdmin}</p>}
+                {kedaluwarsaAdmin && (
+                  <p className="text-xs font-medium text-amber-600">{kedaluwarsaAdmin}</p>
+                )}
               </div>
               <p>
                 <span className="text-zinc-500">Kalau diterbitkan sekarang: </span>
@@ -785,6 +809,7 @@ export default function AdminPesertaPage({
             {items.map((item) => {
               const terkunci = item.sertifikat?.status === "berlaku";
               const materiAdmin = deskripsiMateriAdmin(item.prasyaratMateri);
+              const kedaluwarsaAdmin = deskripsiKedaluwarsaAdmin(item);
               return (
                 <tr
                   key={item.uid}
@@ -844,6 +869,9 @@ export default function AdminPesertaPage({
                           pertimbangan.
                         </p>
                       </div>
+                    )}
+                    {kedaluwarsaAdmin && (
+                      <p className="text-xs font-medium text-amber-600">{kedaluwarsaAdmin}</p>
                     )}
                   </td>
                   <td className={`px-3 py-2 font-medium ${kelasJenisProyeksi(item.jenisSertifikatProyeksi)}`}>

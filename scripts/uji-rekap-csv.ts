@@ -122,13 +122,13 @@ function pesertaDasar(override: Partial<RekapPesertaBaris>): RekapPesertaBaris {
   };
 }
 
-uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan satu kolom per modul atestasi", () => {
+uji("susunBarisRekap: header memuat satu trio kolom per modul evaluasi dan satu kolom per modul atestasi", () => {
   const [header] = susunBarisRekap(KEGIATAN, []);
   assert.deepEqual(header, [
     "No.", "Nama", "Email", "Institusi", "Nomor Identitas", "No. Telepon", "Sumber Identitas",
     "Sumber Pendaftaran", "Status Pendaftaran", "Nilai Akhir",
-    "Skor: Evaluasi Satu", "Lulus: Evaluasi Satu",
-    "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua",
+    "Skor: Evaluasi Satu", "Lulus: Evaluasi Satu", "Kedaluwarsa: Evaluasi Satu",
+    "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua", "Kedaluwarsa: Evaluasi Dua",
     "Atestasi: Atestasi Satu",
     "Referensi Dibuka", "Hasil Kelayakan", "Status Prasyarat Materi",
     "Serial Sertifikat", "Jenis Sertifikat", "Status Sertifikat", "Tanggal Terbit", "Kode Verifikasi",
@@ -137,37 +137,41 @@ uji("susunBarisRekap: header memuat satu pasang kolom per modul evaluasi dan sat
 
 // Slice 8.3a: tiga keadaan berbeda untuk kolom skor/lulus per modul
 // evaluasi — HARUS bisa dibedakan dari CSV-nya saja, tanpa membuka
-// pendaftaran mentahnya. Indeks kolom: 8 = Skor eval-1, 9 = Lulus eval-1,
-// 10 = Skor eval-2, 11 = Lulus eval-2 (setelah 8 kolom tetap di depan).
+// pendaftaran mentahnya. Slice "ujian-berwaktu" menambah kolom ketiga
+// (Kedaluwarsa) per modul evaluasi, jadi tiap modul sekarang 3 kolom.
 const IDX_SKOR_EVAL_1 = 10;
 const IDX_LULUS_EVAL_1 = 11;
-const IDX_SKOR_EVAL_2 = 12;
-const IDX_LULUS_EVAL_2 = 13;
+const IDX_KEDALUWARSA_EVAL_1 = 12;
+const IDX_SKOR_EVAL_2 = 13;
+const IDX_LULUS_EVAL_2 = 14;
+const IDX_KEDALUWARSA_EVAL_2 = 15;
 
 uji("susunBarisRekap: modul TIDAK ADA di modulSnapshot peserta -> sel \"-\" (bukan kosong, bukan 0)", () => {
   const peserta = pesertaDasar({
     // eval-2 belum ada saat peserta ini mendaftar.
     modulEvaluasiDiSnapshot: ["eval-1"],
-    hasilEvaluasi: { "eval-1": { skor: 100, lulus: true } },
+    hasilEvaluasi: { "eval-1": { skor: 100, lulus: true, kedaluwarsa: false } },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
   assert.equal(baris[IDX_SKOR_EVAL_2], "-", "eval-2 tidak ada di snapshot -> harus \"-\"");
   assert.equal(baris[IDX_LULUS_EVAL_2], "-", "kolom lulus eval-2 juga harus \"-\"");
+  assert.equal(baris[IDX_KEDALUWARSA_EVAL_2], "-", "kolom kedaluwarsa eval-2 juga harus \"-\"");
 });
 
 uji("susunBarisRekap: modul ADA di snapshot tapi belum dikerjakan -> sel KOSONG (undefined)", () => {
   const peserta = pesertaDasar({
     // Kedua modul ada di snapshot (bawaan pesertaDasar), tapi eval-2 belum disentuh sama sekali.
-    hasilEvaluasi: { "eval-1": { skor: 100, lulus: true } },
+    hasilEvaluasi: { "eval-1": { skor: 100, lulus: true, kedaluwarsa: false } },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
   assert.equal(baris[IDX_SKOR_EVAL_2], undefined, "eval-2 ada di snapshot tapi belum dikerjakan -> harus kosong");
   assert.equal(baris[IDX_LULUS_EVAL_2], undefined, "kolom lulus eval-2 juga harus kosong");
+  assert.equal(baris[IDX_KEDALUWARSA_EVAL_2], undefined, "kolom kedaluwarsa eval-2 juga harus kosong");
 });
 
 uji("susunBarisRekap: modul dikerjakan dengan skor 0 -> sel \"0\", beda dari kosong dan beda dari \"-\"", () => {
   const peserta = pesertaDasar({
-    hasilEvaluasi: { "eval-1": { skor: 0, lulus: false } },
+    hasilEvaluasi: { "eval-1": { skor: 0, lulus: false, kedaluwarsa: false } },
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
   assert.equal(baris[IDX_SKOR_EVAL_1], 0, "skor 0 sungguhan -> harus 0, bukan kosong ataupun \"-\"");
@@ -177,12 +181,35 @@ uji("susunBarisRekap: modul dikerjakan dengan skor 0 -> sel \"0\", beda dari kos
 uji("susunBarisRekap: ketiga keadaan sekaligus pada satu peserta harus berbeda satu sama lain", () => {
   const peserta = pesertaDasar({
     modulEvaluasiDiSnapshot: ["eval-1"], // eval-2 TIDAK ada di snapshot sama sekali
-    hasilEvaluasi: { "eval-1": { skor: 0, lulus: false } }, // eval-1 dikerjakan, skor 0
+    hasilEvaluasi: { "eval-1": { skor: 0, lulus: false, kedaluwarsa: false } }, // eval-1 dikerjakan, skor 0
   });
   const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
   assert.equal(baris[IDX_SKOR_EVAL_1], 0);
   assert.equal(baris[IDX_SKOR_EVAL_2], "-");
   assert.notEqual(baris[IDX_SKOR_EVAL_1], baris[IDX_SKOR_EVAL_2]);
+});
+
+// ---------------------------------------------------------------------
+// Slice "ujian-berwaktu": kolom "Kedaluwarsa: {judul}" — admin harus
+// melihat penanda ini SEBELUM memutuskan menerbitkan, karena kolom
+// "Lulus" bisa "Ya" sementara hasilnya tetap tidak melayakkan otomatis.
+// ---------------------------------------------------------------------
+
+uji("susunBarisRekap: hasil kedaluwarsa -> kolom Kedaluwarsa \"Ya\" walau kolom Lulus \"Ya\"", () => {
+  const peserta = pesertaDasar({
+    hasilEvaluasi: { "eval-1": { skor: 95, lulus: true, kedaluwarsa: true } },
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_LULUS_EVAL_1], "Ya");
+  assert.equal(baris[IDX_KEDALUWARSA_EVAL_1], "Ya");
+});
+
+uji("susunBarisRekap: hasil TIDAK kedaluwarsa -> kolom Kedaluwarsa kosong, BUKAN \"Tidak\" (supaya penanda tidak tenggelam)", () => {
+  const peserta = pesertaDasar({
+    hasilEvaluasi: { "eval-1": { skor: 95, lulus: true, kedaluwarsa: false } },
+  });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_KEDALUWARSA_EVAL_1], "");
 });
 
 uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di dalam snapshot -> label tingkat (bukan kosong)", () => {

@@ -130,6 +130,7 @@ function mapHasilModul(value: unknown): Record<string, HasilModul> {
       skorTertinggi: typeof data.skorTertinggi === "number" ? data.skorTertinggi : 0,
       lulus: typeof data.lulus === "boolean" ? data.lulus : false,
       percobaan: typeof data.percobaan === "number" ? data.percobaan : 0,
+      kedaluwarsa: typeof data.kedaluwarsa === "boolean" ? data.kedaluwarsa : false,
     };
   }
   return hasil;
@@ -283,7 +284,11 @@ export async function GET(
 
       const hasilEvaluasi: RekapPesertaBaris["hasilEvaluasi"] = {};
       for (const [modulId, hasil] of Object.entries(hasilModul)) {
-        hasilEvaluasi[modulId] = { skor: hasil.skorTertinggi, lulus: hasil.lulus };
+        hasilEvaluasi[modulId] = {
+          skor: hasil.skorTertinggi,
+          lulus: hasil.lulus,
+          kedaluwarsa: hasil.kedaluwarsa,
+        };
       }
       const hasilAtestasi: RekapPesertaBaris["hasilAtestasi"] = {};
       for (const item of prasyaratMateri.atestasiPerModul) {

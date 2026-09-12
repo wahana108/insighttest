@@ -48,6 +48,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
       benar: typeof data.benar === "number" ? data.benar : null,
       total: typeof data.total === "number" ? data.total : null,
       lulus: typeof data.lulus === "boolean" ? data.lulus : null,
+      kedaluwarsa: typeof data.kedaluwarsa === "boolean" ? data.kedaluwarsa : false,
     };
     return Response.json(response);
   } catch (err) {

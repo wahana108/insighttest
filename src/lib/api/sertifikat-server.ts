@@ -253,6 +253,7 @@ function mapHasilModulUntukKelayakan(value: unknown): Record<string, HasilModul>
       skorTertinggi: typeof data.skorTertinggi === "number" ? data.skorTertinggi : 0,
       lulus: typeof data.lulus === "boolean" ? data.lulus : false,
       percobaan: typeof data.percobaan === "number" ? data.percobaan : 0,
+      kedaluwarsa: typeof data.kedaluwarsa === "boolean" ? data.kedaluwarsa : false,
     };
   }
   return hasil;
