@@ -22,6 +22,13 @@ export interface HasilKeputusanKuota {
 const OK: HasilKeputusanKuota = { ok: true, pesan: null };
 
 /**
+ * Diekspor (bukan literal terpisah di tiap pemanggil) supaya pesan di
+ * penjaga klien /daftar (src/app/daftar/page.tsx) TIDAK PERNAH bisa
+ * menyimpang dari pesan penolakan sesungguhnya di server.
+ */
+export const PESAN_KUOTA_HARIAN_PENUH = "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.";
+
+/**
  * LAPIS 1 — kuotaKegiatan 0 berarti tak terbatas (BAWAAN, KA-4: batas
  * adalah parameter). nomorUrutBaru adalah posisi yang AKAN diduduki
  * pendaftar ini kalau diterima (nomorUrutTerakhir + 1, dihitung pemanggil
@@ -62,7 +69,7 @@ export function putuskanBatasHarian(
   if (jumlahBaruHariIni > batasHarian) {
     return {
       ok: false,
-      pesan: "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.",
+      pesan: PESAN_KUOTA_HARIAN_PENUH,
     };
   }
   return OK;

@@ -2276,3 +2276,70 @@ sampai besok. Pada hari paket dinaikkan, dua hal wajib dipasang **sebelum** apa 
 dan keduanya di Google Cloud Billing, bukan di kode: **anggaran dengan peringatan**, dan
 **batas harian** pada Firestore. Kode tidak bisa melindungi dari tagihan; setelan penagihan
 bisa.
+
+### Celah KA-1 di tingkat dokumen, bukan field (ditemukan 11 Sep 2026, belum diperbaiki)
+
+`modePendaftaran()` di `firestore.rules` memanggil `.data.get('modePendaftaran','terbuka')`
+pada hasil `get()` ke `parameter/global`. KA-1 dipatuhi — defaultnya ada. Tapi kalau
+**dokumennya sendiri belum pernah dibuat**, `.data` bernilai null dan rules melempar
+*"Null value error"*, bukan jatuh ke `'terbuka'`.
+
+> **KA-1 menjaga field yang hilang; ia tidak menjaga dokumen yang hilang.**
+> `.data.get('x', default)` hanya aman kalau dokumennya ada. Bentuk yang benar-benar aman:
+> `exists(path) ? get(path).data.get('x', default) : default`.
+
+Tidak muncul di produksi karena admin selalu menyimpan `/admin/parameter` sekali sebelum
+membuka pendaftaran. **Tapi ia pasti muncul di project Firebase yang baru** — persis skenario
+"satu basis kode, dua penempatan" di dokumen Arah Pengembangan §5: project baru, dokumen
+parameter belum ada, pendaftaran mati total dengan pesan yang tidak menjelaskan apa pun.
+
+Perbaikannya satu baris. Dibundel ke slice berikutnya yang memang menyentuh `firestore.rules`
+(slice 4 — kode akses kegiatan), supaya tidak menambah satu siklus deploy tersendiri.
+
+### Slice 1 & 2 — kuota dua lapis dan pendaftaran tanpa kata sandi (11–12 Sep 2026)
+
+Kuota dua lapis terpasang: `kuotaPeserta` per kegiatan (mengikat **semua** jalur, termasuk
+impor admin) dan `batasPendaftaranBaruPerHari` global (mengikat **hanya** pendaftaran mandiri).
+Satu lapis tentang acaranya, satu lapis tentang infrastrukturnya — itu sebabnya yang satu
+mengikat semua orang dan yang satu tidak.
+
+Penghitung hariannya berkunci **Asia/Jakarta**, bukan UTC. Kalau UTC, kuota harian pengguna
+Indonesia akan mereset pukul 07.00 pagi dan tidak ada yang akan mengerti kenapa. Dinaikkan
+dari nilai eksplisit hasil `tx.get()` di dalam transaksi, **bukan** `increment()` — pelajaran
+5.0c.
+
+> **Kuota adalah penjaga di pintu, bukan dinding di dalam ruangan.** Peserta yang sudah
+> terdaftar tetap leluasa meski kuota hari itu penuh — `modulSnapshot`-nya sudah beku dan
+> kelayakannya sedang berjalan. Mengusirnya di tengah jalan merusak hal yang sedang dijaga.
+
+Pendaftaran tanpa kata sandi: `/daftar` hanya meminta email dan nama, akun dibuat dengan kata
+sandi acak yang langsung dibuang, lalu tautan "Buat kata sandi" dikirim dan pengguna
+**dikeluarkan** — inti rancangannya adalah orang belum boleh masuk sebelum membuktikan ia
+memiliki emailnya.
+
+> `auth/email-already-in-use` **tidak pernah ditampilkan**. Ditangkap, dikirimi tautan setel
+> ulang, lalu ditampilkan pesan yang persis sama dengan kasus berhasil. Dua hal benar
+> sekaligus: orang luar tidak belajar siapa punya akun, dan pemilik email yang sebenarnya
+> justru menerima tautan untuk mengambil alih akunnya. Masalah penyamaran identitas selesai
+> tanpa langkah verifikasi terpisah.
+
+Dua pelajaran berulang yang muncul lagi di sini: `setDoc()` non-merge menghapus field baru
+yang tidak disebutkan (ditutup dengan `Pick<>`, keluarga yang sama dengan jebakan
+`arrayUnion`), dan penjaga di klien yang hanya mengandalkan atribut `disabled` tanpa
+pemeriksaan ulang di dalam handler — tombol Google pada `/daftar` terlewat sepenuhnya sampai
+pengguna menemukannya lewat pemakaian nyata.
+
+### Slice 4 diperluas: kode akses sebagai jalur apresiasi (usul pengguna, 12 Sep 2026)
+
+Saat batas harian penuh, pintu tidak lagi sekadar berkata "coba lagi besok" — ia menawarkan
+jalur lain. **Pemegang `kodeAkses` melewati batas harian, tapi tetap terikat kuota kegiatan.**
+
+Konsisten dengan pembagian dua lapis: batas harian adalah pelindung infrastruktur, dan
+penyumbang sedang ikut menanggungnya. Kapasitas kegiatan adalah janji tentang acaranya, dan
+itu tidak dijual kepada siapa pun.
+
+> **Kode, bukan bukti.** Bukti transfer berarti tangkapan layar yang harus diperiksa manusia
+> satu per satu — mengembalikan manusia ke dalam alur, dan gambar bisa dipalsukan atau dipakai
+> ulang. Kodenya sendiri adalah buktinya, karena ia hanya terlihat di pesan terima kasih
+> Saweria. Tetap sediakan tautan "hubungi admin" sebagai jalan terakhir bagi yang kehilangan
+> kodenya.

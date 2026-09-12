@@ -18,6 +18,14 @@ export interface SystemParameter {
    * Spark (§5, docs/arsitektur.md).
    */
   batasPendaftaranBaruPerHari: number;
+  /**
+   * Slice "daftar-tanpa-sandi" (docs/kickoff.md §R, SLICE 2) — default
+   * false. Berlaku HANYA saat modePendaftaran === 'terbuka' (lihat
+   * pendaftaranTanpaSandiAktif(), src/lib/pendaftaran-tanpa-sandi.ts) —
+   * mode 'persetujuan'/'undangan' punya gerbangnya sendiri dan tidak
+   * disentuh field ini.
+   */
+  pendaftaranTanpaKataSandi: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }

@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { signInWithEmail, signInWithGoogle } from "@/lib/auth/session";
+import { pendaftaranTanpaSandiAktif } from "@/lib/pendaftaran-tanpa-sandi";
+import { getSystemParameter } from "@/lib/services/system-parameter";
 
 export default function MasukPage() {
   const router = useRouter();
@@ -11,6 +13,22 @@ export default function MasukPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Slice "daftar-tanpa-sandi" — HANYA mengubah teks tautan di bawah, tidak
+  // ada perilaku lain di halaman ini yang bergantung padanya. Bawaan false
+  // supaya render pertama (sebelum parameter selesai dimuat) sama persis
+  // dengan keadaan mati — tidak ada kedipan teks.
+  const [tanpaSandiAktif, setTanpaSandiAktif] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    getSystemParameter().then((parameter) => {
+      if (mounted) setTanpaSandiAktif(pendaftaranTanpaSandiAktif(parameter));
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -74,7 +92,7 @@ export default function MasukPage() {
                 href="/lupa-password"
                 className="text-xs font-medium text-zinc-500 underline hover:text-zinc-700 dark:hover:text-zinc-300"
               >
-                Lupa kata sandi?
+                {tanpaSandiAktif ? "Lupa / buat kata sandi" : "Lupa kata sandi?"}
               </Link>
             </div>
             <input

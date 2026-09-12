@@ -1,7 +1,9 @@
+import { FirebaseError } from "firebase/app";
 import {
   createUserWithEmailAndPassword,
   deleteUser,
   GoogleAuthProvider,
+  sendPasswordResetEmail,
   signInWithEmailAndPassword,
   signInWithPopup,
   signOut,
@@ -10,6 +12,10 @@ import {
 } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase/client";
+import {
+  buatKataSandiAcak,
+  putuskanTampilanSetelahDaftarTanpaSandi,
+} from "@/lib/pendaftaran-tanpa-sandi";
 import { getSystemParameter } from "@/lib/services/system-parameter";
 import { getUndanganByEmail } from "@/lib/services/user-invitation";
 import { createProfileForNewAccount } from "./user-profile";
@@ -98,6 +104,70 @@ export async function registerWithEmail(
   } catch (error) {
     await rollbackFailedRegistration(credential.user);
     throw error;
+  }
+}
+
+/**
+ * Slice "daftar-tanpa-sandi" (docs/kickoff.md §R, SLICE 2) — dipanggil
+ * HANYA saat pendaftaranTanpaSandiAktif(parameter) true (diperiksa oleh
+ * pemanggil di /daftar, bukan di sini — sama seperti completeRegistration()
+ * mempercayai `parameter` yang dioper, bukan membaca ulang).
+ *
+ * Kata sandi acak (buatKataSandiAcak()) hanya hidup di dalam fungsi ini —
+ * dipakai sekali untuk createUserWithEmailAndPassword() lalu DIBUANG
+ * (tidak pernah disimpan ke variabel di luar percobaan ini, tidak dicatat,
+ * tidak dikembalikan ke pemanggil).
+ *
+ * auth/email-already-in-use SENGAJA tidak pernah melempar — lihat
+ * putuskanTampilanSetelahDaftarTanpaSandi(). Baik jalur itu maupun jalur
+ * normal berakhir dengan signOut(), supaya pemanggil (halaman /daftar)
+ * hanya punya SATU pesan sukses untuk ditampilkan, tidak pernah dua kode
+ * yang bisa dibedakan lewat timing atau isi respons.
+ */
+export async function registerWithoutPassword(
+  email: string,
+  displayName: string,
+  parameter: SystemParameter
+): Promise<void> {
+  const emailTrim = email.trim();
+
+  let credential: { user: User };
+  try {
+    credential = await createUserWithEmailAndPassword(auth, emailTrim, buatKataSandiAcak());
+  } catch (err) {
+    const kode = err instanceof FirebaseError ? err.code : "";
+    const keputusan = putuskanTampilanSetelahDaftarTanpaSandi(kode);
+    if (keputusan.tampilkanSukses) {
+      // Disamarkan (lihat komentar putuskanTampilanSetelahDaftarTanpaSandi):
+      // akun sudah ada, jadi tidak ada apa pun untuk di-rollback — kirim
+      // tautan ke pemilik SEBENARNYA lalu kembali seolah berhasil.
+      await sendPasswordResetEmail(auth, emailTrim);
+      return;
+    }
+    throw new RegistrationError(keputusan.pesanGalat ?? "Gagal mendaftar. Coba lagi.");
+  }
+
+  try {
+    const name = displayName.trim();
+    if (name) {
+      await updateProfile(credential.user, { displayName: name });
+    }
+    await completeRegistration(credential.user, parameter);
+    await sendPasswordResetEmail(auth, emailTrim);
+  } catch (error) {
+    await rollbackFailedRegistration(credential.user);
+    throw error;
+  } finally {
+    // KELUARKAN pengguna SEGERA — BUKAN kelalaian. createUserWithEmailAndPassword
+    // menandatangani sesi baru secara otomatis; inti rancangan slice ini
+    // adalah orang belum boleh masuk sebelum membuktikan kepemilikan
+    // emailnya lewat tautan di atas. Di `finally` supaya tetap berjalan
+    // walau completeRegistration() gagal (lalu rollback) di atas.
+    try {
+      await signOut(auth);
+    } catch {
+      // Upaya terbaik — akun (kalau berhasil dibuat) dan surel tetap terkirim.
+    }
   }
 }
 

@@ -57,6 +57,7 @@ function AdminParameterPageIsi() {
           pesanBeranda: parameter.pesanBeranda,
           urlPublik: parameter.urlPublik,
           batasPendaftaranBaruPerHari: parameter.batasPendaftaranBaruPerHari,
+          pendaftaranTanpaKataSandi: parameter.pendaftaranTanpaKataSandi,
         },
         user.uid
       );
@@ -192,6 +193,28 @@ function AdminParameterPageIsi() {
             saja (impor daftar hadir oleh admin tidak dihitung) — melindungi kuota Firestore
             paket Spark. Naikkan hanya kalau sudah pindah ke paket Blaze dan tahu berapa
             anggarannya.
+          </p>
+        </div>
+
+        <div>
+          <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+            <input
+              type="checkbox"
+              checked={parameter.pendaftaranTanpaKataSandi}
+              onChange={(event) =>
+                setParameter((prev) => ({
+                  ...prev,
+                  pendaftaranTanpaKataSandi: event.target.checked,
+                }))
+              }
+              disabled={!canSave}
+            />
+            Pendaftaran tanpa kata sandi
+          </label>
+          <p className="mt-1 text-xs text-zinc-500">
+            Berlaku HANYA saat mode pendaftaran = Terbuka. /daftar hanya meminta email dan
+            nama; kata sandi dibuat acak lalu peserta menerima tautan email untuk membuatnya
+            sendiri — membuktikan ia memang pemilik email itu sebelum bisa masuk.
           </p>
         </div>
 

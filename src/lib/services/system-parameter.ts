@@ -10,6 +10,7 @@ export const DEFAULT_SYSTEM_PARAMETER: SystemParameter = {
   pesanBeranda: "",
   urlPublik: "",
   batasPendaftaranBaruPerHari: 0,
+  pendaftaranTanpaKataSandi: false,
   updatedAt: null,
   updatedBy: null,
 };
@@ -31,6 +32,7 @@ function mapSystemParameter(data: DocumentData): SystemParameter {
     urlPublik: typeof data.urlPublik === "string" ? data.urlPublik : "",
     batasPendaftaranBaruPerHari:
       typeof data.batasPendaftaranBaruPerHari === "number" ? data.batasPendaftaranBaruPerHari : 0,
+    pendaftaranTanpaKataSandi: data.pendaftaranTanpaKataSandi === true,
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
   };
@@ -55,14 +57,24 @@ export async function getSystemParameter(): Promise<SystemParameter> {
 /**
  * PENTING: setDoc() di bawah TIDAK memakai {merge:true} — ia menimpa
  * SELURUH dokumen parameter/global. Karena itu `next` di sini WAJIB
- * menyertakan batasPendaftaranBaruPerHari (bukan opsional) — kalau field
- * ini pernah lupa disertakan, ia akan lenyap setiap kali admin menyimpan
- * pengaturan lain, walau tidak pernah dimaksudkan berubah.
+ * menyertakan SETIAP field yang ada di SystemParameter (kecuali
+ * updatedAt/updatedBy, yang ditulis fungsi ini sendiri) — bukan opsional.
+ * Field yang lupa disertakan akan lenyap setiap kali admin menyimpan
+ * pengaturan lain, walau tidak pernah dimaksudkan berubah. Ini persis
+ * jebakan yang sama dengan FieldValue di dalam set() non-merge (5.0c),
+ * dalam bentuk berbeda: Pick<> di bawah dibuat SELALU mengikuti seluruh
+ * field SystemParameter yang bisa disunting admin — kalau slice
+ * berikutnya menambah field lagi, tambahkan juga di sini.
  */
 export async function updateSystemParameter(
   next: Pick<
     SystemParameter,
-    "namaPlatform" | "modePendaftaran" | "pesanBeranda" | "urlPublik" | "batasPendaftaranBaruPerHari"
+    | "namaPlatform"
+    | "modePendaftaran"
+    | "pesanBeranda"
+    | "urlPublik"
+    | "batasPendaftaranBaruPerHari"
+    | "pendaftaranTanpaKataSandi"
   >,
   updatedBy: string
 ): Promise<void> {
