@@ -58,6 +58,9 @@ function AdminParameterPageIsi() {
           urlPublik: parameter.urlPublik,
           batasPendaftaranBaruPerHari: parameter.batasPendaftaranBaruPerHari,
           pendaftaranTanpaKataSandi: parameter.pendaftaranTanpaKataSandi,
+          urlDukungan: parameter.urlDukungan,
+          pesanDukungan: parameter.pesanDukungan,
+          kontakAdmin: parameter.kontakAdmin,
         },
         user.uid
       );
@@ -216,6 +219,80 @@ function AdminParameterPageIsi() {
             nama; kata sandi dibuat acak lalu peserta menerima tautan email untuk membuatnya
             sendiri — membuktikan ia memang pemilik email itu sebelum bisa masuk.
           </p>
+        </div>
+
+        <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+          <div>
+            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              Jalur apresiasi
+            </p>
+            <p className="mt-1 text-xs text-zinc-500">
+              Kosongkan urlDukungan untuk mematikan fitur ini — tampilan saat kuota harian
+              penuh akan persis seperti sebelumnya. Diisi, /daftar dan halaman kegiatan
+              menawarkan tautan ini alih-alih sekadar &quot;coba lagi besok&quot;.
+            </p>
+          </div>
+          <div>
+            <label
+              htmlFor="urlDukungan"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              URL dukungan (mis. Saweria)
+            </label>
+            <input
+              id="urlDukungan"
+              type="url"
+              placeholder="https://saweria.co/namaAnda"
+              value={parameter.urlDukungan}
+              onChange={(event) =>
+                setParameter((prev) => ({ ...prev, urlDukungan: event.target.value }))
+              }
+              disabled={!canSave}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="pesanDukungan"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Pesan dukungan
+            </label>
+            <textarea
+              id="pesanDukungan"
+              rows={2}
+              placeholder="Kuota hari ini penuh? Dukung platform ini dan dapatkan kode akses untuk mendaftar hari ini juga."
+              value={parameter.pesanDukungan}
+              onChange={(event) =>
+                setParameter((prev) => ({ ...prev, pesanDukungan: event.target.value }))
+              }
+              disabled={!canSave}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </div>
+          <div>
+            <label
+              htmlFor="kontakAdmin"
+              className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+            >
+              Kontak admin (jalan terakhir)
+            </label>
+            <input
+              id="kontakAdmin"
+              type="text"
+              placeholder="mailto:admin@contoh.com atau https://wa.me/62..."
+              value={parameter.kontakAdmin}
+              onChange={(event) =>
+                setParameter((prev) => ({ ...prev, kontakAdmin: event.target.value }))
+              }
+              disabled={!canSave}
+              className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+            <p className="mt-1 text-xs text-zinc-500">
+              Ditampilkan sebagai tautan &quot;Hubungi admin&quot; bagi yang kehilangan kode
+              aksesnya. Kosong berarti baris ini tidak ditampilkan.
+            </p>
+          </div>
         </div>
 
         {!canSave && (

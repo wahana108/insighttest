@@ -11,6 +11,9 @@ export const DEFAULT_SYSTEM_PARAMETER: SystemParameter = {
   urlPublik: "",
   batasPendaftaranBaruPerHari: 0,
   pendaftaranTanpaKataSandi: false,
+  urlDukungan: "",
+  pesanDukungan: "",
+  kontakAdmin: "",
   updatedAt: null,
   updatedBy: null,
 };
@@ -33,6 +36,9 @@ function mapSystemParameter(data: DocumentData): SystemParameter {
     batasPendaftaranBaruPerHari:
       typeof data.batasPendaftaranBaruPerHari === "number" ? data.batasPendaftaranBaruPerHari : 0,
     pendaftaranTanpaKataSandi: data.pendaftaranTanpaKataSandi === true,
+    urlDukungan: typeof data.urlDukungan === "string" ? data.urlDukungan : "",
+    pesanDukungan: typeof data.pesanDukungan === "string" ? data.pesanDukungan : "",
+    kontakAdmin: typeof data.kontakAdmin === "string" ? data.kontakAdmin : "",
     updatedAt: typeof data.updatedAt === "string" ? data.updatedAt : null,
     updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : null,
   };
@@ -75,6 +81,9 @@ export async function updateSystemParameter(
     | "urlPublik"
     | "batasPendaftaranBaruPerHari"
     | "pendaftaranTanpaKataSandi"
+    | "urlDukungan"
+    | "pesanDukungan"
+    | "kontakAdmin"
   >,
   updatedBy: string
 ): Promise<void> {

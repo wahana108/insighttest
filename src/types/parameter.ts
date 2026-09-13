@@ -26,6 +26,24 @@ export interface SystemParameter {
    * disentuh field ini.
    */
   pendaftaranTanpaKataSandi: boolean;
+  /**
+   * Slice "akses-kegiatan" (docs/kickoff.md §R, SLICE 4) — JALUR APRESIASI.
+   * Kosong (bawaan) berarti fitur mati — tampilan saat kuota harian penuh
+   * persis seperti sebelum slice ini. Diisi, /daftar dan halaman kegiatan
+   * menawarkan tautan ini alih-alih sekadar "coba lagi besok"; kode akses
+   * (kegiatan_kode/{id}) yang didapat lewat urlDukungan MELEWATI batas
+   * harian tapi TETAP terikat kuota kegiatan (lihat putuskanAksesMandiri(),
+   * src/lib/akses-kegiatan.ts).
+   */
+  urlDukungan: string;
+  /** Teks pendek yang bisa disunting admin, ditampilkan di atas tautan urlDukungan. */
+  pesanDukungan: string;
+  /**
+   * mis. mailto: atau wa.me/... — jalan terakhir bagi yang kehilangan kode
+   * aksesnya. Kosong berarti baris "hubungi admin" tidak ditampilkan sama
+   * sekali (bukan galat) — admin belum sempat mengisinya.
+   */
+  kontakAdmin: string;
   updatedAt: string | null;
   updatedBy: string | null;
 }

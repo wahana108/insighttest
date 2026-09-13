@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
+import { JalurDukungan } from "@/app/_jalur-dukungan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { formatDate, formatDateTime } from "@/lib/format-date";
@@ -13,8 +14,10 @@ import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
 import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
 import { LABEL_TINGKAT_ATESTASI } from "@/lib/atestasi-pernyataan";
+import { getSystemParameter } from "@/lib/services/system-parameter";
 import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
 import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
+import type { SystemParameter } from "@/types/parameter";
 
 /**
  * Kalimat positif untuk peserta — beda dari deskripsiPrasyaratMateri()
@@ -112,6 +115,47 @@ export default function KegiatanDetailPage({
   const [mendaftar, setMendaftar] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sukses, setSukses] = useState<string | null>(null);
+  const [kodeAksesInput, setKodeAksesInput] = useState("");
+
+  // Slice "akses-kegiatan" §4 — JALUR APRESIASI. parameter/global dibaca
+  // sekali (sama seperti /daftar) untuk urlDukungan/pesanDukungan/kontakAdmin
+  // DAN untuk memeriksa /api/kuota-hari-ini — HANYA relevan saat caraMasuk
+  // 'terbuka' (pemegang kode akses melewati batas harian, 'hanya_admin'
+  // tidak punya jalur mandiri sama sekali).
+  const [parameter, setParameter] = useState<SystemParameter | null>(null);
+  const [kuotaHarianPenuh, setKuotaHarianPenuh] = useState(false);
+  useEffect(() => {
+    let mounted = true;
+    getSystemParameter()
+      .then(async (next) => {
+        if (!mounted) return;
+        setParameter(next);
+      })
+      .catch(() => {
+        // Gagal memuat parameter BUKAN alasan mengunci pendaftaran — blok
+        // dukungan sekadar tidak tampil (urlDukungan kosong secara default).
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+  useEffect(() => {
+    if (kegiatan?.caraMasuk !== "terbuka") {
+      return;
+    }
+    let mounted = true;
+    fetch("/api/kuota-hari-ini")
+      .then(async (res) => {
+        const body = await res.json();
+        if (mounted) setKuotaHarianPenuh(res.ok && body?.penuh === true);
+      })
+      .catch((err) => {
+        console.error("Gagal memeriksa /api/kuota-hari-ini:", err);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [kegiatan?.caraMasuk]);
 
   const [menerbitkan, setMenerbitkan] = useState(false);
   const [errorSertifikat, setErrorSertifikat] = useState<string | null>(null);
@@ -128,6 +172,16 @@ export default function KegiatanDetailPage({
   }, [loading, user, router]);
 
   async function handleDaftar() {
+    // Lapis kedua, BUKAN cuma atribut `disabled` di tombol (pelajaran
+    // diagnosis /daftar, docs/kickoff.md §R) — server tetap sumber
+    // kebenaran (POST /api/pendaftaran), tapi jangan mengandalkan disabled
+    // sendirian untuk mencegah pengiriman yang sudah diketahui akan ditolak.
+    if (kegiatan?.caraMasuk === "hanya_admin") {
+      return;
+    }
+    if (kegiatan?.caraMasuk === "kode" && !kodeAksesInput.trim()) {
+      return;
+    }
     setError(null);
     setSukses(null);
     setMendaftar(true);
@@ -135,7 +189,7 @@ export default function KegiatanDetailPage({
       const res = await fetchWithAuth("/api/pendaftaran", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kegiatanId: id }),
+        body: JSON.stringify({ kegiatanId: id, kodeAkses: kodeAksesInput }),
       });
       const body = await res.json();
       if (!res.ok) {
@@ -422,6 +476,11 @@ export default function KegiatanDetailPage({
           <p className="text-sm text-green-600">
             Anda sudah terdaftar — nomor urut {pendaftaranKegiatanIni.nomorUrut}.
           </p>
+        ) : kegiatan.caraMasuk === "hanya_admin" ? (
+          <p className="text-sm text-zinc-500">
+            Kegiatan ini hanya menerima peserta lewat pendaftaran oleh admin. Hubungi panitia
+            kalau Anda seharusnya sudah terdaftar.
+          </p>
         ) : jendelaStatus !== "terbuka" ? (
           <p className="text-sm text-zinc-500">
             {jendelaStatus === "belum_dibuka"
@@ -478,8 +537,38 @@ export default function KegiatanDetailPage({
                 .
               </p>
             )}
+            {kegiatan.caraMasuk === "kode" && (
+              <div>
+                <label
+                  htmlFor="kodeAkses"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Kode akses
+                </label>
+                <input
+                  id="kodeAkses"
+                  type="text"
+                  placeholder="Dari pesan terima kasih dukungan Anda"
+                  value={kodeAksesInput}
+                  onChange={(event) => setKodeAksesInput(event.target.value)}
+                  className="mt-1 w-full max-w-xs rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Kegiatan ini butuh kode akses untuk mendaftar — huruf besar/kecil dan spasi
+                  tidak masalah.
+                </p>
+              </div>
+            )}
             {kuotaPenuh && (
               <p className="text-sm text-red-600">Kuota peserta kegiatan ini sudah penuh.</p>
+            )}
+            {kegiatan.caraMasuk === "terbuka" && kuotaHarianPenuh && !kuotaPenuh && (
+              <>
+                <p className="text-sm text-red-600">
+                  Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.
+                </p>
+                {parameter && <JalurDukungan parameter={parameter} konteks="kuota_penuh" />}
+              </>
             )}
             {error && <p className="text-sm text-red-600">{error}</p>}
             {sukses && <p className="text-sm text-green-600">{sukses}</p>}
@@ -491,7 +580,9 @@ export default function KegiatanDetailPage({
                 namaLengkapKosong ||
                 !hasilFormulir.valid ||
                 Boolean(sukses) ||
-                kuotaPenuh
+                kuotaPenuh ||
+                (kegiatan.caraMasuk === "terbuka" && kuotaHarianPenuh) ||
+                (kegiatan.caraMasuk === "kode" && !kodeAksesInput.trim())
               }
               title={kuotaPenuh ? "Kuota peserta kegiatan ini sudah penuh." : undefined}
               className="rounded bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
@@ -530,6 +621,9 @@ export default function KegiatanDetailPage({
               >
                 Lihat sertifikat
               </Link>
+              {/* Slice "akses-kegiatan" §4 — "saat orang sedang merasa
+                  mendapat sesuatu, bukan saat ia ditolak." */}
+              {parameter && <JalurDukungan parameter={parameter} konteks="sertifikat_terbit" />}
             </div>
           ) : kegiatan.syaratSertifikat.jenis === "manual_admin" ? (
             <p className="text-sm text-zinc-500">

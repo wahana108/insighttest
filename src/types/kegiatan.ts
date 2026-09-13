@@ -97,6 +97,8 @@ export interface FormulirPeserta {
   noTelepon: StatusFieldFormulir;
 }
 
+export type CaraMasukKegiatan = "terbuka" | "kode" | "hanya_admin";
+
 export interface Kegiatan {
   id: string;
   /** Menyusun nomor serial sertifikat — lihat §10, docs/arsitektur.md. */
@@ -120,6 +122,24 @@ export interface Kegiatan {
    * formulirPeserta di atas.
    */
   kuotaPeserta: number;
+  /**
+   * Slice "akses-kegiatan" (docs/kickoff.md §R, SLICE 4) — bawaan 'terbuka'
+   * (kegiatan lama tanpa field ini sama sekali, lihat mapCaraMasuk() di
+   * src/lib/akses-kegiatan.ts). BOLEH ada di dokumen yang dibaca publik —
+   * tidak apa-apa orang tahu sebuah kegiatan butuh kode. KODENYA SENDIRI
+   * TIDAK PERNAH di sini — lihat koleksi terpisah kegiatan_kode/{id} di
+   * firestore.rules (server-only, KA-3).
+   *
+   * 'terbuka': seperti sebelum slice ini, terikat kuota kegiatan DAN batas
+   * harian. 'kode': peserta memasukkan kode akses untuk mendaftar mandiri —
+   * melewati batas harian, TETAP terikat kuota kegiatan (putuskanAksesMandiri()).
+   * 'hanya_admin': tidak ada pendaftaran mandiri sama sekali, hanya lewat
+   * impor daftar hadir — disembunyikan dari katalog publik
+   * (bolehTampilDiKatalog()) tapi tetap terlihat peserta yang sudah
+   * terdaftar (lewat /beranda, bukan lewat use-kegiatan-list.ts yang
+   * dipakai katalog — lihat komentar bolehTampilDiKatalog()).
+   */
+  caraMasuk: CaraMasukKegiatan;
   /**
    * Slice "kuota-peserta" — jumlah pendaftar kumulatif kegiatan ini,
    * dipetakan dari field `nomorUrutTerakhir` yang SUDAH ADA sejak awal

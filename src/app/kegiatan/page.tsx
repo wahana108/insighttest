@@ -3,30 +3,10 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import { bolehTampilDiKatalog } from "@/lib/akses-kegiatan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { formatDateTime } from "@/lib/format-date";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
-import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
-import type { Kegiatan } from "@/types/kegiatan";
-
-function CatatanJendela({ kegiatan }: { kegiatan: Kegiatan }) {
-  const status = statusJendelaKegiatan(kegiatan);
-  if (status === "belum_dibuka") {
-    return (
-      <p className="mt-1 text-xs font-medium text-amber-600">
-        Belum dibuka — mulai {formatDateTime(kegiatan.dibukaPada as string)}
-      </p>
-    );
-  }
-  if (status === "sudah_ditutup") {
-    return (
-      <p className="mt-1 text-xs font-medium text-zinc-400">
-        Sudah ditutup pada {formatDateTime(kegiatan.ditutupPada as string)}
-      </p>
-    );
-  }
-  return null;
-}
 
 export default function KegiatanKatalogPage() {
   const router = useRouter();
@@ -39,7 +19,18 @@ export default function KegiatanKatalogPage() {
     loading: loadingKegiatan,
     error: kegiatanError,
   } = useKegiatanList({ hanyaTerbit: true });
-  const kegiatanTersedia = useMemo(() => items.filter((item) => !item.isArchived), [items]);
+  // Slice "akses-kegiatan" §3 — JADWAL PUBLIKASI: kegiatan yang jendelanya
+  // belum dibuka, sudah lewat, atau caraMasuk 'hanya_admin' TIDAK LAGI
+  // muncul di katalog (beda dari sebelumnya, yang menampilkan dengan
+  // keterangan) — supaya admin bisa menyiapkan beberapa edisi sekaligus dan
+  // masing-masing muncul sendiri pada waktunya. Kegiatan begini TETAP
+  // terlihat peserta yang sudah terdaftar lewat /beranda ("Kegiatan saya"),
+  // yang memakai useKegiatanList() TANPA filter ini — lihat komentar
+  // bolehTampilDiKatalog() di src/lib/akses-kegiatan.ts.
+  const kegiatanTersedia = useMemo(
+    () => items.filter((item) => !item.isArchived && bolehTampilDiKatalog(item)),
+    [items]
+  );
 
   useEffect(() => {
     if (!loading && !user) {
@@ -110,7 +101,9 @@ export default function KegiatanKatalogPage() {
                   }`
                 : "Tanpa batas waktu"}
             </p>
-            <CatatanJendela kegiatan={kegiatan} />
+            {kegiatan.caraMasuk === "kode" && (
+              <p className="mt-1 text-xs font-medium text-amber-600">Butuh kode akses</p>
+            )}
             {kegiatan.kuotaPeserta > 0 && (
               <p
                 className={`mt-1 text-xs font-medium ${

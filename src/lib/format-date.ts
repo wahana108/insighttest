@@ -13,7 +13,35 @@ export function formatDate(iso: string): string {
   });
 }
 
-/** "31 Agu 2026 00:00" — dibuat manual (bukan toLocaleTimeString) supaya pemisah jam:menit selalu ":", terlepas dari locale. */
+/**
+ * Jam dalam Asia/Jakarta, HH:MM, TERLEPAS dari timeZone lokal peramban —
+ * en-GB + hourCycle 'h23' dipakai murni sebagai cara stabil mengekstrak
+ * jam/menit lewat formatToParts() (locale id-ID menulis "13.05" dengan
+ * titik, bukan titik dua, untuk hour/minute numerik).
+ */
+function jakartaHourMinute(date: Date): { hour: string; minute: string } {
+  const parts = new Intl.DateTimeFormat("en-GB", {
+    timeZone: "Asia/Jakarta",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).formatToParts(date);
+  return {
+    hour: parts.find((p) => p.type === "hour")?.value ?? "00",
+    minute: parts.find((p) => p.type === "minute")?.value ?? "00",
+  };
+}
+
+/**
+ * "31 Agu 2026 00:00 WIB" — Slice "akses-kegiatan" §5b: SELALU Asia/Jakarta
+ * dan SELALU berlabel "WIB" secara eksplisit, terlepas dari zona waktu
+ * peramban peserta — sebelumnya jam diambil dari getHours()/getMinutes()
+ * (zona LOKAL peramban) tanpa label sama sekali, jadi peserta di zona lain
+ * bisa membaca jam yang salah tanpa tahu itu salah. Kegiatan/{id}.dibukaPada
+ * dan ditutupPada SELALU dimaksudkan sebagai WIB (platform Indonesia),
+ * jadi ini bukan pilihan tampilan — ini mengoreksi salah baca yang sudah
+ * ada sebelumnya.
+ */
 export function formatDateTime(iso: string): string {
   if (!iso) {
     return "-";
@@ -26,9 +54,10 @@ export function formatDateTime(iso: string): string {
     day: "numeric",
     month: "short",
     year: "numeric",
+    timeZone: "Asia/Jakarta",
   });
-  const jam = `${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`;
-  return `${tanggal} ${jam}`;
+  const { hour, minute } = jakartaHourMinute(date);
+  return `${tanggal} ${hour}:${minute} WIB`;
 }
 
 /** "12:05" — mm:ss, dipakai penghitung mundur attempt. Negatif dianggap 0. */

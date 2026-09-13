@@ -1,5 +1,6 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { buatModulSnapshot } from "@/lib/api/pendaftaran-server";
+import { mapCaraMasuk, putuskanAksesMandiri } from "@/lib/akses-kegiatan";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { mapFormulirPeserta, periksaFormulirPeserta } from "@/lib/formulir-peserta";
 import {
@@ -41,6 +42,14 @@ export async function POST(request: Request) {
     if (typeof kegiatanId !== "string" || !kegiatanId) {
       throw new PendaftaranRouteError(400, "kegiatanId wajib diisi.");
     }
+    // Slice "akses-kegiatan" — hanya dipakai kalau kegiatan.caraMasuk
+    // 'kode'; diabaikan (bukan galat) untuk 'terbuka'/'hanya_admin', supaya
+    // klien tidak perlu tahu caraMasuk kegiatan SEBELUM mengirim permintaan.
+    const kodeAksesInput =
+      typeof body === "object" && body !== null &&
+      typeof (body as Record<string, unknown>).kodeAkses === "string"
+        ? ((body as Record<string, unknown>).kodeAkses as string)
+        : "";
 
     if (!user.namaLengkap.trim()) {
       throw new PendaftaranRouteError(
@@ -61,6 +70,7 @@ export async function POST(request: Request) {
         throw new PendaftaranRouteError(404, "Kegiatan tidak ditemukan.");
       }
       const kegiatanData = kegiatanSnap.data() ?? {};
+      const caraMasuk = mapCaraMasuk(kegiatanData.caraMasuk);
       if (kegiatanData.isPublished !== true) {
         throw new PendaftaranRouteError(400, "Kegiatan ini belum diterbitkan.");
       }
@@ -109,22 +119,19 @@ export async function POST(request: Request) {
       nomorUrutHasil = nomorUrut;
 
       // LAPIS 1 (docs/kickoff.md §R) — berlaku untuk jalur mandiri MAUPUN
-      // impor admin (lihat pemeriksaan yang sama di .../impor-hadir/route.ts).
+      // impor admin (lihat pemeriksaan yang sama di .../impor-hadir/route.ts)
+      // dan untuk SEMUA caraMasuk, termasuk 'kode' — kapasitas kegiatan
+      // adalah janji tentang acaranya, tidak dijual kepada siapa pun.
       // kuotaPeserta 0 = tak terbatas.
       const kuotaPeserta =
         typeof kegiatanData.kuotaPeserta === "number" ? kegiatanData.kuotaPeserta : 0;
       const hasilKuota = putuskanKuotaKegiatan(kuotaPeserta, nomorUrut);
-      if (!hasilKuota.ok) {
-        throw new PendaftaranRouteError(
-          409,
-          hasilKuota.pesan ?? "Kuota peserta kegiatan ini sudah penuh."
-        );
-      }
 
-      // LAPIS 2 — HANYA jalur mandiri (impor admin sengaja dikecualikan,
-      // docs/kickoff.md §R). parameter/global dibaca DI DALAM transaksi ini
-      // (bukan getSystemParameter(), yang memakai client SDK) supaya
-      // konsisten dengan pembacaan lain dalam transaksi yang sama.
+      // LAPIS 2 — HANYA relevan untuk caraMasuk 'terbuka' (putuskanAksesMandiri()
+      // di bawah yang memutuskan apakah ini benar-benar ditegakkan — pemegang
+      // kode akses yang benar melewatinya). parameter/global dibaca DI DALAM
+      // transaksi ini (bukan getSystemParameter(), yang memakai client SDK)
+      // supaya konsisten dengan pembacaan lain dalam transaksi yang sama.
       const parameterRef = db.collection("parameter").doc("global");
       const parameterSnap = await tx.get(parameterRef);
       const parameterData = parameterSnap.data() ?? {};
@@ -145,12 +152,30 @@ export async function POST(request: Request) {
       const jumlahHariIniSaatIni =
         typeof kuotaHarianSnap.data()?.jumlah === "number" ? kuotaHarianSnap.data()!.jumlah : 0;
       const jumlahHariIniBaru = jumlahHariIniSaatIni + 1;
-
       const hasilBatasHarian = putuskanBatasHarian(batasHarian, jumlahHariIniBaru);
-      if (!hasilBatasHarian.ok) {
+
+      // Slice "akses-kegiatan" — kode akses TIDAK PERNAH ada di dokumen
+      // kegiatan (KA-3), selalu di koleksi terpisah ini, server-only. Dibaca
+      // apa pun caraMasuk-nya (murah, satu dokumen) — putuskanAksesMandiri()
+      // di bawah yang memutuskan relevan atau tidak.
+      const kodeAksesRef = db.collection("kegiatan_kode").doc(kegiatanId);
+      const kodeAksesSnap = await tx.get(kodeAksesRef);
+      const kodeTersimpan =
+        kodeAksesSnap.exists && typeof kodeAksesSnap.data()?.kode === "string"
+          ? (kodeAksesSnap.data()!.kode as string)
+          : null;
+
+      const keputusanAkses = putuskanAksesMandiri({
+        caraMasuk,
+        kodeDimasukkan: kodeAksesInput,
+        kodeTersimpan,
+        hasilKuotaKegiatan: hasilKuota,
+        hasilBatasHarian,
+      });
+      if (!keputusanAkses.ok) {
         throw new PendaftaranRouteError(
-          429,
-          hasilBatasHarian.pesan ?? "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok."
+          keputusanAkses.status,
+          keputusanAkses.pesan ?? "Pendaftaran tidak diizinkan."
         );
       }
 

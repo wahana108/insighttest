@@ -66,9 +66,11 @@ service cloud.firestore {
     // (beserta ambang dan centang prasyaratnya — satu field map, ditulis
     // sebagai satu kesatuan oleh updateKegiatan()), template sertifikat,
     // (Slice 6.1) formulirPeserta — pengaturan field mana yang diminta saat
-    // peserta mendaftar — dan (Slice "kuota-peserta") kuotaPeserta — kuota
-    // per kegiatan, berlaku untuk jalur mandiri MAUPUN impor admin.
-    // updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // peserta mendaftar — (Slice "kuota-peserta") kuotaPeserta — kuota per
+    // kegiatan, berlaku untuk jalur mandiri MAUPUN impor admin — dan (Slice
+    // "akses-kegiatan") caraMasuk — 'terbuka' | 'kode' | 'hanya_admin', BOLEH
+    // publik karena kodenya sendiri TIDAK PERNAH di sini (lihat
+    // kegiatan_kode/{id} di bawah). updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
     // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
     // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
     // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
@@ -80,7 +82,7 @@ service cloud.firestore {
       return [
         'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
         'syaratSertifikat', 'templateSertifikat', 'formulirPeserta',
-        'kuotaPeserta', 'updatedAt', 'updatedBy'
+        'kuotaPeserta', 'caraMasuk', 'updatedAt', 'updatedBy'
       ];
     }
 
@@ -124,10 +126,17 @@ service cloud.firestore {
     }
 
     // Mode pendaftaran dibaca dari parameter/global. KA-1 berlaku juga di
-    // sini: default 'terbuka' kalau field belum diisi.
+    // sini: default 'terbuka' kalau field belum diisi. Slice "akses-kegiatan"
+    // §5a: KA-1 menjaga FIELD yang hilang (.get(..., default)), tapi tidak
+    // menjaga DOKUMEN yang hilang — .data pada get() ke dokumen yang belum
+    // pernah dibuat sama sekali bernilai null dan .get() di atasnya melempar
+    // "Null value error", bukan jatuh ke default. exists() di bawah menutup
+    // celah itu: project Firebase baru yang belum pernah menyimpan
+    // /admin/parameter sekalipun tetap jatuh ke 'terbuka', bukan mati total
+    // dengan galat yang tidak menjelaskan apa pun (docs/kickoff.md §R).
     function modePendaftaran() {
-      return get(/databases/$(database)/documents/parameter/global)
-        .data.get('modePendaftaran', 'terbuka');
+      let path = /databases/$(database)/documents/parameter/global;
+      return exists(path) ? get(path).data.get('modePendaftaran', 'terbuka') : 'terbuka';
     }
 
     // Undangan pendaftar saat ini (dari email token-nya) harus ada, dan role
@@ -382,6 +391,24 @@ service cloud.firestore {
     // pembuatan pendaftaran (POST /api/pendaftaran), tidak pernah dibaca
     // atau ditulis klien langsung.
     match /kuota_harian/{tanggal} {
+      allow read, write: if false;
+    }
+
+    // kegiatan_kode/{kegiatanId}: kode akses untuk kegiatan bercaraMasuk
+    // 'kode' (Slice "akses-kegiatan", docs/kickoff.md §R). SERVER SAJA,
+    // tanpa kecuali — TERMASUK admin. Kalau kodenya bisa dibaca client SDK
+    // (bahkan hanya oleh admin lewat sesi yang sedang masuk), gerbangnya
+    // jadi pura-pura: dokumen kegiatan/{id} sendiri boleh dibaca publik
+    // (caraMasuk termasuk field yang boleh terlihat semua orang), jadi
+    // kodenya HARUS ada di koleksi terpisah ini — keluarga KA-3 yang sama
+    // dengan kunci_soal (kunci tidak pernah turun ke browser siapa pun yang
+    // belum berhak), walau kunci_soal sendiri masih readable admin/pemilik
+    // (bukan if false total) — di sini SENGAJA lebih ketat lagi karena
+    // tidak ada alasan operasional apa pun bagi client SDK menyentuhnya.
+    // Admin menyunting dan melihat kodenya lewat Route Handler (Admin SDK),
+    // bukan lewat client SDK sama sekali — lihat
+    // src/app/api/admin/kegiatan/[kegiatanId]/kode-akses/route.ts.
+    match /kegiatan_kode/{kegiatanId} {
       allow read, write: if false;
     }
 

@@ -22,6 +22,7 @@ import {
   type KegiatanWriteInput,
 } from "@/lib/services/kegiatan";
 import type {
+  CaraMasukKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   Kegiatan,
@@ -29,6 +30,12 @@ import type {
 } from "@/types/kegiatan";
 
 const SYARAT_OPTIONS: JenisSyaratSertifikat[] = ["nilai_minimum", "manual_admin"];
+
+const CARA_MASUK_OPTIONS: { value: CaraMasukKegiatan; label: string }[] = [
+  { value: "terbuka", label: "Terbuka" },
+  { value: "kode", label: "Kode akses" },
+  { value: "hanya_admin", label: "Hanya admin (impor daftar hadir)" },
+];
 
 interface FormState {
   kode: string;
@@ -46,6 +53,7 @@ interface FormState {
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
+  caraMasuk: CaraMasukKegiatan;
 }
 
 function emptyForm(): FormState {
@@ -65,6 +73,7 @@ function emptyForm(): FormState {
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
     kuotaPeserta: "0",
+    caraMasuk: "terbuka",
   };
 }
 
@@ -138,6 +147,7 @@ export default function AdminKegiatanPage() {
       templateSertifikat: kegiatan.templateSertifikat,
       formulirPeserta: kegiatan.formulirPeserta,
       kuotaPeserta: String(kegiatan.kuotaPeserta),
+      caraMasuk: kegiatan.caraMasuk,
     });
   }
 
@@ -165,6 +175,7 @@ export default function AdminKegiatanPage() {
         templateSertifikat: form.templateSertifikat,
         formulirPeserta: form.formulirPeserta,
         kuotaPeserta: Number(form.kuotaPeserta) || 0,
+        caraMasuk: form.caraMasuk,
       };
 
       if (editingId) {
@@ -440,6 +451,35 @@ export default function AdminKegiatanPage() {
           />
           <p className="mt-1 text-xs text-zinc-500">
             0 berarti tak terbatas. Berlaku untuk pendaftaran mandiri maupun impor daftar hadir.
+          </p>
+        </div>
+
+        <div>
+          <label
+            htmlFor="caraMasuk"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Cara masuk
+          </label>
+          <select
+            id="caraMasuk"
+            value={form.caraMasuk}
+            onChange={(event) =>
+              setForm((f) => ({ ...f, caraMasuk: event.target.value as CaraMasukKegiatan }))
+            }
+            className="mt-1 w-full max-w-xs rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          >
+            {CARA_MASUK_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-xs text-zinc-500">
+            Terbuka: terikat kuota kegiatan dan batas harian. Kode akses: peserta memasukkan
+            kode untuk mendaftar — melewati batas harian, tetap terikat kuota kegiatan (atur
+            kodenya di halaman detail kegiatan). Hanya admin: tidak ada pendaftaran mandiri
+            sama sekali, disembunyikan dari katalog publik.
           </p>
         </div>
 

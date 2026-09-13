@@ -13,8 +13,10 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
+import { mapCaraMasuk } from "@/lib/akses-kegiatan";
 import { mapFormulirPeserta } from "@/lib/formulir-peserta";
 import type {
+  CaraMasukKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   Kegiatan,
@@ -161,6 +163,7 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     templateSertifikat: mapTemplateSertifikat(data.templateSertifikat),
     formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
     kuotaPeserta: typeof data.kuotaPeserta === "number" ? data.kuotaPeserta : 0,
+    caraMasuk: mapCaraMasuk(data.caraMasuk),
     nomorUrutTerakhir:
       typeof data.nomorUrutTerakhir === "number" ? data.nomorUrutTerakhir : 0,
     panitiaUids: mapPanitiaUids(data.panitiaUids),
@@ -182,6 +185,7 @@ export interface KegiatanWriteInput {
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: number;
+  caraMasuk: CaraMasukKegiatan;
 }
 
 /**
@@ -261,6 +265,7 @@ export async function createKegiatan(
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
+    caraMasuk: input.caraMasuk,
     nomorUrutTerakhir: 0,
     panitiaUids: [],
     panitiaIzin: {},
@@ -296,6 +301,7 @@ export async function updateKegiatan(
     templateSertifikat: normalizeTemplateSertifikat(input.templateSertifikat),
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
+    caraMasuk: input.caraMasuk,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, type FormEvent } from "react";
+import { JalurDukungan } from "@/app/_jalur-dukungan";
 import { registerWithEmail, registerWithoutPassword, signInWithGoogle } from "@/lib/auth/session";
 import { PESAN_KUOTA_HARIAN_PENUH } from "@/lib/kuota-peserta";
 import {
@@ -181,7 +182,12 @@ export default function DaftarPage() {
               />
             </div>
 
-            {kuotaPenuh && <p className="text-sm text-red-600">{PESAN_KUOTA_HARIAN_PENUH}</p>}
+            {kuotaPenuh && (
+              <>
+                <p className="text-sm text-red-600">{PESAN_KUOTA_HARIAN_PENUH}</p>
+                {parameter && <JalurDukungan parameter={parameter} konteks="kuota_penuh" />}
+              </>
+            )}
             {error && <p className="text-sm text-red-600">{error}</p>}
 
             <button

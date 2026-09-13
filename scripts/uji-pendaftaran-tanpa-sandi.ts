@@ -31,6 +31,9 @@ const PARAMETER_DASAR: SystemParameter = {
   urlPublik: "",
   batasPendaftaranBaruPerHari: 0,
   pendaftaranTanpaKataSandi: false,
+  urlDukungan: "",
+  pesanDukungan: "",
+  kontakAdmin: "",
   updatedAt: null,
   updatedBy: null,
 };

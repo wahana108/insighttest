@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { use, useMemo, useState, type FormEvent } from "react";
+import { use, useEffect, useMemo, useState, type FormEvent } from "react";
+import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import {
@@ -35,6 +36,7 @@ import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import { verifikasiGameCcl } from "@/lib/verifikasi-atestasi-client";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
+  CaraMasukKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   KategoriModul,
@@ -47,6 +49,12 @@ import type {
   TemplateSertifikat,
   TipeReferensi,
 } from "@/types/kegiatan";
+
+const CARA_MASUK_OPTIONS: { value: CaraMasukKegiatan; label: string }[] = [
+  { value: "terbuka", label: "Terbuka" },
+  { value: "kode", label: "Kode akses" },
+  { value: "hanya_admin", label: "Hanya admin (impor daftar hadir)" },
+];
 
 const STATUS_FIELD_FORMULIR_OPTIONS: { value: StatusFieldFormulir; label: string }[] = [
   { value: "tidak", label: "Tidak diminta" },
@@ -84,6 +92,7 @@ interface KegiatanFormState {
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
+  caraMasuk: CaraMasukKegiatan;
 }
 
 interface ModulFormState {
@@ -470,6 +479,120 @@ function PanitiaKegiatanIni({
   );
 }
 
+/**
+ * Slice "akses-kegiatan" — kode akses TIDAK PERNAH lewat client SDK (KA-3):
+ * dibaca dan disimpan lewat Route Handler
+ * (src/app/api/admin/kegiatan/[kegiatanId]/kode-akses/route.ts), yang
+ * membaca/menulis kegiatan_kode/{id} pakai Admin SDK — koleksi itu sendiri
+ * `allow read, write: if false` di firestore.rules, TERMASUK untuk admin.
+ * Dirender HANYA saat caraMasuk 'kode' (lihat pemanggilnya).
+ */
+function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
+  const [kode, setKode] = useState("");
+  const [kodeTersimpan, setKodeTersimpan] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [saved, setSaved] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    fetchWithAuth(`/api/admin/kegiatan/${kegiatanId}/kode-akses`)
+      .then(async (res) => {
+        const body = await res.json();
+        if (!res.ok) {
+          throw new Error(typeof body?.error === "string" ? body.error : "Gagal memuat kode akses.");
+        }
+        if (mounted) {
+          setKodeTersimpan(typeof body?.kode === "string" ? body.kode : null);
+        }
+      })
+      .catch((err) => {
+        if (mounted) setError(err instanceof Error ? err.message : "Gagal memuat kode akses.");
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, [kegiatanId]);
+
+  async function handleSimpan() {
+    setError(null);
+    setSaved(false);
+    setSaving(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/kegiatan/${kegiatanId}/kode-akses`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kode }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Gagal menyimpan kode akses.");
+      }
+      setKodeTersimpan(body.kode);
+      setKode("");
+      setSaved(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal menyimpan kode akses.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+      <div>
+        <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Kode akses</p>
+        <p className="text-xs text-zinc-500">
+          Disimpan di koleksi terpisah yang tidak pernah bisa dibaca lewat aplikasi klien
+          (KA-3) — hanya terlihat di sini. Peserta memasukkannya sendiri saat mendaftar.
+        </p>
+      </div>
+      {loading ? (
+        <p className="text-xs text-zinc-500">Memuat...</p>
+      ) : (
+        <p className="text-xs text-zinc-500">
+          Kode saat ini:{" "}
+          <span className="font-mono text-black dark:text-zinc-50">
+            {kodeTersimpan ?? "(belum diisi)"}
+          </span>
+        </p>
+      )}
+      <div className="flex flex-wrap items-end gap-2">
+        <div>
+          <label
+            htmlFor="det-kode-akses"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            {kodeTersimpan ? "Ganti kode" : "Isi kode"}
+          </label>
+          <input
+            id="det-kode-akses"
+            type="text"
+            placeholder="mis. SAWERIA-SEPT2026"
+            value={kode}
+            onChange={(event) => setKode(event.target.value)}
+            className="mt-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={handleSimpan}
+          disabled={saving || !kode.trim()}
+          className="inline-flex min-h-11 items-center justify-center rounded bg-black px-4 text-xs font-medium text-white disabled:opacity-50 dark:bg-white dark:text-black"
+        >
+          {saving ? "Menyimpan..." : "Simpan kode"}
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
+      {saved && <p className="text-xs text-green-600">Kode tersimpan.</p>}
+    </div>
+  );
+}
+
 export default function AdminKegiatanDetailPage({
   params,
 }: {
@@ -553,6 +676,7 @@ export default function AdminKegiatanDetailPage({
           templateSertifikat: kegiatan.templateSertifikat,
           formulirPeserta: kegiatan.formulirPeserta,
           kuotaPeserta: String(kegiatan.kuotaPeserta),
+          caraMasuk: kegiatan.caraMasuk,
         }
       : null);
 
@@ -632,6 +756,7 @@ export default function AdminKegiatanDetailPage({
         templateSertifikat: editingKegiatanForm.templateSertifikat,
         formulirPeserta: editingKegiatanForm.formulirPeserta,
         kuotaPeserta: Number(editingKegiatanForm.kuotaPeserta) || 0,
+        caraMasuk: editingKegiatanForm.caraMasuk,
       };
       // kodeSaatIni: kode YANG SUDAH TERSIMPAN di dokumen ini sebelum
       // disunting — untuk panitia field ini `disabled` (lihat "det-kode"
@@ -1321,6 +1446,40 @@ export default function AdminKegiatanDetailPage({
                   0 berarti tak terbatas. Saat ini terisi {kegiatan.nomorUrutTerakhir} orang.
                 </p>
               </div>
+              <div>
+                <label
+                  htmlFor="det-cara-masuk"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Cara masuk
+                </label>
+                <select
+                  id="det-cara-masuk"
+                  value={editingKegiatanForm.caraMasuk}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      caraMasuk: event.target.value as CaraMasukKegiatan,
+                    })
+                  }
+                  className="mt-1 w-full max-w-xs rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                >
+                  {CARA_MASUK_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1 text-xs text-zinc-500">
+                  Terbuka: terikat kuota kegiatan dan batas harian. Kode akses: melewati batas
+                  harian, tetap terikat kuota kegiatan. Hanya admin: tidak ada pendaftaran
+                  mandiri, disembunyikan dari katalog publik (peserta yang sudah terdaftar
+                  tetap melihatnya).
+                </p>
+              </div>
+              {editingKegiatanForm.caraMasuk === "kode" && (
+                <KodeAksesKegiatan kegiatanId={id} />
+              )}
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
