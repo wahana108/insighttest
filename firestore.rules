@@ -70,7 +70,10 @@ service cloud.firestore {
     // kegiatan, berlaku untuk jalur mandiri MAUPUN impor admin — dan (Slice
     // "akses-kegiatan") caraMasuk — 'terbuka' | 'kode' | 'hanya_admin', BOLEH
     // publik karena kodenya sendiri TIDAK PERNAH di sini (lihat
-    // kegiatan_kode/{id} di bawah). updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // kegiatan_kode/{id} di bawah) — dan (Slice "penafsiran-hasil")
+    // penafsiranHasil, kunci penafsiran kuis refleksi diri yang HANYA
+    // ditampilkan ke peserta yang bersangkutan sendiri (src/lib/penafsiran-hasil.ts),
+    // tidak pernah ke /s/[kode], cetak, atau rekap. updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
     // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
     // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
     // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
@@ -82,7 +85,7 @@ service cloud.firestore {
       return [
         'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
         'syaratSertifikat', 'templateSertifikat', 'formulirPeserta',
-        'kuotaPeserta', 'caraMasuk', 'updatedAt', 'updatedBy'
+        'kuotaPeserta', 'caraMasuk', 'penafsiranHasil', 'updatedAt', 'updatedBy'
       ];
     }
 

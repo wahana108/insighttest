@@ -164,6 +164,7 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
     kuotaPeserta: typeof data.kuotaPeserta === "number" ? data.kuotaPeserta : 0,
     caraMasuk: mapCaraMasuk(data.caraMasuk),
+    penafsiranHasil: typeof data.penafsiranHasil === "string" ? data.penafsiranHasil : "",
     nomorUrutTerakhir:
       typeof data.nomorUrutTerakhir === "number" ? data.nomorUrutTerakhir : 0,
     panitiaUids: mapPanitiaUids(data.panitiaUids),
@@ -186,6 +187,7 @@ export interface KegiatanWriteInput {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: number;
   caraMasuk: CaraMasukKegiatan;
+  penafsiranHasil: string;
 }
 
 /**
@@ -266,6 +268,7 @@ export async function createKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    penafsiranHasil: input.penafsiranHasil,
     nomorUrutTerakhir: 0,
     panitiaUids: [],
     panitiaIzin: {},
@@ -302,6 +305,7 @@ export async function updateKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    penafsiranHasil: input.penafsiranHasil,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,
   });

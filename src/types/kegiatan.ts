@@ -141,6 +141,25 @@ export interface Kegiatan {
    */
   caraMasuk: CaraMasukKegiatan;
   /**
+   * Slice "penafsiran-hasil" (docs/kickoff.md §R, SLICE 5) — kosong berarti
+   * fitur mati (BAWAAN, KA-4; kegiatan lama tanpa field ini sama sekali
+   * dibaca sebagai string kosong, bukan galat). Untuk kegiatan "kuis
+   * refleksi diri": beberapa modul evaluasi yang masing-masing mewakili
+   * satu kecenderungan, dan teks ini membantu PESERTA SENDIRI menafsirkan
+   * gabungan skornya — TIDAK ADA logika penilaian baru, mesin evaluasi
+   * yang ada dipakai apa adanya.
+   *
+   * TAMPIL HANYA di /kegiatan/[id] bagi peserta yang SUDAH TERDAFTAR (lihat
+   * susunPenafsiranHasil(), src/lib/penafsiran-hasil.ts) — TIDAK PERNAH di
+   * /s/[kode], halaman cetak sertifikat, atau rekap admin: field ini sama
+   * sekali tidak disebut di SertifikatPublik/SertifikatDetail
+   * (src/types/sertifikat.ts) maupun buildSertifikatDetail()
+   * (src/lib/api/sertifikat-server.ts), jadi tidak ada jalur untuknya bocor
+   * ke sana. Dirender sebagai TEKS BIASA (whitespace-pre-line) — TIDAK
+   * PERNAH sebagai HTML, field ini bisa disunting panitia juga.
+   */
+  penafsiranHasil: string;
+  /**
    * Slice "kuota-peserta" — jumlah pendaftar kumulatif kegiatan ini,
    * dipetakan dari field `nomorUrutTerakhir` yang SUDAH ADA sejak awal
    * (dinaikkan tepat +1 di dalam transaksi pendaftaran, pendaftaran tidak

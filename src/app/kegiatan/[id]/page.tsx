@@ -14,6 +14,7 @@ import { useModulList } from "@/lib/hooks/use-modul-list";
 import { usePendaftaranSaya } from "@/lib/hooks/use-pendaftaran-saya";
 import { useSertifikatSaya } from "@/lib/hooks/use-sertifikat-saya";
 import { LABEL_TINGKAT_ATESTASI } from "@/lib/atestasi-pernyataan";
+import { susunPenafsiranHasil } from "@/lib/penafsiran-hasil";
 import { getSystemParameter } from "@/lib/services/system-parameter";
 import { evaluasiKelayakan } from "@/lib/sertifikat-syarat";
 import type { PrasyaratMateri } from "@/lib/sertifikat-syarat";
@@ -281,6 +282,12 @@ export default function KegiatanDetailPage({
   const kuotaPenuh =
     kegiatan.kuotaPeserta > 0 && kegiatan.nomorUrutTerakhir >= kegiatan.kuotaPeserta;
 
+  // Slice "penafsiran-hasil" — null kalau fitur mati (kosong, termasuk
+  // kegiatan lama tanpa field ini sama sekali). HANYA dihitung di sini,
+  // TIDAK PERNAH di /s/[kode], halaman cetak, atau rekap admin — lihat
+  // komentar Kegiatan.penafsiranHasil (src/types/kegiatan.ts).
+  const teksPenafsiran = susunPenafsiranHasil(kegiatan.penafsiranHasil);
+
   // Slice 6.1: field mana yang diminta kegiatan INI (bukan semua kegiatan)
   // — bawaan 'tidak' untuk kegiatan lama membuat blok ini tidak tampil
   // sama sekali (lihat FORMULIR_PESERTA_DEFAULT). Nilainya datang dari
@@ -349,6 +356,7 @@ export default function KegiatanDetailPage({
           // daftar modul hidup. Admin bisa menyunting modul kegiatan setelah
           // ada peserta (KA-5); peserta yang sudah terdaftar harus tetap
           // melihat persis modul yang dinilai untuknya, bukan versi terbaru.
+          <>
           <ul className="space-y-2">
             {pendaftaranKegiatanIni.modulSnapshot.length === 0 && (
               <div className="rounded-lg border border-dashed border-zinc-300 p-4 text-center dark:border-zinc-700">
@@ -429,6 +437,19 @@ export default function KegiatanDetailPage({
               );
             })}
           </ul>
+          {/* Slice "penafsiran-hasil" — HANYA di sini: peserta yang SUDAH
+              TERDAFTAR, di bawah skor semua modulnya. Teks BIASA
+              (whitespace-pre-line), TIDAK PERNAH HTML — penafsiranHasil
+              bisa disunting panitia juga, merendernya sebagai HTML adalah
+              pintu masuk skrip yang tidak pernah diinginkan. break-words
+              + whitespace-pre-line supaya teks panjang tidak memaksa
+              halaman digeser mendatar di layar sempit. */}
+          {teksPenafsiran && (
+            <p className="mt-4 whitespace-pre-line break-words rounded border border-zinc-200 bg-zinc-50 p-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300">
+              {teksPenafsiran}
+            </p>
+          )}
+          </>
         ) : (
           // Belum terdaftar — gambaran isi kegiatan lewat daftar modul hidup.
           <>

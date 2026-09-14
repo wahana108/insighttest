@@ -93,6 +93,7 @@ interface KegiatanFormState {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
   caraMasuk: CaraMasukKegiatan;
+  penafsiranHasil: string;
 }
 
 interface ModulFormState {
@@ -677,6 +678,7 @@ export default function AdminKegiatanDetailPage({
           formulirPeserta: kegiatan.formulirPeserta,
           kuotaPeserta: String(kegiatan.kuotaPeserta),
           caraMasuk: kegiatan.caraMasuk,
+          penafsiranHasil: kegiatan.penafsiranHasil,
         }
       : null);
 
@@ -757,6 +759,7 @@ export default function AdminKegiatanDetailPage({
         formulirPeserta: editingKegiatanForm.formulirPeserta,
         kuotaPeserta: Number(editingKegiatanForm.kuotaPeserta) || 0,
         caraMasuk: editingKegiatanForm.caraMasuk,
+        penafsiranHasil: editingKegiatanForm.penafsiranHasil,
       };
       // kodeSaatIni: kode YANG SUDAH TERSIMPAN di dokumen ini sebelum
       // disunting — untuk panitia field ini `disabled` (lihat "det-kode"
@@ -1480,6 +1483,48 @@ export default function AdminKegiatanDetailPage({
               {editingKegiatanForm.caraMasuk === "kode" && (
                 <KodeAksesKegiatan kegiatanId={id} />
               )}
+            </div>
+
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <div>
+                <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Penafsiran hasil
+                </p>
+                <p className="text-xs text-zinc-500">
+                  Untuk kegiatan &quot;kuis refleksi diri&quot; — teks ini HANYA dilihat peserta yang
+                  bersangkutan sendiri, di halaman kegiatannya, di bawah skor semua modulnya.
+                  Tidak pernah tampil di sertifikat, halaman verifikasi publik, atau rekap.
+                  Kosongkan untuk mematikan fitur ini.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="det-penafsiran-hasil"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Teks penafsiran
+                </label>
+                <textarea
+                  id="det-penafsiran-hasil"
+                  rows={6}
+                  placeholder={
+                    'Kalau modul A di atas 70 dan modul C di bawah 40, itu berarti...'
+                  }
+                  value={editingKegiatanForm.penafsiranHasil}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      penafsiranHasil: event.target.value,
+                    })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Teks biasa (baris baru dipertahankan) — bukan HTML. Satu baris tetap dari
+                  sistem selalu ikut ditampilkan di atas teks ini: &quot;Hasil ini bersifat
+                  eksperimental dan bukan asesmen klinis.&quot;
+                </p>
+              </div>
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
