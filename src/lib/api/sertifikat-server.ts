@@ -338,6 +338,9 @@ export async function terbitkanSertifikatUntuk(
   // Slice 6.3 — bawaan false SELALU, lihat komentar SyaratSertifikat.terbitkanKeikutsertaan.
   const terbitkanKeikutsertaanSyarat =
     typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
+  // Slice "sertifikat-tanpa-nilai" — bawaan false, lihat komentar SyaratSertifikat.hanyaKeikutsertaan.
+  const hanyaKeikutsertaanSyarat =
+    typeof syaratRaw.hanyaKeikutsertaan === "boolean" ? syaratRaw.hanyaKeikutsertaan : false;
 
   // Penandatangan (nama, jabatan, DAN gambar tanda tangannya) DIBEKUKAN di
   // sertifikat — itu pernyataan seseorang, bukan branding. logo/kop TETAP
@@ -388,6 +391,7 @@ export async function terbitkanSertifikatUntuk(
         wajibBukaReferensi: wajibBukaReferensiSyarat,
         atestasiJadiSyarat: atestasiJadiSyaratSyarat,
         terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
+        hanyaKeikutsertaan: hanyaKeikutsertaanSyarat,
       },
     }
   );
@@ -418,11 +422,19 @@ export async function terbitkanSertifikatUntuk(
   // perilaku yang pernah ada sebelum slice ini.
   const keputusanKelulusan = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
 
-  // self-issue TIDAK PERNAH menerima 'keikutsertaan' — peserta hanya bisa
-  // menerbitkan sendiri kalau benar-benar memenuhi syarat kelulusan, sama
-  // persis seperti sebelum slice ini. Materi wajib yang belum tuntas
-  // (dulu digerbang terpisah di sini) sekarang ikut tercakup oleh
-  // keputusanKelulusan.bisaTerbit, jadi pesannya tetap sama.
+  // self-issue TIDAK PERNAH menerima 'keikutsertaan' lewat terbitkanKeikutsertaan
+  // — peserta hanya bisa menerbitkan sendiri kalau benar-benar memenuhi
+  // syarat kelulusan, sama persis seperti sebelum slice ini. Materi wajib
+  // yang belum tuntas (dulu digerbang terpisah di sini) sekarang ikut
+  // tercakup oleh keputusanKelulusan.bisaTerbit, jadi pesannya tetap sama.
+  //
+  // PENGECUALIAN (Slice "sertifikat-tanpa-nilai"): hanyaKeikutsertaanSyarat
+  // BUKAN "menurunkan kelayakan" seperti terbitkanKeikutsertaan di atas — ia
+  // menentukan JENIS DOKUMEN kegiatan ini secara keseluruhan, berlaku SAMA
+  // untuk penerbitan mandiri maupun admin. Tanpa tentukanJenisSertifikat()
+  // di jalur self-issue, kegiatan hanyaKeikutsertaan=true akan tetap
+  // menerbitkan 'kelulusan' (dan tabel nilainya) untuk peserta yang
+  // menerbitkan sendiri — persis kebocoran yang slice ini menutupnya.
   let jenis: JenisSertifikat;
   if (isSelfIssue) {
     if (jenisSyarat !== "nilai_minimum") {
@@ -431,17 +443,20 @@ export async function terbitkanSertifikatUntuk(
     if (!keputusanKelulusan.bisaTerbit) {
       throw new SertifikatRouteError(400, keputusanKelulusan.alasan);
     }
-    jenis = "kelulusan";
+    jenis = hanyaKeikutsertaanSyarat ? "keikutsertaan" : "kelulusan";
   } else {
-    // Admin TIDAK bisa menurunkan orang yang layak jadi keikutsertaan
-    // (bisaTerbit true selalu menang, terlepas dari terbitkanKeikutsertaan)
-    // dan TIDAK bisa menaikkan yang tidak layak jadi kelulusan (satu-
-    // satunya jalan ke 'kelulusan' adalah bisaTerbit true) — jenis
-    // mengikuti kelayakan, kelayakan mengikuti data (Slice 6.3).
+    // Admin TIDAK bisa menurunkan orang yang layak jadi keikutsertaan lewat
+    // terbitkanKeikutsertaan (bisaTerbit true selalu menang, terlepas dari
+    // terbitkanKeikutsertaan) dan TIDAK bisa menaikkan yang tidak layak
+    // jadi kelulusan (satu-satunya jalan ke 'kelulusan' adalah bisaTerbit
+    // true) — jenis mengikuti kelayakan, kelayakan mengikuti data (Slice
+    // 6.3). hanyaKeikutsertaanSyarat tetap membalik 'kelulusan' menjadi
+    // 'keikutsertaan' di sini juga — lihat komentar tentukanJenisSertifikat().
     const hasilJenis = tentukanJenisSertifikat(
       true, // pendaftaranSnap.exists sudah dipastikan di atas — targetUid TERDAFTAR
       keputusanKelulusan.bisaTerbit,
-      terbitkanKeikutsertaanSyarat
+      terbitkanKeikutsertaanSyarat,
+      hanyaKeikutsertaanSyarat
     );
     if (!hasilJenis.bolehTerbit || !hasilJenis.jenis) {
       throw new SertifikatRouteError(400, hasilJenis.alasan);

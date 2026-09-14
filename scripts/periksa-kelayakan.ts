@@ -212,6 +212,8 @@ async function main(): Promise<void> {
     typeof syaratRaw.atestasiJadiSyarat === "boolean" ? syaratRaw.atestasiJadiSyarat : false;
   const terbitkanKeikutsertaanSyarat =
     typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
+  const hanyaKeikutsertaanSyarat =
+    typeof syaratRaw.hanyaKeikutsertaan === "boolean" ? syaratRaw.hanyaKeikutsertaan : false;
 
   console.log("=".repeat(72));
   console.log(`Kegiatan: ${typeof kegiatanData.kode === "string" ? kegiatanData.kode : "(tanpa kode)"} — ${typeof kegiatanData.judul === "string" ? kegiatanData.judul : "(tanpa judul)"}`);
@@ -223,6 +225,9 @@ async function main(): Promise<void> {
   console.log(`Atestasi jadi syarat   : ${atestasiJadiSyaratSyarat ? "AKTIF" : "tidak aktif"}`);
   console.log(
     `Terbitkan keikutsertaan: ${terbitkanKeikutsertaanSyarat ? "AKTIF (yang tidak layak bisa dapat sertifikat keikutsertaan)" : "tidak aktif"}`
+  );
+  console.log(
+    `Hanya keikutsertaan   : ${hanyaKeikutsertaanSyarat ? "AKTIF (tidak pernah menerbitkan kelulusan, walau layak)" : "tidak aktif"}`
   );
 
   console.log("\nModul kegiatan:");
@@ -379,11 +384,17 @@ async function main(): Promise<void> {
           wajibBukaReferensi: wajibBukaReferensiSyarat,
           atestasiJadiSyarat: atestasiJadiSyaratSyarat,
           terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
+          hanyaKeikutsertaan: hanyaKeikutsertaanSyarat,
         },
       }
     );
     const keputusan = putuskanPenerbitan(jenisSyarat, { kelayakan, prasyaratMateri });
-    const hasilJenis = tentukanJenisSertifikat(true, keputusan.bisaTerbit, terbitkanKeikutsertaanSyarat);
+    const hasilJenis = tentukanJenisSertifikat(
+      true,
+      keputusan.bisaTerbit,
+      terbitkanKeikutsertaanSyarat,
+      hanyaKeikutsertaanSyarat
+    );
 
     // Slice 7.6: TIGA keadaan, bukan dua — "tuntas" tidak boleh dipakai
     // untuk keadaan gerbang-mati-tapi-materi-nyatanya-belum (lihat komentar

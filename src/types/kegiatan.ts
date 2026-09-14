@@ -41,6 +41,27 @@ export interface SyaratSertifikat {
    * jadi menambah field wajib di sini TIDAK memerlukan perubahan rules.
    */
   terbitkanKeikutsertaan: boolean;
+  /**
+   * Slice "sertifikat-tanpa-nilai" (SLICE 5a) — default false. Kalau true,
+   * tentukanJenisSertifikat() (src/lib/sertifikat-syarat.ts) SELALU
+   * mengembalikan 'keikutsertaan' bagi siapa pun yang berhak menerima
+   * sertifikat sama sekali — tidak ada jalur ke 'kelulusan' pada kegiatan
+   * ini, termasuk penerbitan mandiri maupun massal. Untuk kegiatan seperti
+   * kuis refleksi diri (Slice "penafsiran-hasil"): sertifikat keikutsertaan
+   * tidak memuat nilai maupun tabel modul, jadi skor psikologis peserta
+   * tidak pernah tampil di halaman verifikasi publik /s/[kode].
+   *
+   * Diletakkan di sini (bukan field kegiatan terpisah) SENGAJA, persis
+   * alasan terbitkanKeikutsertaan di atas: syaratSertifikat sudah satu
+   * kesatuan di panitiaKegiatanKunciDiizinkan() (firestore.rules), jadi
+   * field baru di sini TIDAK memerlukan perubahan rules.
+   *
+   * Sertifikat yang SUDAH TERBIT tidak berubah — jenisnya beku sejak
+   * terbit (KA-6). Menyalakan ini TIDAK berlaku surut; admin harus
+   * mencabut lalu menerbitkan ulang kalau ingin sertifikat lama berhenti
+   * menampilkan nilai.
+   */
+  hanyaKeikutsertaan: boolean;
 }
 
 /**

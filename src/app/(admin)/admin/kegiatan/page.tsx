@@ -50,6 +50,7 @@ interface FormState {
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
   syaratTerbitkanKeikutsertaan: boolean;
+  syaratHanyaKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
@@ -71,6 +72,9 @@ function emptyForm(): FormState {
     syaratWajibBukaReferensi: false,
     syaratAtestasiJadiSyarat: false,
     syaratTerbitkanKeikutsertaan: false,
+    // Disunting di /admin/kegiatan/[id], bukan di sini — sama seperti
+    // syaratTerbitkanKeikutsertaan di atas.
+    syaratHanyaKeikutsertaan: false,
     templateSertifikat: TEMPLATE_SERTIFIKAT_KOSONG,
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
     kuotaPeserta: "0",
@@ -144,6 +148,7 @@ export default function AdminKegiatanPage() {
       syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
       syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
       syaratTerbitkanKeikutsertaan: kegiatan.syaratSertifikat.terbitkanKeikutsertaan,
+      syaratHanyaKeikutsertaan: kegiatan.syaratSertifikat.hanyaKeikutsertaan,
       // Blok "Template sertifikat" disunting di /admin/kegiatan/[id], bukan
       // di sini — dioper apa adanya supaya "Simpan perubahan" di halaman
       // ini tidak menimpanya jadi kosong. Blok "Formulir peserta" (Slice
@@ -178,6 +183,7 @@ export default function AdminKegiatanPage() {
           wajibBukaReferensi: form.syaratWajibBukaReferensi,
           atestasiJadiSyarat: form.syaratAtestasiJadiSyarat,
           terbitkanKeikutsertaan: form.syaratTerbitkanKeikutsertaan,
+          hanyaKeikutsertaan: form.syaratHanyaKeikutsertaan,
         },
         templateSertifikat: form.templateSertifikat,
         formulirPeserta: form.formulirPeserta,

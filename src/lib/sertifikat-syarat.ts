@@ -418,17 +418,36 @@ export interface HasilTentukanJenis {
  * tidak peduli terbitkanKeikutsertaan), dan TIDAK bisa menaikkan yang
  * tidak layak jadi kelulusan (satu-satunya jalan ke 'kelulusan' adalah
  * bisaTerbitKelulusan true — tidak ada parameter lain yang bisa memaksanya).
+ *
+ * PENGECUALIAN — Slice "sertifikat-tanpa-nilai" (SLICE 5a): hanyaKeikutsertaan
+ * true membalik SATU aturan di atas dengan sengaja — jenis 'kelulusan'
+ * TIDAK PERNAH dikembalikan pada kegiatan ini, bahkan untuk peserta yang
+ * bisaTerbitKelulusan true. Untuk kegiatan seperti kuis refleksi diri:
+ * sertifikat kelulusan mencetak tabel nilai tiap modul di halaman
+ * verifikasi publik, dan itu berarti menyiarkan skor psikologis peserta
+ * kepada siapa pun yang memegang kodenya. hanyaKeikutsertaan TIDAK
+ * mengubah SIAPA berhak menerima sertifikat (bolehTerbit) — kalau tidak
+ * layak dan terbitkanKeikutsertaan mati, hasilnya tetap tidak boleh
+ * terbit sama sekali, persis seperti sebelum pengecualian ini ada.
  */
 export function tentukanJenisSertifikat(
   terdaftar: boolean,
   bisaTerbitKelulusan: boolean,
-  terbitkanKeikutsertaan: boolean
+  terbitkanKeikutsertaan: boolean,
+  hanyaKeikutsertaan: boolean = false
 ): HasilTentukanJenis {
   if (!terdaftar) {
     return { bolehTerbit: false, jenis: null, alasan: "Tidak terdaftar di kegiatan ini." };
   }
   if (bisaTerbitKelulusan) {
-    return { bolehTerbit: true, jenis: "kelulusan", alasan: "Memenuhi syarat kelayakan." };
+    return hanyaKeikutsertaan
+      ? {
+          bolehTerbit: true,
+          jenis: "keikutsertaan",
+          alasan:
+            "Memenuhi syarat kelayakan — kegiatan ini hanya menerbitkan sertifikat keikutsertaan (tidak memuat nilai).",
+        }
+      : { bolehTerbit: true, jenis: "kelulusan", alasan: "Memenuhi syarat kelayakan." };
   }
   if (terbitkanKeikutsertaan) {
     return {

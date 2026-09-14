@@ -89,6 +89,7 @@ interface KegiatanFormState {
   syaratWajibBukaReferensi: boolean;
   syaratAtestasiJadiSyarat: boolean;
   syaratTerbitkanKeikutsertaan: boolean;
+  syaratHanyaKeikutsertaan: boolean;
   templateSertifikat: TemplateSertifikat;
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
@@ -674,6 +675,7 @@ export default function AdminKegiatanDetailPage({
           syaratWajibBukaReferensi: kegiatan.syaratSertifikat.wajibBukaReferensi,
           syaratAtestasiJadiSyarat: kegiatan.syaratSertifikat.atestasiJadiSyarat,
           syaratTerbitkanKeikutsertaan: kegiatan.syaratSertifikat.terbitkanKeikutsertaan,
+          syaratHanyaKeikutsertaan: kegiatan.syaratSertifikat.hanyaKeikutsertaan,
           templateSertifikat: kegiatan.templateSertifikat,
           formulirPeserta: kegiatan.formulirPeserta,
           kuotaPeserta: String(kegiatan.kuotaPeserta),
@@ -754,6 +756,7 @@ export default function AdminKegiatanDetailPage({
           wajibBukaReferensi: editingKegiatanForm.syaratWajibBukaReferensi,
           atestasiJadiSyarat: editingKegiatanForm.syaratAtestasiJadiSyarat,
           terbitkanKeikutsertaan: editingKegiatanForm.syaratTerbitkanKeikutsertaan,
+          hanyaKeikutsertaan: editingKegiatanForm.syaratHanyaKeikutsertaan,
         },
         templateSertifikat: editingKegiatanForm.templateSertifikat,
         formulirPeserta: editingKegiatanForm.formulirPeserta,
@@ -1369,6 +1372,38 @@ export default function AdminKegiatanDetailPage({
                     tapi tidak mengerjakan atau tidak lulus evaluasi. Jenis sertifikat SELALU
                     ditentukan otomatis dari kelayakan — tidak bisa dipilih manual per peserta.
                   </p>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={editingKegiatanForm.syaratHanyaKeikutsertaan}
+                      onChange={(event) =>
+                        setKegiatanForm({
+                          ...editingKegiatanForm,
+                          syaratHanyaKeikutsertaan: event.target.checked,
+                        })
+                      }
+                    />
+                    Hanya sertifikat keikutsertaan (tidak pernah kelulusan)
+                  </label>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Untuk kegiatan seperti kuis refleksi diri. Sertifikatnya tidak memuat nilai
+                    maupun tabel modul, sehingga skor peserta tidak pernah tampil di halaman
+                    verifikasi publik. Berlaku untuk penerbitan mandiri maupun oleh admin.
+                    Sertifikat yang SUDAH TERBIT tidak berubah (jenisnya beku sejak terbit) —
+                    menyalakan ini TIDAK berlaku surut; cabut lalu terbitkan ulang kalau ingin
+                    sertifikat lama berhenti menampilkan nilai.
+                  </p>
+                  {editingKegiatanForm.penafsiranHasil.trim() !== "" &&
+                    !editingKegiatanForm.syaratHanyaKeikutsertaan && (
+                      <p className="mt-2 rounded border border-amber-300 bg-amber-50 p-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950 dark:text-amber-200">
+                        Kegiatan ini punya kunci penafsiran hasil, tapi sertifikatnya masih
+                        memuat nilai tiap modul — dan nilai itu tampil di halaman verifikasi
+                        publik. Pertimbangkan menyalakan &quot;hanya sertifikat
+                        keikutsertaan&quot;.
+                      </p>
+                    )}
                 </div>
               </div>
             </div>

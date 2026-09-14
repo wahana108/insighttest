@@ -268,6 +268,7 @@ export async function GET(
             wajibBukaReferensi: wajibBukaReferensiSyarat,
             atestasiJadiSyarat: atestasiJadiSyaratSyarat,
             terbitkanKeikutsertaan: false, // tidak dipakai di rute ini — CSV membaca jenis AKTUAL dari sertifikatByUid, bukan proyeksi
+            hanyaKeikutsertaan: false, // tidak dipakai di rute ini, sama seperti terbitkanKeikutsertaan di atas
           },
         }
       );

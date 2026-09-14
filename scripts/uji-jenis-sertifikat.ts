@@ -35,7 +35,8 @@ function uji(nama: string, fn: () => void): void {
 }
 
 // ---------------------------------------------------------------------
-// tentukanJenisSertifikat() — langsung, tujuh kasus yang diminta.
+// tentukanJenisSertifikat() — langsung, tujuh kasus asli (Slice 6.3) +
+// lima kasus hanyaKeikutsertaan (Slice "sertifikat-tanpa-nilai") di bawah.
 // ---------------------------------------------------------------------
 
 uji("tentukanJenisSertifikat: layak + parameter MATI -> kelulusan", () => {
@@ -76,6 +77,40 @@ uji("tentukanJenisSertifikat: admin TIDAK BISA menaikkan yang tidak layak jadi k
 });
 
 // ---------------------------------------------------------------------
+// Slice "sertifikat-tanpa-nilai" (SLICE 5a) — hanyaKeikutsertaan, kasus
+// uji yang diminta persis.
+// ---------------------------------------------------------------------
+
+uji("hanyaKeikutsertaan=true + peserta LAYAK -> HARUS keikutsertaan, bukan kelulusan", () => {
+  const hasil = tentukanJenisSertifikat(true, true, false, true);
+  assert.equal(hasil.bolehTerbit, true);
+  assert.equal(hasil.jenis, "keikutsertaan");
+});
+
+uji("hanyaKeikutsertaan=true + TIDAK layak + terbitkanKeikutsertaan=true -> keikutsertaan", () => {
+  const hasil = tentukanJenisSertifikat(true, false, true, true);
+  assert.equal(hasil.bolehTerbit, true);
+  assert.equal(hasil.jenis, "keikutsertaan");
+});
+
+uji("hanyaKeikutsertaan=true + TIDAK layak + terbitkanKeikutsertaan=false -> TIDAK boleh terbit sama sekali (hanyaKeikutsertaan tidak memberi kelayakan baru)", () => {
+  const hasil = tentukanJenisSertifikat(true, false, false, true);
+  assert.equal(hasil.bolehTerbit, false);
+  assert.equal(hasil.jenis, null);
+});
+
+uji("hanyaKeikutsertaan=false + peserta LAYAK -> TETAP kelulusan (tidak ada regresi dari perilaku sebelum slice ini)", () => {
+  const hasil = tentukanJenisSertifikat(true, true, false, false);
+  assert.equal(hasil.bolehTerbit, true);
+  assert.equal(hasil.jenis, "kelulusan");
+});
+
+uji("hanyaKeikutsertaan TIDAK DIOPER SAMA SEKALI (parameter opsional, meniru pemanggil lama) -> bawaan false, perilaku sama seperti sebelum slice ini", () => {
+  const hasil = tentukanJenisSertifikat(true, true, false);
+  assert.equal(hasil.jenis, "kelulusan", "pemanggil yang belum diperbarui tidak boleh diam-diam berubah perilakunya");
+});
+
+// ---------------------------------------------------------------------
 // Kegiatan lama tanpa field terbitkanKeikutsertaan -> bawaan false.
 // ---------------------------------------------------------------------
 
@@ -98,12 +133,17 @@ function syaratUntukKegiatanLama(): SyaratSertifikat {
     // import langsung, fungsi itu memakai firebase/firestore klien).
     terbitkanKeikutsertaan:
       typeof dataLama.terbitkanKeikutsertaan === "boolean" ? dataLama.terbitkanKeikutsertaan : false,
+    // Slice "sertifikat-tanpa-nilai" — sama semangatnya: kegiatan lama
+    // (dari sebelum slice INI) juga tidak punya field ini sama sekali.
+    hanyaKeikutsertaan:
+      typeof dataLama.hanyaKeikutsertaan === "boolean" ? dataLama.hanyaKeikutsertaan : false,
   };
 }
 
-uji("kegiatan lama tanpa field terbitkanKeikutsertaan -> bawaan false, tidak melempar", () => {
+uji("kegiatan lama tanpa field terbitkanKeikutsertaan MAUPUN hanyaKeikutsertaan -> keduanya bawaan false, tidak melempar", () => {
   const syarat = syaratUntukKegiatanLama();
   assert.equal(syarat.terbitkanKeikutsertaan, false);
+  assert.equal(syarat.hanyaKeikutsertaan, false);
 });
 
 uji("integrasi: kegiatan lama (bawaan terbitkanKeikutsertaan=false) + peserta tidak layak -> tidak boleh terbit, PERSIS perilaku sebelum Slice 6.3", () => {
@@ -201,6 +241,7 @@ uji("integrasi: mode manual_admin -> bisaTerbit selalu true -> jenis SELALU kelu
     wajibBukaReferensi: false,
     atestasiJadiSyarat: false,
     terbitkanKeikutsertaan: false,
+    hanyaKeikutsertaan: false,
   };
   const syaratNyala: SyaratSertifikat = { ...syaratMati, terbitkanKeikutsertaan: true };
   const { kelayakan, prasyaratMateri } = evaluasiKelayakan(

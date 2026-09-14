@@ -89,6 +89,9 @@ function mapSyaratSertifikat(value: unknown): SyaratSertifikat {
     // Slice 6.3 — bawaan false SELALU, lihat komentar di types/kegiatan.ts.
     terbitkanKeikutsertaan:
       typeof data.terbitkanKeikutsertaan === "boolean" ? data.terbitkanKeikutsertaan : false,
+    // Slice "sertifikat-tanpa-nilai" — bawaan false, lihat komentar di types/kegiatan.ts.
+    hanyaKeikutsertaan:
+      typeof data.hanyaKeikutsertaan === "boolean" ? data.hanyaKeikutsertaan : false,
   };
 }
 

@@ -185,6 +185,9 @@ export async function GET(request: Request) {
     // Slice 6.3 — bawaan false SELALU, lihat komentar SyaratSertifikat.terbitkanKeikutsertaan.
     const terbitkanKeikutsertaanSyarat =
       typeof syaratRaw.terbitkanKeikutsertaan === "boolean" ? syaratRaw.terbitkanKeikutsertaan : false;
+    // Slice "sertifikat-tanpa-nilai" — bawaan false, lihat komentar SyaratSertifikat.hanyaKeikutsertaan.
+    const hanyaKeikutsertaanSyarat =
+      typeof syaratRaw.hanyaKeikutsertaan === "boolean" ? syaratRaw.hanyaKeikutsertaan : false;
 
     const sertifikatByUid = new Map<
       string,
@@ -227,6 +230,7 @@ export async function GET(request: Request) {
             wajibBukaReferensi: wajibBukaReferensiSyarat,
             atestasiJadiSyarat: atestasiJadiSyaratSyarat,
             terbitkanKeikutsertaan: terbitkanKeikutsertaanSyarat,
+            hanyaKeikutsertaan: hanyaKeikutsertaanSyarat,
           },
         }
       );
@@ -239,7 +243,8 @@ export async function GET(request: Request) {
       const hasilJenis = tentukanJenisSertifikat(
         true,
         keputusan.bisaTerbit,
-        terbitkanKeikutsertaanSyarat
+        terbitkanKeikutsertaanSyarat,
+        hanyaKeikutsertaanSyarat
       );
       return {
         uid,
