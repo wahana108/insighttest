@@ -2343,3 +2343,99 @@ itu tidak dijual kepada siapa pun.
 > ulang. Kodenya sendiri adalah buktinya, karena ia hanya terlihat di pesan terima kasih
 > Saweria. Tetap sediakan tautan "hubungi admin" sebagai jalan terakhir bagi yang kehilangan
 > kodenya.
+
+### Slice 3, 4, 5, 5a — ujian berwaktu, lapisan akses, dan kunci penafsiran (12–14 Sep 2026)
+
+**Slice 3 — ujian berjendela waktu.** Dua lapis, dan hanya lapis kedua yang berkuasa: hitung
+mundur + kirim paksa di klien adalah *kesopanan* bagi peserta yang jujur; cap waktu **server**
+saat jawaban tiba dibandingkan dengan `ditutupPada` adalah yang menentukan. Peserta boleh
+memundurkan jam laptopnya — tidak ada gunanya.
+
+Hasil terlambat **tetap dinilai dan tetap tersimpan**, hanya ditandai `kedaluwarsa` dan tidak
+melayakkan sertifikat secara otomatis; keputusannya berpindah ke admin.
+
+> Menghukum keterlambatan tanpa menghukum orangnya. Membuang jawaban yang sudah dikerjakan
+> adalah hukuman atas hal yang bukan pengetahuannya.
+
+**Slice 4 — lapisan akses.** `caraMasuk: 'terbuka' | 'kode' | 'hanya_admin'`, jadwal publikasi
+lewat penyaringan jendela waktu di katalog, dan jalur apresiasi saat kuota harian penuh.
+
+Yang paling mudah salah, dan nyaris terjadi: **dokumen kegiatan bisa dibaca publik.** Kode
+akses yang disimpan di sana bisa dibaca siapa pun langsung dari Firestore tanpa membuka
+halaman apa pun — gerbang yang terlihat terkunci dengan kuncinya tergantung di pintu. Kode
+karena itu tinggal di `kegiatan_kode/{kegiatanId}` dengan `allow read, write: if false` tanpa
+kecuali, dibaca hanya lewat Route Handler. Keluarga KA-3.
+
+Perbaikan yang dibundel: `modePendaftaran()` di rules kini dibungkus `exists()`, dan jendela
+waktu diberi label **WIB** eksplisit alih-alih diam-diam memakai zona peramban.
+
+**Slice 5 & 5a — kunci penafsiran, dan sertifikat yang tidak memuat nilai.**
+`penafsiranHasil` memungkinkan kegiatan "kuis refleksi diri": beberapa modul dengan
+`nilaiMinimum` 0, lalu kunci penafsiran yang dibaca peserta sendiri. Nol logika penilaian
+baru.
+
+Pengujian dengan kegiatan sungguhan menemukan yang tidak terlihat di rancangan: halaman
+publik `/s/{kode}` menampilkan **delapan skor dimensi peserta beserta namanya** kepada siapa
+pun yang memegang kodenya — dan kode itu tercetak di sertifikat yang memang dibuat untuk
+dibagikan.
+
+> Teks penafsirannya memang tidak ikut bocor. **Angkanya sudah cukup.** Dengan kunci
+> penafsiran yang dibagikan ke peserta, siapa pun bisa membaca profil orang itu dari halaman
+> publik, dan sekali beredar tidak bisa ditarik.
+
+Jalan keluarnya sudah ada sejak 6.3 — sertifikat keikutsertaan tidak memuat nilai maupun tabel
+modul — tapi jenis ditentukan otomatis dari kelayakan, dan `nilaiMinimum` 0 membuat semua
+orang "lulus". `syaratSertifikat.hanyaKeikutsertaan` menutupnya, dan karena ia bersarang di
+`syaratSertifikat` yang sudah utuh di daftar izin panitia, **rules tidak berubah sama sekali**.
+
+Saat menutupnya, ditemukan kebocoran kedua: **jalur penerbitan mandiri oleh peserta mengunci
+jenis ke `'kelulusan'`** tanpa pernah memanggil `tentukanJenisSertifikat()`. Tanpa perbaikan
+itu, pengaturan baru akan bekerja untuk penerbitan admin dan gagal diam-diam pada jalur yang
+justru dipakai peserta kuis refleksi.
+
+> Pola yang berulang sepanjang proyek ini: **sebuah aturan hanya berlaku di jalur yang
+> benar-benar memanggilnya.** Tahap 8 mengajarkannya lewat izin, 6.1 lewat query, dan di sini
+> lewat jenis sertifikat.
+
+---
+
+## S. Status pekerjaan — diperbarui 15 Sep 2026
+
+Bagian ini ada karena satu kejadian: slice 4a dianggap sudah dikerjakan padahal promptnya
+tidak pernah sampai ke Claude CLI. Audit sepuluh menit membuktikannya belum ada sama sekali.
+
+> **Rencana yang hidup di percakapan akan hilang di percakapan.** Sebelum menganggap sebuah
+> slice selesai, minta CLI mengauditnya — sebutkan berkas dan barisnya, bukan ingatannya.
+
+### Sudah di `main`
+
+Sembilan tahap peta awal, ditambah: **4a** kuota dua lapis · **slice 1** kuota peserta &
+batas harian · **slice 2** pendaftaran tanpa kata sandi · **slice 3** ujian berjendela waktu ·
+**slice 4** cara masuk kegiatan, kode akses server-only, jadwal publikasi, jalur apresiasi ·
+**slice 4a** penghitung & batas pemakaian kode · **slice 5** kunci penafsiran hasil ·
+**slice 5a** kegiatan yang tidak pernah menerbitkan kelulusan.
+
+### Belum dikerjakan
+
+| | Isi | Catatan |
+|---|---|---|
+| **Slice 7** | Gambar pada soal, opsi jawaban, dan kegiatan | KA-8 berlaku penuh — URL, bukan unggahan. Gambar disimpan di `public/gambar/` pada repo sendiri: permanen, gratis, tanpa pihak ketiga yang bisa mati |
+| **Slice 6** | Formulir niat dukungan + kirim kode lewat email | Rancangan di ARAH §9. Email dikirim dari Route Handler di **Vercel** — paket Firebase tidak relevan. Hanya ke alamat akun yang sedang login, tidak pernah ke alamat yang diketik |
+
+### Bukan kode, tapi menentukan kesiapan
+
+- Firebase Console: Email/Password **dan** Google keduanya menyala; perlindungan enumerasi
+  email; kebijakan kata sandi
+- Saweria: buat halaman, kode edisi berjalan di deskripsinya, lalu isi `urlDukungan` dan
+  `pesanDukungan` di `/admin/parameter`
+- **Isi**: satu kegiatan sungguhan dengan soal yang benar-benar ditulis sendiri. Ini yang
+  menentukan apakah orang datang — bukan fitur berikutnya
+- Kegiatan **baru** untuk gelombang pertama; jangan pakai kegiatan uji yang berisi peserta
+  `@contoh.com`
+- Putuskan sadar: gelombang pertama bermode **otomatis** atau **manual**
+
+### Pola yang sudah muncul tiga kali
+
+`arrayUnion` di 5.0c, `setDoc` parameter di slice 1, dan PUT kode akses di slice 4a:
+**tulisan non-merge menghapus apa yang tidak disebutkan.** Setiap kali sebuah dokumen
+mendapat field baru dari penulis yang berbeda, periksa semua penulis lama dokumen itu.

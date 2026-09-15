@@ -492,10 +492,18 @@ function PanitiaKegiatanIni({
 function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
   const [kode, setKode] = useState("");
   const [kodeTersimpan, setKodeTersimpan] = useState<string | null>(null);
+  // Slice "kode-akses-terukur" — jumlahDipakai ditampilkan apa adanya
+  // (bacaan, tidak pernah disunting langsung); kodeMaksPakaiInput adalah
+  // string form biasa (boleh kosong sementara diketik) yang dipetakan ke
+  // angka saat menyimpan, sama pola dengan kode di atas.
+  const [jumlahDipakai, setJumlahDipakai] = useState(0);
+  const [kodeMaksPakaiInput, setKodeMaksPakaiInput] = useState("0");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [resetting, setResetting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const [resetOk, setResetOk] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -507,6 +515,10 @@ function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
         }
         if (mounted) {
           setKodeTersimpan(typeof body?.kode === "string" ? body.kode : null);
+          setJumlahDipakai(typeof body?.jumlahDipakai === "number" ? body.jumlahDipakai : 0);
+          setKodeMaksPakaiInput(
+            typeof body?.kodeMaksPakai === "number" ? String(body.kodeMaksPakai) : "0"
+          );
         }
       })
       .catch((err) => {
@@ -523,24 +535,54 @@ function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
   async function handleSimpan() {
     setError(null);
     setSaved(false);
+    setResetOk(false);
     setSaving(true);
     try {
+      const kodeMaksPakai = Number(kodeMaksPakaiInput);
       const res = await fetchWithAuth(`/api/admin/kegiatan/${kegiatanId}/kode-akses`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kode }),
+        body: JSON.stringify({
+          kode,
+          kodeMaksPakai: Number.isFinite(kodeMaksPakai) ? kodeMaksPakai : 0,
+        }),
       });
       const body = await res.json();
       if (!res.ok) {
         throw new Error(typeof body?.error === "string" ? body.error : "Gagal menyimpan kode akses.");
       }
       setKodeTersimpan(body.kode);
+      setKodeMaksPakaiInput(typeof body?.kodeMaksPakai === "number" ? String(body.kodeMaksPakai) : "0");
       setKode("");
       setSaved(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal menyimpan kode akses.");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleResetPenghitung() {
+    setError(null);
+    setSaved(false);
+    setResetOk(false);
+    setResetting(true);
+    try {
+      const res = await fetchWithAuth(`/api/admin/kegiatan/${kegiatanId}/kode-akses`, {
+        method: "POST",
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(
+          typeof body?.error === "string" ? body.error : "Gagal mengatur ulang penghitung."
+        );
+      }
+      setJumlahDipakai(0);
+      setResetOk(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengatur ulang penghitung.");
+    } finally {
+      setResetting(false);
     }
   }
 
@@ -556,12 +598,17 @@ function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
       {loading ? (
         <p className="text-xs text-zinc-500">Memuat...</p>
       ) : (
-        <p className="text-xs text-zinc-500">
-          Kode saat ini:{" "}
-          <span className="font-mono text-black dark:text-zinc-50">
-            {kodeTersimpan ?? "(belum diisi)"}
-          </span>
-        </p>
+        <>
+          <p className="text-xs text-zinc-500">
+            Kode saat ini:{" "}
+            <span className="font-mono text-black dark:text-zinc-50">
+              {kodeTersimpan ?? "(belum diisi)"}
+            </span>
+          </p>
+          <p className="text-xs text-zinc-500">
+            Kode ini sudah dipakai <span className="font-medium text-black dark:text-zinc-50">{jumlahDipakai}</span> kali.
+          </p>
+        </>
       )}
       <div className="flex flex-wrap items-end gap-2">
         <div>
@@ -580,6 +627,24 @@ function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
             className="mt-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
           />
         </div>
+        <div>
+          <label
+            htmlFor="det-kode-maks-pakai"
+            className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+          >
+            Batas pemakaian
+          </label>
+          <input
+            id="det-kode-maks-pakai"
+            type="number"
+            min={0}
+            step={1}
+            placeholder="0 = tak terbatas"
+            value={kodeMaksPakaiInput}
+            onChange={(event) => setKodeMaksPakaiInput(event.target.value)}
+            className="mt-1 w-32 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+          />
+        </div>
         <button
           type="button"
           onClick={handleSimpan}
@@ -588,9 +653,18 @@ function KodeAksesKegiatan({ kegiatanId }: { kegiatanId: string }) {
         >
           {saving ? "Menyimpan..." : "Simpan kode"}
         </button>
+        <button
+          type="button"
+          onClick={handleResetPenghitung}
+          disabled={resetting || loading}
+          className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+        >
+          {resetting ? "Mengatur ulang..." : "Atur ulang penghitung"}
+        </button>
       </div>
       {error && <p className="text-xs text-red-600">{error}</p>}
       {saved && <p className="text-xs text-green-600">Kode tersimpan.</p>}
+      {resetOk && <p className="text-xs text-green-600">Penghitung diatur ulang ke 0.</p>}
     </div>
   );
 }

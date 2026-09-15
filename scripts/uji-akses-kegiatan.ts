@@ -13,6 +13,7 @@ import {
   mapCaraMasuk,
   normalisasiKodeAkses,
   putuskanAksesMandiri,
+  putuskanBatasPemakaianKode,
 } from "../src/lib/akses-kegiatan";
 import type { HasilKeputusanKuota } from "../src/lib/kuota-peserta";
 
@@ -38,6 +39,11 @@ const BATAS_HARIAN_PENUH: HasilKeputusanKuota = {
   ok: false,
   pesan: "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.",
 };
+const BATAS_PEMAKAIAN_KODE_OK: HasilKeputusanKuota = { ok: true, pesan: null };
+const BATAS_PEMAKAIAN_KODE_TERCAPAI: HasilKeputusanKuota = {
+  ok: false,
+  pesan: "Kode ini sudah mencapai batas pemakaiannya.",
+};
 
 uji("terbuka + kuota kegiatan penuh → DITOLAK", () => {
   const hasil = putuskanAksesMandiri({
@@ -46,6 +52,7 @@ uji("terbuka + kuota kegiatan penuh → DITOLAK", () => {
     kodeTersimpan: null,
     hasilKuotaKegiatan: KUOTA_PENUH,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota peserta kegiatan ini sudah penuh.");
@@ -58,6 +65,7 @@ uji("terbuka + batas harian penuh → DITOLAK", () => {
     kodeTersimpan: null,
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_PENUH,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.");
@@ -70,6 +78,7 @@ uji("kode + kode benar + batas harian penuh → LOLOS (melewati batas harian)", 
     kodeTersimpan: "SAWERIA2026",
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_PENUH,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, true, `Diharapkan lolos, dapat ditolak: ${hasil.pesan}`);
 });
@@ -81,6 +90,7 @@ uji("kode + kode benar + kuota kegiatan penuh → DITOLAK (tetap terikat kuota k
     kodeTersimpan: "SAWERIA2026",
     hasilKuotaKegiatan: KUOTA_PENUH,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota peserta kegiatan ini sudah penuh.");
@@ -93,6 +103,7 @@ uji("kode + kode salah → DITOLAK", () => {
     kodeTersimpan: "SAWERIA2026",
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -105,6 +116,7 @@ uji("kode + kode kosong → DITOLAK", () => {
     kodeTersimpan: "SAWERIA2026",
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -117,6 +129,7 @@ uji("kode + kegiatan_kode belum pernah diisi admin (kodeTersimpan null) → DITO
     kodeTersimpan: null,
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
 });
@@ -128,6 +141,7 @@ uji("kode dengan spasi dan huruf kecil → tetap cocok setelah dinormalkan", () 
     kodeTersimpan: "SAWERIA2026",
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, true, `Diharapkan lolos setelah normalisasi, dapat ditolak: ${hasil.pesan}`);
 });
@@ -139,6 +153,7 @@ uji("hanya_admin + pendaftaran mandiri → DITOLAK", () => {
     kodeTersimpan: null,
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, false);
   assert.match(hasil.pesan ?? "", /admin/i);
@@ -154,6 +169,7 @@ uji("kegiatan lama tanpa field caraMasuk (mapCaraMasuk(undefined)) → diperlaku
     kodeTersimpan: null,
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
   });
   assert.equal(hasil.ok, true, "kegiatan lama harus berperilaku persis 'terbuka'");
 });
@@ -162,6 +178,105 @@ uji("mapCaraMasuk: nilai valid dipetakan apa adanya", () => {
   assert.equal(mapCaraMasuk("kode"), "kode");
   assert.equal(mapCaraMasuk("hanya_admin"), "hanya_admin");
   assert.equal(mapCaraMasuk("terbuka"), "terbuka");
+});
+
+// --- putuskanBatasPemakaianKode() (Slice "kode-akses-terukur") ---
+
+uji("putuskanBatasPemakaianKode: penghitung 0 dengan maksPakai 0 (tak terbatas) → diterima", () => {
+  const hasil = putuskanBatasPemakaianKode(0, 1);
+  assert.equal(hasil.ok, true);
+  assert.equal(hasil.pesan, null);
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 0 (tak terbatas) → diterima berapa pun jumlahDipakaiBaru", () => {
+  assert.equal(putuskanBatasPemakaianKode(0, 999999).ok, true);
+});
+
+uji("putuskanBatasPemakaianKode: dokumen kode lama tanpa field maksPakai maupun penghitung (keduanya dibaca 0) → diterima", () => {
+  const kodeMaksPakaiDefaultDokumenLama = 0;
+  const jumlahDipakaiBaruDariPenghitungKosong = 0 + 1;
+  assert.equal(
+    putuskanBatasPemakaianKode(kodeMaksPakaiDefaultDokumenLama, jumlahDipakaiBaruDariPenghitungKosong).ok,
+    true
+  );
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 5, penghitung di bawah batas (jumlahDipakaiBaru 4) → diterima", () => {
+  const hasil = putuskanBatasPemakaianKode(5, 4);
+  assert.equal(hasil.ok, true);
+  assert.equal(hasil.pesan, null);
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 5, TEPAT di batas (jumlahDipakaiBaru 5) → diterima (pas)", () => {
+  assert.equal(putuskanBatasPemakaianKode(5, 5).ok, true);
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 5, melewati batas (jumlahDipakaiBaru 6) → DITOLAK, pesan BEDA dari kode salah", () => {
+  const hasil = putuskanBatasPemakaianKode(5, 6);
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, "Kode ini sudah mencapai batas pemakaiannya.");
+  assert.notEqual(hasil.pesan, "Kode akses salah atau belum diisi.");
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 1, pemakaian pertama (jumlahDipakaiBaru 1) → diterima", () => {
+  assert.equal(putuskanBatasPemakaianKode(1, 1).ok, true);
+});
+
+uji("putuskanBatasPemakaianKode: maksPakai 1, pemakaian kedua (jumlahDipakaiBaru 2) → DITOLAK", () => {
+  assert.equal(putuskanBatasPemakaianKode(1, 2).ok, false);
+});
+
+// --- putuskanAksesMandiri() + hasilBatasPemakaianKode (Slice "kode-akses-terukur") ---
+
+uji("kode + kode benar + batas pemakaian kode tercapai → DITOLAK dengan pesan BEDA dari kode salah", () => {
+  const hasil = putuskanAksesMandiri({
+    caraMasuk: "kode",
+    kodeDimasukkan: "SAWERIA2026",
+    kodeTersimpan: "SAWERIA2026",
+    hasilKuotaKegiatan: KUOTA_OK,
+    hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, "Kode ini sudah mencapai batas pemakaiannya.");
+});
+
+uji("kode + kode salah + batas pemakaian kode SUDAH tercapai → tetap pesan 'kode salah', bukan 'batas tercapai' (kode salah dicek lebih dulu)", () => {
+  const hasil = putuskanAksesMandiri({
+    caraMasuk: "kode",
+    kodeDimasukkan: "SALAH",
+    kodeTersimpan: "SAWERIA2026",
+    hasilKuotaKegiatan: KUOTA_OK,
+    hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
+});
+
+uji("kode + kode benar + batas pemakaian kode tercapai DAN kuota kegiatan penuh → pesan batas pemakaian (dicek lebih dulu)", () => {
+  const hasil = putuskanAksesMandiri({
+    caraMasuk: "kode",
+    kodeDimasukkan: "SAWERIA2026",
+    kodeTersimpan: "SAWERIA2026",
+    hasilKuotaKegiatan: KUOTA_PENUH,
+    hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, "Kode ini sudah mencapai batas pemakaiannya.");
+});
+
+uji("terbuka + hasilBatasPemakaianKode tercapai (diabaikan untuk caraMasuk 'terbuka') → tetap LOLOS", () => {
+  const hasil = putuskanAksesMandiri({
+    caraMasuk: "terbuka",
+    kodeDimasukkan: "",
+    kodeTersimpan: null,
+    hasilKuotaKegiatan: KUOTA_OK,
+    hasilBatasHarian: BATAS_HARIAN_OK,
+    hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+  });
+  assert.equal(hasil.ok, true, `hasilBatasPemakaianKode hanya relevan untuk caraMasuk 'kode': ${hasil.pesan}`);
 });
 
 // --- normalisasiKodeAkses() ---

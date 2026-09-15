@@ -1,6 +1,6 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { buatModulSnapshot } from "@/lib/api/pendaftaran-server";
-import { mapCaraMasuk, putuskanAksesMandiri } from "@/lib/akses-kegiatan";
+import { mapCaraMasuk, putuskanAksesMandiri, putuskanBatasPemakaianKode } from "@/lib/akses-kegiatan";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { mapFormulirPeserta, periksaFormulirPeserta } from "@/lib/formulir-peserta";
 import {
@@ -160,10 +160,21 @@ export async function POST(request: Request) {
       // di bawah yang memutuskan relevan atau tidak.
       const kodeAksesRef = db.collection("kegiatan_kode").doc(kegiatanId);
       const kodeAksesSnap = await tx.get(kodeAksesRef);
+      const kodeAksesData = kodeAksesSnap.data() ?? {};
       const kodeTersimpan =
-        kodeAksesSnap.exists && typeof kodeAksesSnap.data()?.kode === "string"
-          ? (kodeAksesSnap.data()!.kode as string)
-          : null;
+        typeof kodeAksesData.kode === "string" ? (kodeAksesData.kode as string) : null;
+      // Slice "kode-akses-terukur" — 0/tanpa field berarti tak terbatas
+      // (KA-1), sama seperti kuotaPeserta/batasHarian. jumlahDipakaiBaru
+      // dihitung di sini (nilai tersimpan + 1), BUKAN dari increment(),
+      // supaya bisa dinilai putuskanBatasPemakaianKode() SEBELUM ditulis —
+      // dan supaya tulisannya nanti (di bawah) memakai nilai eksplisit yang
+      // sama, bukan transform yang dievaluasi ulang saat commit.
+      const jumlahDipakaiSaatIni =
+        typeof kodeAksesData.jumlahDipakai === "number" ? kodeAksesData.jumlahDipakai : 0;
+      const kodeMaksPakai =
+        typeof kodeAksesData.kodeMaksPakai === "number" ? kodeAksesData.kodeMaksPakai : 0;
+      const jumlahDipakaiBaru = jumlahDipakaiSaatIni + 1;
+      const hasilBatasPemakaianKode = putuskanBatasPemakaianKode(kodeMaksPakai, jumlahDipakaiBaru);
 
       const keputusanAkses = putuskanAksesMandiri({
         caraMasuk,
@@ -171,6 +182,7 @@ export async function POST(request: Request) {
         kodeTersimpan,
         hasilKuotaKegiatan: hasilKuota,
         hasilBatasHarian,
+        hasilBatasPemakaianKode,
       });
       if (!keputusanAkses.ok) {
         throw new PendaftaranRouteError(
@@ -180,6 +192,16 @@ export async function POST(request: Request) {
       }
 
       tx.update(kegiatanRef, { nomorUrutTerakhir: nomorUrut });
+      if (caraMasuk === "kode") {
+        // PERINGATAN (jebakan 5.0c, sama seperti kuota_harian di bawah):
+        // jumlahDipakaiBaru ditulis SEBAGAI NILAI EKSPLISIT dibaca dari
+        // tx.get() di atas — TIDAK memakai FieldValue.increment(). merge:
+        // true supaya kode/kodeMaksPakai yang tersimpan di dokumen yang
+        // sama tidak ikut tertimpa. Hanya pendaftaran yang BERHASIL lewat
+        // jalur 'kode' yang menaikkan ini — kalau keputusanAkses di atas
+        // menolak, baris ini tidak pernah tercapai.
+        tx.set(kodeAksesRef, { jumlahDipakai: jumlahDipakaiBaru }, { merge: true });
+      }
       // PERINGATAN (jebakan 5.0c, docs/kickoff.md §R): jumlahHariIniBaru
       // ditulis SEBAGAI NILAI EKSPLISIT dibaca dari tx.get() di atas — TIDAK
       // memakai FieldValue.increment(), yang di dalam set() non-merge

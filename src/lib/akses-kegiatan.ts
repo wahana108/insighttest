@@ -43,10 +43,40 @@ export interface KeputusanAksesMandiri {
 }
 
 const OK: KeputusanAksesMandiri = { ok: true, pesan: null, status: 200 };
+const OK_KUOTA: HasilKeputusanKuota = { ok: true, pesan: null };
 
 export const PESAN_HANYA_ADMIN =
   "Kegiatan ini hanya menerima peserta lewat pendaftaran oleh admin. Hubungi panitia kalau Anda seharusnya sudah terdaftar.";
 export const PESAN_KODE_SALAH = "Kode akses salah atau belum diisi.";
+export const PESAN_KODE_BATAS_PEMAKAIAN_TERCAPAI = "Kode ini sudah mencapai batas pemakaiannya.";
+
+/**
+ * Slice "kode-akses-terukur" — kode akses dipakai bersama satu periode dan
+ * bisa beredar lebih luas dari yang dimaksud (grup pesan, bukan cuma
+ * pesan terima kasih Saweria satu orang). kodeMaksPakai 0 berarti tak
+ * terbatas (BAWAAN, sama seperti kuotaPeserta/batasHarian di
+ * kuota-peserta.ts). jumlahDipakaiBaru adalah jumlah pemakaian kode ini
+ * yang AKAN tercatat kalau pendaftaran ini diterima (jumlah tersimpan di
+ * kegiatan_kode/{kegiatanId} + 1, dibaca pemanggil DI DALAM transaksi
+ * pendaftaran yang sama — jebakan 5.0c yang sama seperti jumlahHariIniBaru
+ * di POST /api/pendaftaran).
+ *
+ * Pesannya SENGAJA beda dari PESAN_KODE_SALAH: kodenya memang benar,
+ * batas pemakaiannya yang habis — orangnya berhak tahu bedanya supaya
+ * tidak mengira dirinya salah ketik.
+ */
+export function putuskanBatasPemakaianKode(
+  kodeMaksPakai: number,
+  jumlahDipakaiBaru: number
+): HasilKeputusanKuota {
+  if (kodeMaksPakai <= 0) {
+    return OK_KUOTA;
+  }
+  if (jumlahDipakaiBaru > kodeMaksPakai) {
+    return { ok: false, pesan: PESAN_KODE_BATAS_PEMAKAIAN_TERCAPAI };
+  }
+  return OK_KUOTA;
+}
 
 /**
  * SATU-SATUNYA tempat yang memutuskan apakah pendaftaran MANDIRI (bukan
@@ -68,8 +98,21 @@ export function putuskanAksesMandiri(params: {
   kodeTersimpan: string | null;
   hasilKuotaKegiatan: HasilKeputusanKuota;
   hasilBatasHarian: HasilKeputusanKuota;
+  /**
+   * Slice "kode-akses-terukur" — hanya relevan untuk caraMasuk 'kode',
+   * diabaikan untuk 'terbuka'/'hanya_admin' (sama seperti hasilBatasHarian
+   * yang selalu dioper pemanggil apa pun caraMasuk-nya).
+   */
+  hasilBatasPemakaianKode: HasilKeputusanKuota;
 }): KeputusanAksesMandiri {
-  const { caraMasuk, kodeDimasukkan, kodeTersimpan, hasilKuotaKegiatan, hasilBatasHarian } = params;
+  const {
+    caraMasuk,
+    kodeDimasukkan,
+    kodeTersimpan,
+    hasilKuotaKegiatan,
+    hasilBatasHarian,
+    hasilBatasPemakaianKode,
+  } = params;
 
   if (caraMasuk === "hanya_admin") {
     return { ok: false, pesan: PESAN_HANYA_ADMIN, status: 403 };
@@ -83,6 +126,11 @@ export function putuskanAksesMandiri(params: {
       dimasukkanNormal === normalisasiKodeAkses(kodeTersimpan);
     if (!cocok) {
       return { ok: false, pesan: PESAN_KODE_SALAH, status: 403 };
+    }
+    // Kode cocok TAPI sudah mencapai batas pemakaiannya — beda dari kode
+    // salah, dicek SEBELUM kuota kegiatan supaya pesannya paling tepat.
+    if (!hasilBatasPemakaianKode.ok) {
+      return { ok: false, pesan: hasilBatasPemakaianKode.pesan, status: 409 };
     }
     // Kode cocok — lewati batas harian, TETAP terikat kuota kegiatan.
     if (!hasilKuotaKegiatan.ok) {
