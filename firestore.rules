@@ -401,6 +401,19 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // kuota_email/{tanggal}: penghitung email uji per akun per hari (Slice
+    // "email-brevo" 6a) — id dokumen = tanggal Asia/Jakarta (YYYY-MM-DD,
+    // sama seperti kuota_harian di atas), isi {uid: jumlah}. SERVER SAJA,
+    // tanpa kecuali — TERMASUK admin, sama semangatnya dengan kegiatan_kode
+    // di bawah: tidak ada alasan operasional apa pun bagi client SDK
+    // menyentuhnya, dan yang perlu dilihat admin (hasil kirim, sisa kuota)
+    // sudah dikembalikan langsung oleh POST /api/email/uji, bukan dibaca
+    // ulang dari sini. Dinaikkan Admin SDK di dalam transaksi terpisah
+    // SETELAH pengiriman Brevo sukses — lihat src/app/api/email/uji/route.ts.
+    match /kuota_email/{tanggal} {
+      allow read, write: if false;
+    }
+
     // kegiatan_kode/{kegiatanId}: kode akses untuk kegiatan bercaraMasuk
     // 'kode' (Slice "akses-kegiatan", docs/kickoff.md §R). SERVER SAJA,
     // tanpa kecuali — TERMASUK admin. Kalau kodenya bisa dibaca client SDK

@@ -2,6 +2,7 @@
 
 import { useEffect, useState, type FormEvent } from "react";
 import { WajibAdmin } from "@/app/(admin)/_wajib-admin";
+import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { useAuth } from "@/lib/auth/auth-provider";
 import {
   DEFAULT_SYSTEM_PARAMETER,
@@ -15,6 +16,62 @@ export default function AdminParameterPage() {
     <WajibAdmin>
       <AdminParameterPageIsi />
     </WajibAdmin>
+  );
+}
+
+/**
+ * Slice "email-brevo" (6a) — membuktikan pengiriman email bekerja, bukan
+ * fitur pengguna. Tujuan SELALU alamat akun yang sedang login (ditampilkan
+ * sebagai teks mati di sini, TIDAK PERNAH sebagai isian bebas — server
+ * yang menentukan tujuan dari token, lihat POST /api/email/uji) —
+ * ditampilkan supaya admin tahu persis ke mana email akan pergi sebelum
+ * mengklik.
+ */
+function KirimEmailUji({ emailTujuan }: { emailTujuan: string }) {
+  const [mengirim, setMengirim] = useState(false);
+  const [hasil, setHasil] = useState<{ ok: boolean; pesan: string } | null>(null);
+
+  async function handleKirim() {
+    setMengirim(true);
+    setHasil(null);
+    try {
+      const res = await fetchWithAuth("/api/email/uji", { method: "POST" });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Gagal mengirim email uji.");
+      }
+      setHasil({ ok: true, pesan: `Email uji berhasil dikirim ke ${body.ke}.` });
+    } catch (err) {
+      setHasil({
+        ok: false,
+        pesan: err instanceof Error ? err.message : "Gagal mengirim email uji.",
+      });
+    } finally {
+      setMengirim(false);
+    }
+  }
+
+  return (
+    <div className="space-y-2 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+      <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Email uji (Brevo)</p>
+      <p className="text-xs text-zinc-500">
+        Tujuan:{" "}
+        <span className="font-mono text-black dark:text-zinc-50">
+          {emailTujuan || "(alamat akun tidak diketahui)"}
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={handleKirim}
+        disabled={mengirim || !emailTujuan}
+        className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+      >
+        {mengirim ? "Mengirim..." : "Kirim email uji ke alamat saya"}
+      </button>
+      {hasil && (
+        <p className={`text-xs ${hasil.ok ? "text-green-600" : "text-red-600"}`}>{hasil.pesan}</p>
+      )}
+    </div>
   );
 }
 
@@ -79,6 +136,8 @@ function AdminParameterPageIsi() {
   return (
     <div className="max-w-lg space-y-6">
       <h1 className="text-xl font-semibold text-black dark:text-zinc-50">Parameter</h1>
+
+      <KirimEmailUji emailTujuan={user?.email ?? ""} />
 
       <form onSubmit={handleSubmit} className="space-y-4">
         <div>
