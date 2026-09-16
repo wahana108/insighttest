@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { use, useEffect, useMemo, useState, type FormEvent } from "react";
+import { GambarAman, usePratinjauGambarStatus } from "@/app/_gambar-aman";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { normalkanAmbangKeterlibatan } from "@/lib/atestasi-pernyataan";
 import { useAuth } from "@/lib/auth/auth-provider";
@@ -175,29 +176,38 @@ function ringkasanModul(modul: ModulKegiatan, topikLabel: Map<string, string>): 
 }
 
 /**
- * Satu field URL gambar template sertifikat (logo/kop/tanda tangan) —
- * dipakai tiga kali, jadi diekstrak supaya validasi + pratinjau tidak
- * ditulis ulang tiga kali. periksaUrlGambar() cuma memeriksa bentuk URL-nya
- * (protokol, host, query, ekstensi) — img onError di bawah ini memeriksa
- * hal yang tidak bisa diketahui dari teks URL saja: apakah tautannya
- * benar-benar bisa dimuat sekarang.
+ * Satu field URL gambar — dipakai untuk template sertifikat (logo/kop/tanda
+ * tangan) DAN sampul kegiatan, jadi diekstrak supaya validasi + pratinjau
+ * tidak ditulis ulang empat kali. periksaUrlGambar() (BAGIAN 1, Slice
+ * "validasi-gambar" 7a/7b) cuma memeriksa BENTUK URL-nya (protokol,
+ * ekstensi, host, query) — usePratinjauGambarStatus() (BAGIAN 2,
+ * src/app/_gambar-aman.tsx) memeriksa hal yang tidak bisa diketahui dari
+ * teks URL saja: apakah tautannya benar-benar bisa dimuat SEKARANG.
+ * key={value} pada GambarAman di bawah SENGAJA — itulah yang membuat
+ * status pratinjau mereset tiap kali tautan diketik ulang (lihat catatan
+ * di usePratinjauGambarStatus()/GambarAman kenapa bukan useEffect).
+ *
+ * Slice 7b §"Di form": kalau periksaUrlGambar() MENOLAK (hasil.valid
+ * false), pratinjau (gambar + label status) disembunyikan SAMA SEKALI —
+ * hanya pesan penolakan yang tampil, supaya tidak pernah ada dua pesan
+ * yang bertentangan ("URL tidak sah" berdampingan dengan "gambar
+ * ditemukan"). Catatan NETRAL dari jalur 3 periksaUrlGambar() (tanpa
+ * ekstensi dikenal) BUKAN penolakan (hasil.valid tetap true) — pratinjau
+ * tetap tampil di sampingnya, memang itu gunanya.
  */
 function FieldUrlGambar({
   id,
   label,
   value,
   onChange,
-  gambarGagal,
-  onGambarStatus,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
-  gambarGagal: boolean;
-  onGambarStatus: (berhasil: boolean) => void;
 }) {
   const hasil = periksaUrlGambar(value);
+  const pratinjau = usePratinjauGambarStatus(value);
   return (
     <div>
       <label
@@ -215,26 +225,31 @@ function FieldUrlGambar({
           onChange={(event) => onChange(event.target.value)}
           className="w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
-        {value.trim() && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
+        {value.trim() && hasil.valid && (
+          <GambarAman
+            key={value}
             src={value}
             alt=""
             className="h-10 w-10 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-700"
-            onError={() => onGambarStatus(false)}
-            onLoad={() => onGambarStatus(true)}
+            onMuat={pratinjau.onMuat}
+            onGagal={pratinjau.onGagal}
           />
         )}
       </div>
-      {!hasil.valid && hasil.alasan && (
-        <p className="mt-1 text-xs text-red-600">{hasil.alasan}</p>
+      {hasil.alasan && (
+        <p className={`mt-1 text-xs ${hasil.valid ? "text-zinc-500" : "text-red-600"}`}>
+          {hasil.alasan}
+        </p>
       )}
-      {hasil.valid && hasil.alasan && (
-        <p className="mt-1 text-xs text-amber-600">{hasil.alasan}</p>
+      {hasil.valid && pratinjau.status === "memeriksa" && (
+        <p className="mt-1 text-xs text-zinc-500">memeriksa...</p>
       )}
-      {gambarGagal && (
+      {hasil.valid && pratinjau.status === "ditemukan" && (
+        <p className="mt-1 text-xs text-green-600">gambar ditemukan</p>
+      )}
+      {hasil.valid && pratinjau.status === "gagal" && (
         <p className="mt-1 text-xs text-red-600">
-          Gambar tidak bisa dimuat — periksa tautannya
+          gambar tidak bisa dimuat — tautannya mungkin salah atau berkasnya sudah tidak ada
         </p>
       )}
     </div>
@@ -728,17 +743,6 @@ export default function AdminKegiatanDetailPage({
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
   const [savingKegiatan, setSavingKegiatan] = useState(false);
-  const [gambarGagal, setGambarGagal] = useState<{
-    logo: boolean;
-    kop: boolean;
-    ttd: boolean;
-    sampul: boolean;
-  }>({
-    logo: false,
-    kop: false,
-    ttd: false,
-    sampul: false,
-  });
 
   const editingKegiatanForm =
     kegiatanForm ??
@@ -1237,10 +1241,6 @@ export default function AdminKegiatanDetailPage({
                 label="Gambar sampul (opsional)"
                 value={editingKegiatanForm.urlGambar}
                 onChange={(nilai) => setKegiatanForm({ ...editingKegiatanForm, urlGambar: nilai })}
-                gambarGagal={gambarGagal.sampul}
-                onGambarStatus={(berhasil) =>
-                  setGambarGagal((g) => ({ ...g, sampul: !berhasil }))
-                }
               />
               <p className="mt-1 text-xs text-zinc-500">
                 Tampil di katalog /kegiatan dan di halaman kegiatan ini. Tautan gambar harus
@@ -1689,10 +1689,6 @@ export default function AdminKegiatanDetailPage({
                       },
                     })
                   }
-                  gambarGagal={gambarGagal.logo}
-                  onGambarStatus={(berhasil) =>
-                    setGambarGagal((g) => ({ ...g, logo: !berhasil }))
-                  }
                 />
                 <FieldUrlGambar
                   id="tpl-kop"
@@ -1706,10 +1702,6 @@ export default function AdminKegiatanDetailPage({
                         kopUrl: nilai,
                       },
                     })
-                  }
-                  gambarGagal={gambarGagal.kop}
-                  onGambarStatus={(berhasil) =>
-                    setGambarGagal((g) => ({ ...g, kop: !berhasil }))
                   }
                 />
                 <div>
@@ -1771,10 +1763,6 @@ export default function AdminKegiatanDetailPage({
                           tandaTanganUrl: nilai,
                         },
                       })
-                    }
-                    gambarGagal={gambarGagal.ttd}
-                    onGambarStatus={(berhasil) =>
-                      setGambarGagal((g) => ({ ...g, ttd: !berhasil }))
                     }
                   />
                 </div>

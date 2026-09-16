@@ -77,6 +77,139 @@ uji("periksaUrlGambar: URL tidak bisa diparse sama sekali → DITOLAK, tidak mel
   assert.equal(hasil.valid, false);
 });
 
+// --- periksaUrlGambar(): Slice "validasi-gambar" (7a/7b) — ekstensi berkas, TIGA jalur ---
+
+uji("periksaUrlGambar: .pdf → DITOLAK, pesan menyebut ekstensi yang ditemukan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/dokumen.pdf");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /\.pdf/);
+});
+
+uji("periksaUrlGambar: .html → DITOLAK", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/halaman.html");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /\.html/);
+});
+
+uji("periksaUrlGambar: https://picsum.photos/400 (tanpa ekstensi, layanan gambar sah) → DITERIMA dengan catatan netral (7a menolaknya secara keliru)", () => {
+  const hasil = periksaUrlGambar("https://picsum.photos/400");
+  assert.equal(hasil.valid, true);
+  assert.match(hasil.alasan ?? "", /tidak berakhir dengan ekstensi gambar yang dikenal/i);
+});
+
+uji("periksaUrlGambar: .jgp (ekstensi tak dikenal, kemungkinan salah ketik dari .jpg) → DITERIMA dengan catatan netral, BUKAN penolakan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.jgp");
+  assert.equal(hasil.valid, true);
+  assert.match(hasil.alasan ?? "", /tidak berakhir dengan ekstensi gambar yang dikenal/i);
+});
+
+uji("periksaUrlGambar: URL mengandung '](' (tautan Markdown tersalin utuh) → DITOLAK, pesan menyebut Markdown", () => {
+  const hasil = periksaUrlGambar("[gambar](https://contoh.com/foto.png)");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /markdown/i);
+});
+
+uji("periksaUrlGambar: '](' di tengah URL yang sebenarnya bisa diparse → tetap DITOLAK lebih dulu (dicek sebelum new URL())", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/gambar.png](https://lain.com/x.png)");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /markdown/i);
+});
+
+uji("periksaUrlGambar: .JPG huruf besar → diterima TANPA catatan (tidak peka besar-kecil)", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.JPG");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .png?width=300 → diterima TANPA catatan (query string diabaikan saat memeriksa ekstensi)", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/gambar.png?width=300");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .jpg → diterima tanpa catatan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.jpg");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .webp → diterima tanpa catatan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.webp");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .svg → diterima tanpa catatan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/ikon.svg");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .gif → diterima tanpa catatan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/animasi.gif");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: .avif → diterima tanpa catatan", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.avif");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: http:// dengan ekstensi gambar sah → TETAP DITOLAK seperti sebelumnya (protokol dicek lebih dulu)", () => {
+  const hasil = periksaUrlGambar("http://contoh.com/gambar.png");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /https/i);
+});
+
+uji("periksaUrlGambar: tanpa ekstensi TAPI host bermasalah (private-user-images) → TETAP DITOLAK — jalur 3 bukan celah KA-8", () => {
+  const hasil = periksaUrlGambar("https://private-user-images.githubusercontent.com/12345/berkas");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /sementara/i);
+});
+
+// --- periksaUrlGambar(): Slice "tautan-permanen" — tautan bertanda tangan/sementara ---
+
+uji("periksaUrlGambar: raw.githubusercontent.com/...jpg?token=ABC → DITOLAK (parameter token)", () => {
+  const hasil = periksaUrlGambar(
+    "https://raw.githubusercontent.com/user/repo/main/foto.jpg?token=ABC"
+  );
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /tanda tangan sementara/i);
+  assert.match(hasil.alasan ?? "", /'token'/);
+});
+
+uji("periksaUrlGambar: ...jpg?X-Amz-Signature=abc → DITOLAK", () => {
+  const hasil = periksaUrlGambar("https://contoh-bucket.s3.amazonaws.com/foto.jpg?X-Amz-Signature=abc");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /tanda tangan sementara/i);
+});
+
+uji("periksaUrlGambar: ...jpg?TOKEN=abc (huruf besar) → DITOLAK (perbandingan parameter tidak peka huruf besar-kecil)", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/foto.jpg?TOKEN=abc");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /tanda tangan sementara/i);
+});
+
+uji("periksaUrlGambar: camo.githubusercontent.com/... → DITOLAK (proxy gambar GitHub, bukan alamat asli)", () => {
+  const hasil = periksaUrlGambar("https://camo.githubusercontent.com/abcdef1234567890/foto.png");
+  assert.equal(hasil.valid, false);
+  assert.match(hasil.alasan ?? "", /proxy gambar github/i);
+});
+
+uji("periksaUrlGambar: raw.githubusercontent.com/...jpg TANPA token → DITERIMA (repo publik memang permanen, jangan ikut diblokir)", () => {
+  const hasil = periksaUrlGambar("https://raw.githubusercontent.com/user/repo/main/foto.jpg");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
+uji("periksaUrlGambar: ...png?width=300 → TETAP DITERIMA (kontrol negatif — pemeriksaan tanda tangan tidak boleh menelan query yang tidak bersalah)", () => {
+  const hasil = periksaUrlGambar("https://contoh.com/gambar.png?width=300");
+  assert.equal(hasil.valid, true);
+  assert.equal(hasil.alasan, undefined);
+});
+
 // --- periksaGambarSoal(): gerbang gabungan soal + opsi ---
 
 uji("periksaGambarSoal: soal dengan gambar valid, opsi tanpa gambar → OK", () => {

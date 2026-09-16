@@ -3,7 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { WajibBolehBuatSoal } from "@/app/(admin)/_wajib-admin";
-import { GambarAman } from "@/app/_gambar-aman";
+import { GambarAman, usePratinjauGambarStatus } from "@/app/_gambar-aman";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
@@ -57,10 +57,20 @@ function emptyForm(): FormState {
 
 /**
  * Slice "gambar-soal" — dipakai untuk gambar soal DAN gambar per opsi.
- * periksaUrlGambar() memeriksa BENTUK URL-nya saja; GambarAman (dipakai
- * juga di runner ujian dan katalog) memeriksa apakah tautannya benar-benar
- * bisa dimuat sekarang, dan gagal DIAM-DIAM (tidak merusak form) — sama
- * aturan tampilan dengan tempat gambar ini nanti dirender ke peserta.
+ * periksaUrlGambar() (BAGIAN 1, Slice "validasi-gambar" 7a/7b) memeriksa
+ * BENTUK URL-nya saja; usePratinjauGambarStatus() (BAGIAN 2,
+ * src/app/_gambar-aman.tsx) memeriksa apakah tautannya benar-benar bisa
+ * dimuat SEKARANG. Murni di peramban, tidak memanggil server, tidak
+ * memblokir penyimpanan — hanya memberi tahu. Sama aturan tampilan dengan
+ * tempat gambar ini nanti dirender ke peserta (gagal diam-diam di sana; di
+ * sini gagalnya justru yang ingin ditunjukkan ke admin). key={value} pada
+ * GambarAman di bawah SENGAJA — lihat catatan di usePratinjauGambarStatus().
+ *
+ * Slice 7b: kalau periksaUrlGambar() MENOLAK (hasil.valid false), pratinjau
+ * (gambar + label status) disembunyikan SAMA SEKALI — hanya pesan
+ * penolakan yang tampil, supaya tidak pernah ada dua pesan yang
+ * bertentangan. Catatan NETRAL dari jalur 3 periksaUrlGambar() (tanpa
+ * ekstensi dikenal) BUKAN penolakan — pratinjau tetap tampil di sampingnya.
  */
 function FieldUrlGambarSoal({
   id,
@@ -77,6 +87,8 @@ function FieldUrlGambarSoal({
   altPratinjau: string;
 }) {
   const hasil = periksaUrlGambar(value);
+  const pratinjau = usePratinjauGambarStatus(value);
+
   return (
     <div>
       <label htmlFor={id} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
@@ -91,16 +103,33 @@ function FieldUrlGambarSoal({
           onChange={(event) => onChange(event.target.value)}
           className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
         />
-        {value.trim() && (
+        {value.trim() && hasil.valid && (
           <GambarAman
+            key={value}
             src={value}
             alt={altPratinjau}
             className="h-10 w-10 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-700"
+            onMuat={pratinjau.onMuat}
+            onGagal={pratinjau.onGagal}
           />
         )}
       </div>
-      {!hasil.valid && hasil.alasan && <p className="mt-1 text-xs text-red-600">{hasil.alasan}</p>}
-      {hasil.valid && hasil.alasan && <p className="mt-1 text-xs text-amber-600">{hasil.alasan}</p>}
+      {hasil.alasan && (
+        <p className={`mt-1 text-xs ${hasil.valid ? "text-zinc-500" : "text-red-600"}`}>
+          {hasil.alasan}
+        </p>
+      )}
+      {hasil.valid && pratinjau.status === "memeriksa" && (
+        <p className="mt-1 text-xs text-zinc-500">memeriksa...</p>
+      )}
+      {hasil.valid && pratinjau.status === "ditemukan" && (
+        <p className="mt-1 text-xs text-green-600">gambar ditemukan</p>
+      )}
+      {hasil.valid && pratinjau.status === "gagal" && (
+        <p className="mt-1 text-xs text-red-600">
+          gambar tidak bisa dimuat — tautannya mungkin salah atau berkasnya sudah tidak ada
+        </p>
+      )}
     </div>
   );
 }
