@@ -55,6 +55,7 @@ interface FormState {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
   caraMasuk: CaraMasukKegiatan;
+  urlGambar: string;
   penafsiranHasil: string;
 }
 
@@ -79,6 +80,9 @@ function emptyForm(): FormState {
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
     kuotaPeserta: "0",
     caraMasuk: "terbuka",
+    // Slice "gambar-soal" — disunting di /admin/kegiatan/[id], bukan di
+    // sini — sama seperti templateSertifikat/formulirPeserta di atas.
+    urlGambar: "",
     // Disunting di /admin/kegiatan/[id], bukan di sini — sama seperti
     // templateSertifikat/formulirPeserta di atas.
     penafsiranHasil: "",
@@ -157,6 +161,9 @@ export default function AdminKegiatanPage() {
       formulirPeserta: kegiatan.formulirPeserta,
       kuotaPeserta: String(kegiatan.kuotaPeserta),
       caraMasuk: kegiatan.caraMasuk,
+      // Slice "gambar-soal" — sampul kegiatan, sama seperti
+      // templateSertifikat: disunting di /admin/kegiatan/[id].
+      urlGambar: kegiatan.urlGambar,
       // Blok "Penafsiran hasil" (Slice "penafsiran-hasil") sama —
       // disunting di /admin/kegiatan/[id].
       penafsiranHasil: kegiatan.penafsiranHasil,
@@ -189,6 +196,7 @@ export default function AdminKegiatanPage() {
         formulirPeserta: form.formulirPeserta,
         kuotaPeserta: Number(form.kuotaPeserta) || 0,
         caraMasuk: form.caraMasuk,
+        urlGambar: form.urlGambar,
         penafsiranHasil: form.penafsiranHasil,
       };
 

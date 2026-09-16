@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { use, useEffect, useMemo, useState } from "react";
+import { GambarAman } from "@/app/_gambar-aman";
 import { JalurDukungan } from "@/app/_jalur-dukungan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
@@ -311,6 +312,13 @@ export default function KegiatanDetailPage({
       </Link>
 
       <div>
+        {kegiatan.urlGambar && (
+          <GambarAman
+            src={kegiatan.urlGambar}
+            alt={kegiatan.judul}
+            className="mb-3 max-h-56 w-full rounded-lg object-cover"
+          />
+        )}
         <h1 className="text-xl font-semibold text-black dark:text-zinc-50">{kegiatan.judul}</h1>
         {kegiatan.deskripsi && (
           <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400">{kegiatan.deskripsi}</p>

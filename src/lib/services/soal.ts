@@ -12,6 +12,7 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase/client";
 import { getTopikByKode } from "@/lib/services/topik";
+import { periksaGambarSoal } from "@/lib/validasi-url-gambar";
 import type { KunciSoal, OpsiSoal, Soal, TingkatSoal } from "@/types/soal";
 
 export class SoalError extends Error {
@@ -41,6 +42,9 @@ function mapOpsi(value: unknown): OpsiSoal[] {
     .map((item) => ({
       id: typeof item.id === "string" ? item.id : "",
       label: typeof item.label === "string" ? item.label : "",
+      // Slice "gambar-soal" — opsi lama tanpa field ini sama sekali dibaca
+      // sebagai "" (KA-1), bukan galat.
+      urlGambar: typeof item.urlGambar === "string" ? item.urlGambar : "",
     }));
 }
 
@@ -52,6 +56,9 @@ export function mapSoal(id: string, data: DocumentData): Soal {
     topikKode: typeof data.topikKode === "string" ? data.topikKode : "",
     tingkat: isTingkat(data.tingkat) ? data.tingkat : "sedang",
     opsi: mapOpsi(data.opsi),
+    // Slice "gambar-soal" — soal lama tanpa field ini sama sekali dibaca
+    // sebagai "" (KA-1), bukan galat.
+    urlGambar: typeof data.urlGambar === "string" ? data.urlGambar : "",
     isActive: typeof data.isActive === "boolean" ? data.isActive : true,
     // Soal lama tidak punya field ini sama sekali — string kosong, bukan
     // galat (KA-1). Lihat komentar Soal.dibuatOleh di src/types/soal.ts.
@@ -77,6 +84,8 @@ export interface SoalWriteInput {
   opsi: OpsiSoal[];
   opsiBenarId: string;
   pembahasan: string;
+  /** Slice "gambar-soal" — opsional, string kosong berarti tidak ada gambar. */
+  urlGambar: string;
 }
 
 /**
@@ -103,6 +112,18 @@ export async function validasiSoal(input: SoalWriteInput): Promise<void> {
   }
   if (!input.topikKode) {
     throw new SoalError("Topik wajib dipilih.");
+  }
+
+  // Slice "gambar-soal" — KA-8 berlaku PENUH: periksaGambarSoal() (fungsi
+  // murni, src/lib/validasi-url-gambar.ts) SATU-SATUNYA gerbang, dipakai
+  // ulang di sini (form manual DAN importer massal, lewat validasiSoal()
+  // ini) — bukan ditulis ulang. Hanya valid:false yang menolak; valid:true
+  // dengan alasan terisi cuma peringatan (mis. URL tanpa ekstensi gambar
+  // dikenal), tidak menghalangi penyimpanan — sama seperti perlakuannya di
+  // form template sertifikat.
+  const hasilGambar = periksaGambarSoal(input);
+  if (!hasilGambar.valid) {
+    throw new SoalError(hasilGambar.alasan ?? "Gambar tidak valid.");
   }
 
   const topik = await getTopikByKode(input.topikKode);
@@ -164,7 +185,12 @@ export function buildSoalWrite(
     tipe: "pilihan_ganda",
     topikKode: input.topikKode,
     tingkat: input.tingkat,
-    opsi: input.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label.trim() })),
+    opsi: input.opsi.map((opsi) => ({
+      id: opsi.id,
+      label: opsi.label.trim(),
+      urlGambar: opsi.urlGambar.trim(),
+    })),
+    urlGambar: input.urlGambar.trim(),
     isActive: ctx.isActive ?? true,
     dibuatOleh,
     createdAt: ctx.createdAt ?? now,

@@ -74,3 +74,32 @@ export function periksaUrlGambar(url: string): HasilValidasiUrlGambar {
 
   return { valid: true };
 }
+
+/**
+ * Slice "gambar-soal" (docs/kickoff.md §S "Slice 7") — memeriksa SEMUA URL
+ * gambar pada satu kandidat soal (gambar soal sendiri + gambar tiap opsi)
+ * lewat periksaUrlGambar(), berhenti di kesalahan PERTAMA. Fungsi murni,
+ * diekstrak dari validasiSoal() (src/lib/services/soal.ts) supaya bisa
+ * diuji tanpa Firestore — validasiSoal() sendiri memanggil
+ * getTopikByKode(), butuh koneksi Firestore, sementara pemeriksaan gambar
+ * ini tidak. validasiSoal() memanggil fungsi ini dan hanya fungsi ini untuk
+ * bagian gambar — SATU gerbang yang dipakai BERSAMA oleh form manual
+ * (/admin/soal) dan importer massal (src/lib/services/soal-import.ts),
+ * sesuai KA-8 (docs/arsitektur.md).
+ */
+export function periksaGambarSoal(input: {
+  urlGambar: string;
+  opsi: { urlGambar: string }[];
+}): HasilValidasiUrlGambar {
+  const hasilSoal = periksaUrlGambar(input.urlGambar);
+  if (!hasilSoal.valid) {
+    return { valid: false, alasan: `Gambar soal: ${hasilSoal.alasan}` };
+  }
+  for (let index = 0; index < input.opsi.length; index += 1) {
+    const hasilOpsi = periksaUrlGambar(input.opsi[index].urlGambar);
+    if (!hasilOpsi.valid) {
+      return { valid: false, alasan: `Gambar opsi ${index + 1}: ${hasilOpsi.alasan}` };
+    }
+  }
+  return { valid: true };
+}

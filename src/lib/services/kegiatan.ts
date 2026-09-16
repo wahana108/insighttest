@@ -167,6 +167,9 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
     kuotaPeserta: typeof data.kuotaPeserta === "number" ? data.kuotaPeserta : 0,
     caraMasuk: mapCaraMasuk(data.caraMasuk),
+    // Slice "gambar-soal" — kegiatan lama tanpa field ini sama sekali
+    // dibaca sebagai "" (KA-1), bukan galat.
+    urlGambar: typeof data.urlGambar === "string" ? data.urlGambar : "",
     penafsiranHasil: typeof data.penafsiranHasil === "string" ? data.penafsiranHasil : "",
     nomorUrutTerakhir:
       typeof data.nomorUrutTerakhir === "number" ? data.nomorUrutTerakhir : 0,
@@ -190,6 +193,8 @@ export interface KegiatanWriteInput {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: number;
   caraMasuk: CaraMasukKegiatan;
+  /** Slice "gambar-soal" — sampul kegiatan, opsional. */
+  urlGambar: string;
   penafsiranHasil: string;
 }
 
@@ -271,6 +276,7 @@ export async function createKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    urlGambar: input.urlGambar.trim(),
     penafsiranHasil: input.penafsiranHasil,
     nomorUrutTerakhir: 0,
     panitiaUids: [],
@@ -308,6 +314,7 @@ export async function updateKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    urlGambar: input.urlGambar.trim(),
     penafsiranHasil: input.penafsiranHasil,
     updatedAt: new Date().toISOString(),
     updatedBy: actorId,

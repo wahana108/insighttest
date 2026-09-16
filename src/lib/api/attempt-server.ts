@@ -43,10 +43,14 @@ export async function muatSoalUntukAttempt(
       .map((item) => ({
         id: typeof item.id === "string" ? item.id : "",
         label: typeof item.label === "string" ? item.label : "",
+        // Slice "gambar-soal" — soal lama tanpa field ini sama sekali
+        // dibaca sebagai "" (KA-1), bukan galat.
+        urlGambar: typeof item.urlGambar === "string" ? item.urlGambar : "",
       }));
     return {
       id: soalIds[index],
       teks: typeof data.teks === "string" ? data.teks : "",
+      urlGambar: typeof data.urlGambar === "string" ? data.urlGambar : "",
       opsi,
     };
   });

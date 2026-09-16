@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { use, useEffect, useMemo, useRef, useState } from "react";
+import { GambarAman } from "@/app/_gambar-aman";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { nilaiAtestasi } from "@/lib/atestasi-pernyataan";
@@ -1113,6 +1114,13 @@ export default function ModulAttemptPage({
               key={butir.id}
               className="space-y-2 rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950"
             >
+              {butir.urlGambar && (
+                <GambarAman
+                  src={butir.urlGambar}
+                  alt={butir.teks}
+                  className="max-h-64 rounded object-contain"
+                />
+              )}
               <p className="text-sm font-medium text-black dark:text-zinc-50">
                 {index + 1}. {butir.teks}
               </p>
@@ -1120,16 +1128,25 @@ export default function ModulAttemptPage({
                 {butir.opsi.map((opsi) => (
                   <label
                     key={opsi.id}
-                    className="flex min-h-11 items-center gap-2 rounded border border-zinc-200 p-2.5 text-sm dark:border-zinc-800"
+                    className="flex min-h-11 flex-col gap-1.5 rounded border border-zinc-200 p-2.5 text-sm dark:border-zinc-800"
                   >
-                    <input
-                      type="radio"
-                      name={`soal-${butir.id}`}
-                      checked={jawaban[butir.id] === opsi.id}
-                      onChange={() => handlePilihJawaban(butir.id, opsi.id)}
-                      className="shrink-0"
-                    />
-                    <span className="text-zinc-700 dark:text-zinc-300">{opsi.label}</span>
+                    {opsi.urlGambar && (
+                      <GambarAman
+                        src={opsi.urlGambar}
+                        alt={opsi.label}
+                        className="max-h-40 rounded object-contain"
+                      />
+                    )}
+                    <span className="flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name={`soal-${butir.id}`}
+                        checked={jawaban[butir.id] === opsi.id}
+                        onChange={() => handlePilihJawaban(butir.id, opsi.id)}
+                        className="shrink-0"
+                      />
+                      <span className="text-zinc-700 dark:text-zinc-300">{opsi.label}</span>
+                    </span>
                   </label>
                 ))}
               </div>

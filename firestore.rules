@@ -73,7 +73,10 @@ service cloud.firestore {
     // kegiatan_kode/{id} di bawah) — dan (Slice "penafsiran-hasil")
     // penafsiranHasil, kunci penafsiran kuis refleksi diri yang HANYA
     // ditampilkan ke peserta yang bersangkutan sendiri (src/lib/penafsiran-hasil.ts),
-    // tidak pernah ke /s/[kode], cetak, atau rekap. updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // tidak pernah ke /s/[kode], cetak, atau rekap. (Slice "gambar-soal",
+    // docs/kickoff.md §S "Slice 7") urlGambar — sampul kegiatan, LIVE seperti
+    // templateSertifikat.logoUrl/kopUrl, KA-8 (URL saja, tidak pernah
+    // diunggah). updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
     // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
     // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
     // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
@@ -85,7 +88,8 @@ service cloud.firestore {
       return [
         'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
         'syaratSertifikat', 'templateSertifikat', 'formulirPeserta',
-        'kuotaPeserta', 'caraMasuk', 'penafsiranHasil', 'updatedAt', 'updatedBy'
+        'kuotaPeserta', 'caraMasuk', 'urlGambar', 'penafsiranHasil',
+        'updatedAt', 'updatedBy'
       ];
     }
 

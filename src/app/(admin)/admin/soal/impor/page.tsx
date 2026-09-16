@@ -30,8 +30,9 @@ Skema (schemaVersion "${SOAL_IMPOR_SCHEMA_VERSION}"):
       "topikKode": "KODE_TOPIK",
       "pertanyaan": "Teks pertanyaan di sini",
       "tingkat": "mudah" | "sedang" | "sulit",
+      "urlGambar": "https://... (opsional, kosongkan/hapus field ini kalau tidak ada gambar)",
       "opsi": [
-        { "teks": "Opsi A", "benar": true },
+        { "teks": "Opsi A", "benar": true, "urlGambar": "https://... (opsional)" },
         { "teks": "Opsi B", "benar": false },
         { "teks": "Opsi C", "benar": false }
       ]
@@ -45,6 +46,10 @@ ${daftarTopik || "(belum ada topik aktif — buat topik dulu di /admin/topik)"}
 - Setiap soal minimal 2 opsi, dan TEPAT SATU opsi bertanda "benar": true.
 - "tingkat" hanya salah satu dari "mudah", "sedang", "sulit".
 - "pertanyaan" tidak boleh kosong.
+- "urlGambar" (soal maupun tiap opsi) HARUS berupa tautan langsung ke berkas gambar
+  publik dan permanen (berakhiran .png/.jpg/.jpeg/.webp/.svg) — JANGAN karang tautan
+  yang tidak Anda yakin benar-benar ada; kosongkan/hapus field ini kalau tidak ada
+  gambar yang cocok.
 
 Buatkan [ISI: jumlah soal] soal untuk topik [ISI: kode topik yang diinginkan].`;
 }
@@ -257,6 +262,10 @@ function AdminSoalImporPageIsi() {
                         <span className="text-zinc-500">Pertanyaan: </span>
                         {baris.pratinjau?.teks ?? "-"}
                       </p>
+                      <p className="text-zinc-700 dark:text-zinc-300">
+                        <span className="text-zinc-500">Gambar: </span>
+                        {baris.pratinjau?.punyaGambar ? "📷 Ada" : "-"}
+                      </p>
                       {baris.pesan.length > 0 && (
                         <ul className="list-inside list-disc space-y-0.5 text-zinc-700 dark:text-zinc-300">
                           {baris.pesan.map((pesan, index) => (
@@ -276,6 +285,7 @@ function AdminSoalImporPageIsi() {
                         <th className="px-3 py-2 font-medium">Status</th>
                         <th className="px-3 py-2 font-medium">Topik</th>
                         <th className="px-3 py-2 font-medium">Pertanyaan</th>
+                        <th className="px-3 py-2 font-medium">Gambar</th>
                         <th className="px-3 py-2 font-medium">Pesan</th>
                       </tr>
                     </thead>
@@ -298,6 +308,9 @@ function AdminSoalImporPageIsi() {
                           </td>
                           <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
                             {baris.pratinjau?.teks ?? "-"}
+                          </td>
+                          <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
+                            {baris.pratinjau?.punyaGambar ? "📷 Ada" : "-"}
                           </td>
                           <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
                             {baris.pesan.length > 0 ? (

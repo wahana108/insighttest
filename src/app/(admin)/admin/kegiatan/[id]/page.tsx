@@ -94,6 +94,7 @@ interface KegiatanFormState {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
   caraMasuk: CaraMasukKegiatan;
+  urlGambar: string;
   penafsiranHasil: string;
 }
 
@@ -727,10 +728,16 @@ export default function AdminKegiatanDetailPage({
   const [kegiatanForm, setKegiatanForm] = useState<KegiatanFormState | null>(null);
   const [kegiatanError, setKegiatanError] = useState<string | null>(null);
   const [savingKegiatan, setSavingKegiatan] = useState(false);
-  const [gambarGagal, setGambarGagal] = useState<{ logo: boolean; kop: boolean; ttd: boolean }>({
+  const [gambarGagal, setGambarGagal] = useState<{
+    logo: boolean;
+    kop: boolean;
+    ttd: boolean;
+    sampul: boolean;
+  }>({
     logo: false,
     kop: false,
     ttd: false,
+    sampul: false,
   });
 
   const editingKegiatanForm =
@@ -754,6 +761,7 @@ export default function AdminKegiatanDetailPage({
           formulirPeserta: kegiatan.formulirPeserta,
           kuotaPeserta: String(kegiatan.kuotaPeserta),
           caraMasuk: kegiatan.caraMasuk,
+          urlGambar: kegiatan.urlGambar,
           penafsiranHasil: kegiatan.penafsiranHasil,
         }
       : null);
@@ -801,6 +809,7 @@ export default function AdminKegiatanDetailPage({
       ["URL logo", editingKegiatanForm.templateSertifikat.logoUrl],
       ["URL kop/header", editingKegiatanForm.templateSertifikat.kopUrl],
       ["URL gambar tanda tangan", editingKegiatanForm.templateSertifikat.tandaTanganUrl],
+      ["URL gambar sampul", editingKegiatanForm.urlGambar],
     ];
     for (const [label, nilai] of ladangUrl) {
       const hasil = periksaUrlGambar(nilai);
@@ -836,6 +845,7 @@ export default function AdminKegiatanDetailPage({
         formulirPeserta: editingKegiatanForm.formulirPeserta,
         kuotaPeserta: Number(editingKegiatanForm.kuotaPeserta) || 0,
         caraMasuk: editingKegiatanForm.caraMasuk,
+        urlGambar: editingKegiatanForm.urlGambar,
         penafsiranHasil: editingKegiatanForm.penafsiranHasil,
       };
       // kodeSaatIni: kode YANG SUDAH TERSIMPAN di dokumen ini sebelum
@@ -1220,6 +1230,25 @@ export default function AdminKegiatanDetailPage({
                 }
                 className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
               />
+            </div>
+            <div>
+              <FieldUrlGambar
+                id="det-url-gambar-sampul"
+                label="Gambar sampul (opsional)"
+                value={editingKegiatanForm.urlGambar}
+                onChange={(nilai) => setKegiatanForm({ ...editingKegiatanForm, urlGambar: nilai })}
+                gambarGagal={gambarGagal.sampul}
+                onGambarStatus={(berhasil) =>
+                  setGambarGagal((g) => ({ ...g, sampul: !berhasil }))
+                }
+              />
+              <p className="mt-1 text-xs text-zinc-500">
+                Tampil di katalog /kegiatan dan di halaman kegiatan ini. Tautan gambar harus
+                publik dan permanen. Cara paling aman: taruh berkasnya di folder
+                public/gambar/ pada repo ini, lalu pakai alamat
+                https://&lt;alamat-platform&gt;/gambar/nama-berkas.png — permanen, gratis,
+                dan tidak bergantung pada layanan pihak ketiga yang bisa mati.
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div>

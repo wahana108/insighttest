@@ -3,6 +3,7 @@
 import { useMemo, useState, type FormEvent } from "react";
 import Link from "next/link";
 import { WajibBolehBuatSoal } from "@/app/(admin)/_wajib-admin";
+import { GambarAman } from "@/app/_gambar-aman";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useSoalList } from "@/lib/hooks/use-soal-list";
 import { useTopikList } from "@/lib/hooks/use-topik-list";
@@ -17,6 +18,7 @@ import {
   type SoalWriteInput,
 } from "@/lib/services/soal";
 import { formatTopikLabel } from "@/lib/services/topik";
+import { periksaUrlGambar } from "@/lib/validasi-url-gambar";
 import type { Soal, TingkatSoal } from "@/types/soal";
 
 const TINGKAT_OPTIONS: TingkatSoal[] = ["mudah", "sedang", "sulit"];
@@ -24,19 +26,21 @@ const TINGKAT_OPTIONS: TingkatSoal[] = ["mudah", "sedang", "sulit"];
 interface OpsiFormState {
   id: string;
   label: string;
+  urlGambar: string;
 }
 
 interface FormState {
   topikKode: string;
   tingkat: TingkatSoal;
   teks: string;
+  urlGambar: string;
   opsi: OpsiFormState[];
   opsiBenarId: string;
   pembahasan: string;
 }
 
 function emptyOpsi(): OpsiFormState {
-  return { id: crypto.randomUUID(), label: "" };
+  return { id: crypto.randomUUID(), label: "", urlGambar: "" };
 }
 
 function emptyForm(): FormState {
@@ -44,10 +48,61 @@ function emptyForm(): FormState {
     topikKode: "",
     tingkat: "sedang",
     teks: "",
+    urlGambar: "",
     opsi: [emptyOpsi(), emptyOpsi()],
     opsiBenarId: "",
     pembahasan: "",
   };
+}
+
+/**
+ * Slice "gambar-soal" — dipakai untuk gambar soal DAN gambar per opsi.
+ * periksaUrlGambar() memeriksa BENTUK URL-nya saja; GambarAman (dipakai
+ * juga di runner ujian dan katalog) memeriksa apakah tautannya benar-benar
+ * bisa dimuat sekarang, dan gagal DIAM-DIAM (tidak merusak form) — sama
+ * aturan tampilan dengan tempat gambar ini nanti dirender ke peserta.
+ */
+function FieldUrlGambarSoal({
+  id,
+  label,
+  value,
+  onChange,
+  altPratinjau,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  /** Teks alternatif pratinjau — teks soal/opsi ini sendiri, TIDAK ADA field deskripsi baru. */
+  altPratinjau: string;
+}) {
+  const hasil = periksaUrlGambar(value);
+  return (
+    <div>
+      <label htmlFor={id} className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+        {label}
+      </label>
+      <div className="mt-1 flex items-start gap-2">
+        <input
+          id={id}
+          type="url"
+          placeholder="https://... (opsional)"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+        />
+        {value.trim() && (
+          <GambarAman
+            src={value}
+            alt={altPratinjau}
+            className="h-10 w-10 shrink-0 rounded border border-zinc-200 object-contain dark:border-zinc-700"
+          />
+        )}
+      </div>
+      {!hasil.valid && hasil.alasan && <p className="mt-1 text-xs text-red-600">{hasil.alasan}</p>}
+      {hasil.valid && hasil.alasan && <p className="mt-1 text-xs text-amber-600">{hasil.alasan}</p>}
+    </div>
+  );
 }
 
 function truncate(teks: string, max = 70): string {
@@ -126,6 +181,13 @@ function AdminSoalPageIsi() {
     }));
   }
 
+  function updateOpsiUrlGambar(id: string, urlGambar: string) {
+    setForm((f) => ({
+      ...f,
+      opsi: f.opsi.map((opsi) => (opsi.id === id ? { ...opsi, urlGambar } : opsi)),
+    }));
+  }
+
   function addOpsi() {
     setForm((f) => ({ ...f, opsi: [...f.opsi, emptyOpsi()] }));
   }
@@ -155,7 +217,8 @@ function AdminSoalPageIsi() {
         topikKode: soal.topikKode,
         tingkat: soal.tingkat,
         teks: soal.teks,
-        opsi: soal.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label })),
+        urlGambar: soal.urlGambar,
+        opsi: soal.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label, urlGambar: opsi.urlGambar })),
         opsiBenarId: kunci?.opsiBenarId ?? "",
         pembahasan: kunci?.pembahasan ?? "",
       });
@@ -178,7 +241,8 @@ function AdminSoalPageIsi() {
         teks: form.teks,
         topikKode: form.topikKode,
         tingkat: form.tingkat,
-        opsi: form.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label })),
+        urlGambar: form.urlGambar,
+        opsi: form.opsi.map((opsi) => ({ id: opsi.id, label: opsi.label, urlGambar: opsi.urlGambar })),
         opsiBenarId: form.opsiBenarId,
         pembahasan: form.pembahasan,
       };
@@ -317,35 +381,62 @@ function AdminSoalPageIsi() {
           />
         </div>
 
-        <div className="space-y-2">
+        <FieldUrlGambarSoal
+          id="urlGambarSoal"
+          label="Gambar soal (opsional) — tampil di ATAS teks soal saat dikerjakan"
+          value={form.urlGambar}
+          onChange={(urlGambar) => setForm((f) => ({ ...f, urlGambar }))}
+          altPratinjau={form.teks}
+        />
+        <p className="text-xs text-zinc-500">
+          Tautan gambar harus publik dan permanen. Cara paling aman: taruh berkasnya di
+          folder public/gambar/ pada repo ini, lalu pakai alamat
+          https://&lt;alamat-platform&gt;/gambar/nama-berkas.png — permanen, gratis, dan
+          tidak bergantung pada layanan pihak ketiga yang bisa mati. Berlaku sama untuk
+          gambar opsi jawaban di bawah.
+        </p>
+
+        <div className="space-y-3">
           <p className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">
             Opsi jawaban (tandai satu sebagai benar)
           </p>
           {form.opsi.map((opsi, index) => (
-            <div key={opsi.id} className="flex items-center gap-2">
-              <input
-                type="radio"
-                name="opsiBenarId"
-                checked={form.opsiBenarId === opsi.id}
-                onChange={() => setForm((f) => ({ ...f, opsiBenarId: opsi.id }))}
-                aria-label={`Tandai opsi ${index + 1} sebagai benar`}
+            <div
+              key={opsi.id}
+              className="space-y-2 rounded border border-zinc-200 p-2.5 dark:border-zinc-800"
+            >
+              <div className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="opsiBenarId"
+                  checked={form.opsiBenarId === opsi.id}
+                  onChange={() => setForm((f) => ({ ...f, opsiBenarId: opsi.id }))}
+                  aria-label={`Tandai opsi ${index + 1} sebagai benar`}
+                />
+                <input
+                  type="text"
+                  required
+                  placeholder={`Opsi ${index + 1}`}
+                  value={opsi.label}
+                  onChange={(event) => updateOpsiLabel(opsi.id, event.target.value)}
+                  className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <button
+                  type="button"
+                  onClick={() => removeOpsi(opsi.id)}
+                  disabled={form.opsi.length <= 2}
+                  className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-30"
+                >
+                  Hapus
+                </button>
+              </div>
+              <FieldUrlGambarSoal
+                id={`urlGambarOpsi-${opsi.id}`}
+                label={`Gambar opsi ${index + 1} (opsional)`}
+                value={opsi.urlGambar}
+                onChange={(urlGambar) => updateOpsiUrlGambar(opsi.id, urlGambar)}
+                altPratinjau={opsi.label}
               />
-              <input
-                type="text"
-                required
-                placeholder={`Opsi ${index + 1}`}
-                value={opsi.label}
-                onChange={(event) => updateOpsiLabel(opsi.id, event.target.value)}
-                className="flex-1 rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
-              />
-              <button
-                type="button"
-                onClick={() => removeOpsi(opsi.id)}
-                disabled={form.opsi.length <= 2}
-                className="inline-flex min-h-11 items-center text-sm font-medium text-red-600 hover:underline disabled:opacity-30"
-              >
-                Hapus
-              </button>
             </div>
           ))}
           <button

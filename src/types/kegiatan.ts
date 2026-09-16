@@ -162,6 +162,18 @@ export interface Kegiatan {
    */
   caraMasuk: CaraMasukKegiatan;
   /**
+   * Slice "gambar-soal" (docs/kickoff.md §S "Slice 7") — sampul kegiatan,
+   * opsional, kosong berarti tidak ada gambar (KA-1). LIVE, dibaca langsung
+   * saat render (katalog /kegiatan dan halaman kegiatan/[id]) — persis
+   * seperti templateSertifikat.logoUrl/kopUrl, TIDAK PERNAH dibekukan ke
+   * pendaftaran/sertifikat mana pun, jadi tidak perlu pagar server terpisah
+   * seperti tandaTanganUrl (lihat KA-8, docs/arsitektur.md). Field baru
+   * tingkat atas pada kegiatan — WAJIB ada di panitiaKegiatanKunciDiizinkan()
+   * (firestore.rules), persis jebakan hasOnly yang sama dengan kuotaPeserta
+   * di atas.
+   */
+  urlGambar: string;
+  /**
    * Slice "penafsiran-hasil" (docs/kickoff.md §R, SLICE 5) — kosong berarti
    * fitur mati (BAWAAN, KA-4; kegiatan lama tanpa field ini sama sekali
    * dibaca sebagai string kosong, bukan galat). Untuk kegiatan "kuis

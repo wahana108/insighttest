@@ -43,7 +43,9 @@ export interface Attempt {
 export interface SoalUntukAttempt {
   id: string;
   teks: string;
-  opsi: { id: string; label: string }[];
+  /** Slice "gambar-soal" — string kosong berarti tidak ada gambar (KA-1). */
+  urlGambar: string;
+  opsi: { id: string; label: string; urlGambar: string }[];
 }
 
 export interface MulaiAttemptResponse {

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo } from "react";
+import { GambarAman } from "@/app/_gambar-aman";
 import { bolehTampilDiKatalog } from "@/lib/akses-kegiatan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { formatDateTime } from "@/lib/format-date";
@@ -88,6 +89,14 @@ export default function KegiatanKatalogPage() {
             href={`/kegiatan/${kegiatan.id}`}
             className="block rounded-lg border border-zinc-200 bg-white p-4 hover:border-zinc-300 dark:border-zinc-800 dark:bg-zinc-950 dark:hover:border-zinc-700"
           >
+            {kegiatan.urlGambar && (
+              <GambarAman
+                src={kegiatan.urlGambar}
+                alt={kegiatan.judul}
+                loading="lazy"
+                className="mb-3 max-h-40 w-full rounded object-cover"
+              />
+            )}
             <p className="font-medium text-black dark:text-zinc-50">{kegiatan.judul}</p>
             {kegiatan.deskripsi && (
               <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
