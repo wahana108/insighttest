@@ -3,7 +3,8 @@ import { kirimEmail } from "@/lib/email/brevo";
 import { templatEmailKodeAkses } from "@/lib/email/templat";
 import { getAdminAuth, getAdminDb } from "@/lib/firebase/admin";
 import { izinPanitia } from "@/lib/izin-panitia";
-import { idNiatDukungan } from "@/lib/niat-dukungan";
+import { tanggalJakarta } from "@/lib/kuota-peserta";
+import { idNiatDukungan, putuskanBatasDukunganAdminHarian } from "@/lib/niat-dukungan";
 
 class DukunganAdminRouteError extends Error {
   status: number;
@@ -21,9 +22,9 @@ class DukunganAdminRouteError extends Error {
  * (atau belum sempat) mengisi formulir sendiri.
  *
  * PENGECUALIAN TERKENDALI dari aturan "email hanya pernah dikirim ke akun
- * sendiri" (POST /api/dukungan/niat, POST /api/dukungan/kirim-ulang, POST
- * /api/email/uji): route ini MENGIRIM KE AKUN LAIN. Ini aman karena TIGA
- * syarat sekaligus, bukan satu: (1) penerimanya WAJIB akun terdaftar —
+ * sendiri" (POST /api/dukungan/kirim-kode, POST /api/email/uji): route ini
+ * MENGIRIM KE AKUN LAIN. Ini aman karena TIGA syarat sekaligus, bukan
+ * satu: (1) penerimanya WAJIB akun terdaftar —
  * server mencari lewat getUserByEmail(), menolak keras kalau tidak ada,
  * tidak pernah membuat akun baru dari sini; (2) alamatnya dibaca SERVER
  * dari catatan Firebase Auth akun itu sendiri (userRecord.email), BUKAN
@@ -113,6 +114,26 @@ export async function POST(request: Request) {
       });
     }
 
+    // Slice "urutan-dukungan" (6c) — SEBELUM ini route tidak punya batas
+    // sama sekali: satu akun admin bisa mengirim email lewat Brevo tanpa
+    // henti. field dukunganAdmin_${uid} pakai UID ADMIN yang memanggil
+    // (user.uid), BUKAN uid peserta yang dibuatkan catatan (userRecord.uid)
+    // — yang dibatasi adalah SEBERAPA SERING admin ini memakai route ini,
+    // bukan berapa banyak peserta berbeda yang dibuatkan catatan. Pola
+    // pemeriksaan SAMA PERSIS dengan POST /api/dukungan/niat dan POST
+    // /api/email/uji (6a): pemeriksaan awal di luar transaksi, penghitung
+    // dinaikkan di transaksi terpisah setelah create() sukses.
+    const tanggalHariIni = tanggalJakarta(new Date());
+    const kuotaRef = db.collection("kuota_email").doc(tanggalHariIni);
+    const field = `dukunganAdmin_${user.uid}`;
+    const kuotaSnapAwal = await kuotaRef.get();
+    const jumlahAwal =
+      typeof kuotaSnapAwal.data()?.[field] === "number" ? kuotaSnapAwal.data()![field] : 0;
+    const hasilBatasAdmin = putuskanBatasDukunganAdminHarian(jumlahAwal);
+    if (!hasilBatasAdmin.ok) {
+      throw new DukunganAdminRouteError(429, hasilBatasAdmin.pesan ?? "Batas harian tercapai.");
+    }
+
     // Slice "niat-dukungan" — kodeAkses dibaca DI SERVER dari koleksi
     // server-only (KA-3). HANYA dipakai untuk isi email di bawah — TIDAK
     // PERNAH dimasukkan ke Response.json() mana pun di berkas ini.
@@ -156,6 +177,18 @@ export async function POST(request: Request) {
       });
     } catch {
       return Response.json({ ok: true, sudahAda: true, ke: emailTujuan });
+    }
+
+    if (terkirim) {
+      // Dinaikkan HANYA setelah pengiriman sukses, transaksi TERPISAH dari
+      // panggilan Brevo di atas — pola yang SAMA dengan POST
+      // /api/email/uji (6a), POST /api/dukungan/niat, dan POST
+      // /api/dukungan/kirim-kode.
+      await db.runTransaction(async (tx) => {
+        const snap = await tx.get(kuotaRef);
+        const jumlahSaatIni = typeof snap.data()?.[field] === "number" ? snap.data()![field] : 0;
+        tx.set(kuotaRef, { [field]: jumlahSaatIni + 1 }, { merge: true });
+      });
     }
 
     return Response.json({ ok: true, sudahAda: false, ke: emailTujuan, terkirim, alasanGagal });

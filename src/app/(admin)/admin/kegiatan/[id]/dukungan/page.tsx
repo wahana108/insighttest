@@ -47,7 +47,15 @@ export default function AdminDukunganPage({
   const [items, setItems] = useState<NiatDukungan[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [mengunduh, setMengunduh] = useState(false);
+  // Slice "urutan-dukungan" (6c) — sama pola dengan handleUnduhRekap()
+  // (src/app/(admin)/admin/kegiatan/[id]/peserta/page.tsx): DUA tombol,
+  // bukan satu dengan tebakan lokal Excel pengguna. Pemisah/pengapit/BOM
+  // di GET /api/admin/kegiatan/[kegiatanId]/dukungan SUDAH SAMA PERSIS
+  // dengan GET /api/admin/rekap/[kegiatanId] sejak awal (keduanya memakai
+  // keCsv() yang sama, bawaan titik koma, ?pemisah=koma sebagai pilihan) —
+  // yang tadinya beda cuma UI ini hanya punya satu tombol (selalu memakai
+  // bawaan titik koma, tidak pernah memberi pilihan koma).
+  const [mengunduh, setMengunduh] = useState<"koma" | "titik-koma" | null>(null);
 
   const muat = useCallback(() => {
     fetchWithAuth(`/api/admin/kegiatan/${encodeURIComponent(kegiatanId)}/dukungan`)
@@ -66,12 +74,13 @@ export default function AdminDukunganPage({
     muat();
   }, [muat]);
 
-  async function handleUnduhCsv() {
+  async function handleUnduhCsv(pemisah: "koma" | "titik-koma") {
     setError(null);
-    setMengunduh(true);
+    setMengunduh(pemisah);
     try {
+      const query = pemisah === "koma" ? "&pemisah=koma" : "";
       const res = await fetchWithAuth(
-        `/api/admin/kegiatan/${encodeURIComponent(kegiatanId)}/dukungan?format=csv`
+        `/api/admin/kegiatan/${encodeURIComponent(kegiatanId)}/dukungan?format=csv${query}`
       );
       if (!res.ok) {
         const body = await res.json().catch(() => null);
@@ -91,7 +100,7 @@ export default function AdminDukunganPage({
     } catch (err) {
       setError(err instanceof Error ? err.message : "Gagal mengunduh CSV.");
     } finally {
-      setMengunduh(false);
+      setMengunduh(null);
     }
   }
 
@@ -112,16 +121,31 @@ export default function AdminDukunganPage({
         <>
           <BuatkanCatatan kegiatanId={kegiatanId} onBerhasil={muat} />
 
-          <div className="flex items-center justify-between gap-3">
-            <p className="text-sm text-zinc-500">{items.length} catatan.</p>
-            <button
-              type="button"
-              onClick={handleUnduhCsv}
-              disabled={mengunduh}
-              className="inline-flex min-h-11 items-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
-            >
-              {mengunduh ? "Mengunduh..." : "Unduh CSV"}
-            </button>
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <p className="text-sm text-zinc-500">{items.length} catatan.</p>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleUnduhCsv("koma")}
+                  disabled={mengunduh !== null}
+                  className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  {mengunduh === "koma" ? "Mengunduh..." : "Unduh CSV (pemisah koma)"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUnduhCsv("titik-koma")}
+                  disabled={mengunduh !== null}
+                  className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  {mengunduh === "titik-koma" ? "Mengunduh..." : "Unduh CSV (pemisah titik koma)"}
+                </button>
+              </div>
+            </div>
+            <p className="text-xs text-zinc-500">
+              Kalau kolomnya menumpuk jadi satu saat dibuka di Excel, coba unduhan yang satunya.
+            </p>
           </div>
 
           {loading && <p className="text-sm text-zinc-500">Memuat...</p>}

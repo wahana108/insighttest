@@ -6,9 +6,10 @@ import type {
 } from "@/types/niat-dukungan";
 
 /**
- * Slice "niat-dukungan" (6b) — fungsi murni saja di sini, tidak ada akses
- * Firestore/jaringan (sama pola dengan src/lib/akses-kegiatan.ts). I/O
- * sesungguhnya ada di POST /api/dukungan/{niat,kirim-ulang,admin} dan GET
+ * Slice "niat-dukungan" (6b, diperbaiki di 6c) — fungsi murni saja di sini,
+ * tidak ada akses Firestore/jaringan (sama pola dengan
+ * src/lib/akses-kegiatan.ts). I/O sesungguhnya ada di POST
+ * /api/dukungan/{niat,kirim-kode,admin} dan GET
  * /api/admin/kegiatan/[kegiatanId]/dukungan.
  */
 
@@ -19,14 +20,19 @@ export const PESAN_BATAS_NIAT_TERCAPAI =
   "Anda sudah mengisi 5 formulir dukungan hari ini. Coba lagi besok.";
 
 /**
- * Batas 5/hari pada POST /api/dukungan/niat — melindungi kuota Brevo dan
- * kuota tulis Firestore dari SATU akun yang mengisi formulir di banyak
- * kegiatan sekaligus. TIDAK menggantikan pembatasan satu-kali-per-kegiatan
+ * Batas 5/hari pada POST /api/dukungan/niat. Sejak Slice "urutan-dukungan"
+ * (6c) route itu TIDAK LAGI mengirim email sama sekali (lihat komentar di
+ * sana) — batas ini sekarang melindungi kuota TULIS Firestore (pembuatan
+ * dokumen niat_dukungan) dari SATU akun yang mengisi formulir di banyak
+ * kegiatan sekaligus, BUKAN lagi kuota Brevo (itu urusan
+ * putuskanBatasKirimKodeHarian-nya sendiri di POST /api/dukungan/kirim-kode,
+ * yang justru TIDAK diekstrak jadi fungsi murni terpisah — lihat komentar
+ * di route itu). TIDAK menggantikan pembatasan satu-kali-per-kegiatan
  * (niat_dukungan/{kegiatanId}__{uid} sudah ada — dicek terpisah oleh
  * pemanggil lewat .exists sebelum sampai ke fungsi ini) — keduanya berlaku
  * bersamaan, independen satu sama lain.
  *
- * jumlahSaatIni: jumlah pengisian yang SUDAH tercatat TERKIRIM hari ini
+ * jumlahSaatIni: jumlah dokumen niat_dukungan yang SUDAH dibuat hari ini
  * untuk akun ini (dibaca pemanggil dari kuota_email/{tanggal}, field
  * `dukunganNiat_${uid}` — lihat komentar di firestore.rules
  * match /kuota_email/{tanggal}), SEBELUM percobaan yang sedang diputuskan
@@ -37,6 +43,26 @@ export const PESAN_BATAS_NIAT_TERCAPAI =
 export function putuskanBatasNiatHarian(jumlahSaatIni: number): HasilKeputusanKuota {
   if (jumlahSaatIni >= BATAS_NIAT_PER_HARI) {
     return { ok: false, pesan: PESAN_BATAS_NIAT_TERCAPAI };
+  }
+  return OK_KUOTA;
+}
+
+export const BATAS_DUKUNGAN_ADMIN_PER_HARI = 20;
+export const PESAN_BATAS_DUKUNGAN_ADMIN_TERCAPAI =
+  "Anda sudah membuat 20 catatan dukungan hari ini. Coba lagi besok.";
+
+/**
+ * Batas 20/hari pada POST /api/dukungan/admin — tanpa ini SATU akun admin
+ * bisa mengirim email lewat Brevo tanpa henti (route itu sebelum Slice
+ * "urutan-dukungan" 6c tidak punya batas apa pun). jumlahSaatIni: jumlah
+ * catatan yang SUDAH dibuat admin/panitia ini hari ini (dibaca pemanggil
+ * dari kuota_email/{tanggal}, field `dukunganAdmin_${uid}` — uid ADMIN yang
+ * memanggil, bukan uid peserta yang dibuatkan catatan), SEBELUM percobaan
+ * ini. Sama pola dengan putuskanBatasNiatHarian() di atas.
+ */
+export function putuskanBatasDukunganAdminHarian(jumlahSaatIni: number): HasilKeputusanKuota {
+  if (jumlahSaatIni >= BATAS_DUKUNGAN_ADMIN_PER_HARI) {
+    return { ok: false, pesan: PESAN_BATAS_DUKUNGAN_ADMIN_TERCAPAI };
   }
   return OK_KUOTA;
 }
@@ -59,7 +85,7 @@ export function idNiatDukungan(kegiatanId: string, uid: string): string {
 }
 
 function isStatusNiatDukungan(value: unknown): value is StatusNiatDukungan {
-  return value === "terkirim" || value === "gagal";
+  return value === "tercatat" || value === "terkirim" || value === "gagal";
 }
 
 function isDibuatOlehNiatDukungan(value: unknown): value is DibuatOlehNiatDukungan {

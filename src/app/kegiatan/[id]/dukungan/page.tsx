@@ -11,18 +11,27 @@ interface HasilKirim {
   sudahAda: boolean;
   urlSaweria: string;
   pesan: string;
-  terkirim?: boolean;
-  alasanGagal?: string;
+  /** 'tercatat' | 'terkirim' | 'gagal' — status TERSIMPAN di server SAAT formulir ini dikirim/dibaca, BUKAN diperbarui live setelah itu (lihat kodeStatus di bawah untuk status kode SETELAH interaksi di halaman ini). */
+  status?: string;
 }
 
+type StatusKode = "idle" | "mengirim" | "terkirim" | "gagal";
+
 /**
- * Slice "niat-dukungan" (6b) — halaman TERPISAH (bukan dialog) supaya tidak
+ * Slice "niat-dukungan" (6b), URUTAN KEJADIAN diperbaiki di Slice
+ * "urutan-dukungan" (6c) — halaman TERPISAH (bukan dialog) supaya tidak
  * menambah state machine baru ke halaman kegiatan yang sudah kompleks
  * (docs: "pilih yang paling sedikit mengubah struktur yang ada").
- * urlSaweria TIDAK PERNAH dirender SEBELUM formulir dikirim — hanya
- * ditampilkan dari hasil respons POST /api/dukungan/niat SETELAH terkirim
- * atau sudahAda, tidak pernah dibaca langsung dari kegiatan.dukungan di
- * sini.
+ *
+ * PERUBAHAN 6c — urutan kejadian dibalik, bukan cuma teksnya: SEBELUM 6c,
+ * email kode terkirim SAAT formulir dikirim, jadi peserta sudah punya
+ * kodenya sebelum sempat membuka Saweria (tidak ada alasan lagi
+ * membukanya). Sekarang POST /api/dukungan/niat HANYA mencatat niat
+ * (TIDAK mengirim email sama sekali) — kode baru dibaca dan dikirim lewat
+ * POST /api/dukungan/kirim-kode, dipanggil SETELAH tab Saweria dibuka
+ * (lihat handleBukaSaweria() di bawah: window.open() adalah baris PERTAMA,
+ * sebelum await apa pun — wajib, supaya peramban tidak memblokirnya
+ * sebagai popup).
  */
 export default function DukunganPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
@@ -49,6 +58,14 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
   const [mengirimUlang, setMengirimUlang] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasil, setHasil] = useState<HasilKirim | null>(null);
+
+  // Status kode SETELAH interaksi di halaman ini (klik "Buka Saweria" atau
+  // "kirim ulang") — TERPISAH dari hasil.status (status yang sudah
+  // tersimpan SAAT formulir dikirim/dibaca). 'idle' berarti belum ada
+  // interaksi apa pun di sesi halaman ini; render di bawah jatuh ke
+  // hasil.status untuk kasus itu.
+  const [kodeStatus, setKodeStatus] = useState<StatusKode>("idle");
+  const [kodeAlasanGagal, setKodeAlasanGagal] = useState<string | null>(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -86,24 +103,56 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
     }
   }
 
-  async function handleKirimUlang() {
-    setError(null);
-    setMengirimUlang(true);
+  async function panggilKirimKode() {
+    setKodeStatus("mengirim");
+    setKodeAlasanGagal(null);
     try {
-      const res = await fetchWithAuth("/api/dukungan/kirim-ulang", {
+      const res = await fetchWithAuth("/api/dukungan/kirim-kode", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ kegiatanId: id }),
       });
       const body = await res.json();
       if (!res.ok) {
-        throw new Error(typeof body?.error === "string" ? body.error : "Gagal mengirim ulang kode.");
+        throw new Error(typeof body?.error === "string" ? body.error : "Gagal mengirim kode.");
       }
-      setHasil((prev) =>
-        prev ? { ...prev, terkirim: body.terkirim, alasanGagal: body.alasanGagal } : prev
-      );
+      if (body.terkirim) {
+        setKodeStatus("terkirim");
+      } else {
+        setKodeStatus("gagal");
+        setKodeAlasanGagal(body.alasanGagal ?? "Gagal mengirim kode akses.");
+      }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Gagal mengirim ulang kode.");
+      setKodeStatus("gagal");
+      setKodeAlasanGagal(err instanceof Error ? err.message : "Gagal mengirim kode.");
+    }
+  }
+
+  // Slice "urutan-dukungan" (6c) — window.open() WAJIB baris PERTAMA di
+  // sini, SEBELUM await apa pun (termasuk await di dalam panggilKirimKode()
+  // yang dipanggil belakangan): peramban memblokir window.open() yang
+  // dipanggil setelah sebuah await sebagai popup, karena dianggap tidak
+  // lagi bagian dari gestur klik pengguna yang sama.
+  async function handleBukaSaweria() {
+    if (!hasil) {
+      return;
+    }
+    window.open(hasil.urlSaweria, "_blank", "noopener");
+
+    // Kode sudah pernah terkirim (baik dari respons server saat formulir
+    // ini dibaca/dikirim, MAUPUN dari interaksi kita sendiri sebelumnya di
+    // sesi halaman ini) — tab tetap dibuka di atas, tapi TIDAK memanggil
+    // kirim-kode lagi.
+    if (hasil.status === "terkirim" || kodeStatus === "terkirim") {
+      return;
+    }
+    await panggilKirimKode();
+  }
+
+  async function handleKirimUlang() {
+    setMengirimUlang(true);
+    try {
+      await panggilKirimKode();
     } finally {
       setMengirimUlang(false);
     }
@@ -220,33 +269,54 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
             <p className="text-sm text-zinc-700 dark:text-zinc-300">{hasil.pesan}</p>
           )}
           {hasil.urlSaweria && (
-            <a
-              href={hasil.urlSaweria}
-              target="_blank"
-              rel="noopener noreferrer"
+            <button
+              type="button"
+              onClick={handleBukaSaweria}
               className="inline-flex min-h-11 items-center rounded bg-black px-4 text-sm font-medium text-white dark:bg-white dark:text-black"
             >
               Buka Saweria
-            </a>
+            </button>
           )}
-          {typeof hasil.terkirim === "boolean" && (
-            <p
-              className={`text-sm ${hasil.terkirim ? "text-green-600" : "text-red-600"}`}
-            >
-              {hasil.terkirim
-                ? `Kode akses sudah dikirim ke ${user.email}.`
-                : (hasil.alasanGagal ?? "Gagal mengirim kode akses.")}
+
+          {kodeStatus === "mengirim" && (
+            <p className="text-sm text-zinc-500">Mengirim kode akses...</p>
+          )}
+          {kodeStatus === "terkirim" && (
+            <p className="text-sm text-green-600">Kode akses sudah dikirim ke {user.email}.</p>
+          )}
+          {kodeStatus === "gagal" && (
+            <p className="text-sm text-red-600">
+              {kodeAlasanGagal ?? "Gagal mengirim kode akses."}
             </p>
           )}
-          <button
-            type="button"
-            onClick={handleKirimUlang}
-            disabled={mengirimUlang}
-            className="inline-flex min-h-11 items-center rounded border border-zinc-300 px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
-          >
-            {mengirimUlang ? "Mengirim ulang..." : "Kirim ulang kode ke email saya"}
-          </button>
+          {kodeStatus === "idle" && hasil.status === "terkirim" && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Kode akses sudah pernah dikirim ke {user.email}.
+            </p>
+          )}
+
+          <div>
+            <button
+              type="button"
+              onClick={handleKirimUlang}
+              disabled={mengirimUlang}
+              className="text-xs font-medium text-zinc-700 underline disabled:opacity-50 dark:text-zinc-300"
+            >
+              {mengirimUlang ? "Mengirim ulang..." : "Kirim ulang kode ke email saya"}
+            </button>
+            <p className="mt-1 text-xs text-zinc-500">
+              Gunakan ini kalau email pertama tidak sampai.
+            </p>
+          </div>
+
           {error && <p className="text-sm text-red-600">{error}</p>}
+
+          <Link
+            href={`/kegiatan/${id}`}
+            className="block w-full rounded bg-black px-4 py-3 text-center text-sm font-medium text-white dark:bg-white dark:text-black"
+          >
+            Kembali ke kegiatan
+          </Link>
         </div>
       )}
     </div>

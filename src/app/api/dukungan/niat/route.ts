@@ -1,6 +1,4 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
-import { kirimEmail } from "@/lib/email/brevo";
-import { templatEmailKodeAkses } from "@/lib/email/templat";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { tanggalJakarta } from "@/lib/kuota-peserta";
 import { idNiatDukungan, putuskanBatasNiatHarian } from "@/lib/niat-dukungan";
@@ -16,13 +14,21 @@ class DukunganNiatRouteError extends Error {
 }
 
 /**
- * Slice "niat-dukungan" (6b) — SEMUA peran yang sudah login boleh memanggil
+ * Slice "niat-dukungan" (6b), URUTAN KEJADIAN diperbaiki di Slice
+ * "urutan-dukungan" (6c) — SEMUA peran yang sudah login boleh memanggil
  * (tidak ada pemeriksaan role, beda dari route admin) — verifyRequest()
  * sudah cukup: token sah + akun aktif.
  *
- * Tujuan email SELALU alamat akun yang sedang login, dari token
- * terverifikasi — TIDAK ADA parameter alamat email di body, aturan keras
- * sama seperti POST /api/email/uji (Slice 6a).
+ * PERUBAHAN 6c — route ini TIDAK LAGI MENGIRIM EMAIL SAMA SEKALI. Sebelum
+ * 6c, kode akses terkirim SEBELUM peserta sempat membuka Saweria — begitu
+ * formulir dikirim, kodenya sudah ada di kotak masuk, jadi tidak ada alasan
+ * lagi membuka tautan dukungannya. Sekarang route ini HANYA mencatat niat
+ * (status awal 'tercatat') dan mengembalikan urlSaweria supaya klien
+ * membuka Saweria DULU — kode baru dibaca dari kegiatan_kode dan dikirim
+ * lewat POST /api/dukungan/kirim-kode, dipanggil klien SETELAH tab Saweria
+ * terbuka (src/app/kegiatan/[id]/dukungan/page.tsx). Berkas ini sekarang
+ * TIDAK PERNAH menyentuh koleksi kegiatan_kode maupun kirimEmail() —
+ * memperkecil permukaan KA-3, bukan cuma memindah teksnya.
  */
 export async function POST(request: Request) {
   try {
@@ -66,25 +72,36 @@ export async function POST(request: Request) {
     }
     const urlSaweria = typeof dukunganRaw.urlSaweria === "string" ? dukunganRaw.urlSaweria : "";
     const pesanDukungan = typeof dukunganRaw.pesan === "string" ? dukunganRaw.pesan : "";
-    const judulKegiatan = typeof kegiatanData.judul === "string" ? kegiatanData.judul : "";
 
     const niatRef = db.collection("niat_dukungan").doc(idNiatDukungan(kegiatanId, user.uid));
     const niatSnapAwal = await niatRef.get();
     if (niatSnapAwal.exists) {
-      // Sudah pernah mengisi — JANGAN kirim ulang otomatis. Pakai POST
-      // /api/dukungan/kirim-ulang secara eksplisit kalau memang perlu.
-      return Response.json({ ok: true, sudahAda: true, urlSaweria, pesan: pesanDukungan });
+      // Sudah pernah mengisi — JANGAN buat catatan baru atau kirim apa pun
+      // di sini. Kalau peserta perlu kode lagi, itu tugas eksplisit POST
+      // /api/dukungan/kirim-kode (dipanggil klien lewat tombol "Buka
+      // Saweria" atau tautan "kirim ulang"), bukan efek samping mengisi
+      // formulir yang sama lagi.
+      const statusAwal =
+        typeof niatSnapAwal.data()?.status === "string" ? niatSnapAwal.data()!.status : "tercatat";
+      return Response.json({
+        ok: true,
+        sudahAda: true,
+        urlSaweria,
+        pesan: pesanDukungan,
+        status: statusAwal,
+      });
     }
 
-    // Slice "niat-dukungan" — batas 5/hari melindungi kuota Brevo dan kuota
-    // tulis Firestore dari SATU akun yang mengisi formulir di banyak
-    // kegiatan sekaligus. TIDAK menggantikan pembatasan satu-kali-per-
-    // kegiatan di atas (niatSnapAwal.exists) — keduanya berlaku bersamaan,
-    // independen satu sama lain. Pola SAMA PERSIS dengan POST /api/email/uji
-    // (Slice 6a): pemeriksaan awal di luar transaksi (di sini), penghitung
-    // dinaikkan setelah kirim SUKSES di transaksi terpisah (di bawah, dekat
-    // akhir fungsi) — bukan di dalam transaksi yang sama dengan panggilan
-    // Brevo, supaya percobaan ulang transaksi tidak mengirim email dua kali.
+    // Slice "urutan-dukungan" (6c) — batas 5/hari melindungi kuota TULIS
+    // Firestore dari SATU akun yang membuat catatan di banyak kegiatan
+    // sekaligus (route ini tidak lagi memanggil Brevo, jadi tidak ada lagi
+    // kuota Brevo untuk dilindungi di sini — itu urusan POST
+    // /api/dukungan/kirim-kode). TIDAK menggantikan pembatasan satu-kali-
+    // per-kegiatan di atas (niatSnapAwal.exists) — keduanya berlaku
+    // bersamaan, independen satu sama lain. Pemeriksaan awal di luar
+    // transaksi, penghitung dinaikkan di transaksi terpisah setelah
+    // create() sukses — pola yang SAMA dengan POST /api/email/uji (6a) dan
+    // POST /api/dukungan/kirim-kode.
     const tanggalHariIni = tanggalJakarta(new Date());
     const kuotaRef = db.collection("kuota_email").doc(tanggalHariIni);
     const field = `dukunganNiat_${user.uid}`;
@@ -96,33 +113,6 @@ export async function POST(request: Request) {
       throw new DukunganNiatRouteError(429, hasilBatasNiat.pesan ?? "Batas harian tercapai.");
     }
 
-    // Slice "niat-dukungan" — kodeAkses dibaca DI SERVER dari koleksi
-    // server-only (KA-3, sama seperti POST /api/pendaftaran). Variabel ini
-    // HANYA dipakai untuk membangun isi email di bawah — TIDAK PERNAH
-    // dimasukkan ke Response.json() mana pun di berkas ini.
-    const kodeAksesSnap = await db.collection("kegiatan_kode").doc(kegiatanId).get();
-    const kodeAkses =
-      typeof kodeAksesSnap.data()?.kode === "string" ? (kodeAksesSnap.data()!.kode as string) : null;
-
-    const namaTujuan = namaDipakai || user.namaLengkap.trim() || user.email;
-
-    let terkirim = false;
-    let alasanGagal = "";
-    if (!kodeAkses) {
-      alasanGagal = "Kegiatan ini belum punya kode akses — hubungi admin.";
-    } else {
-      const templat = templatEmailKodeAkses(namaTujuan, judulKegiatan, kodeAkses);
-      const hasilKirim = await kirimEmail({
-        ke: user.email,
-        keNama: namaTujuan,
-        subjek: templat.subjek,
-        isiTeks: templat.isiTeks,
-        isiHtml: templat.isiHtml,
-      });
-      terkirim = hasilKirim.terkirim;
-      alasanGagal = hasilKirim.terkirim ? "" : (hasilKirim.alasan ?? "Gagal mengirim email.");
-    }
-
     const now = new Date().toISOString();
     try {
       // .create() (bukan .set()) — kalau dua permintaan datang nyaris
@@ -130,7 +120,7 @@ export async function POST(request: Request) {
       // bukan jaminan atomik; .create() menolak keras kalau dokumen
       // ternyata sudah ada di antara pembacaan dan penulisan ini, ditangkap
       // di bawah sebagai kasus "sudah ada" alih-alih menimpa catatan yang
-      // sudah tertulis (dan berpotensi mengirim email dua kali).
+      // sudah tertulis.
       await niatRef.create({
         kegiatanId,
         uid: user.uid,
@@ -140,35 +130,40 @@ export async function POST(request: Request) {
         catatan,
         dibuatPada: now,
         dibuatOleh: "sendiri",
-        status: terkirim ? "terkirim" : "gagal",
-        alasanGagal,
-        dikirimPada: terkirim ? now : null,
-        jumlahKirim: terkirim ? 1 : 0,
+        status: "tercatat",
+        alasanGagal: "",
+        dikirimPada: null,
+        jumlahKirim: 0,
       });
     } catch {
       // Kalah balapan — dokumen sudah ada (dibuat permintaan lain di antara
       // pembacaan dan penulisan). Perlakukan sama seperti sudahAda; JANGAN
-      // menimpa catatan yang sudah tersimpan.
+      // menimpa catatan yang sudah tersimpan. Status pemenang balapan tidak
+      // dibaca ulang di sini (percobaan tambahan untuk kasus yang sangat
+      // jarang) — klien memperlakukan sudahAda:true tanpa status eksplisit
+      // sebagai 'tercatat', aman karena itu status TERLONGGAR (paling
+      // sedikit mengasumsikan kode sudah terkirim).
       return Response.json({ ok: true, sudahAda: true, urlSaweria, pesan: pesanDukungan });
     }
 
-    if (terkirim) {
-      // Dinaikkan HANYA setelah pengiriman sukses, transaksi TERPISAH dari
-      // panggilan Brevo di atas — pola yang SAMA dengan POST /api/email/uji
-      // (Slice 6a): transaksi Firestore bisa dicoba ulang SDK saat ada
-      // konflik, dan mengulang panggilan jaringan di dalamnya berisiko
-      // mengirim email yang sama dua kali. kuotaRef/field sudah dihitung di
-      // atas (dipakai juga untuk pemeriksaan BATAS_NIAT_PER_HARI sebelum
-      // kirimEmail() dipanggil) — dipakai ulang di sini, bukan dihitung
-      // ulang, supaya keduanya SELALU merujuk dokumen/field yang sama.
-      await db.runTransaction(async (tx) => {
-        const snap = await tx.get(kuotaRef);
-        const jumlahSaatIni = typeof snap.data()?.[field] === "number" ? snap.data()![field] : 0;
-        tx.set(kuotaRef, { [field]: jumlahSaatIni + 1 }, { merge: true });
-      });
-    }
+    // Dinaikkan HANYA setelah create() sukses, transaksi TERPISAH — sama
+    // pola dengan POST /api/email/uji (6a): transaksi Firestore bisa
+    // dicoba ulang SDK saat ada konflik, jadi operasi yang TIDAK boleh
+    // terulang (di sini: pembuatan dokumen) tidak pernah ada di dalam
+    // transaksi yang sama dengan penghitungnya.
+    await db.runTransaction(async (tx) => {
+      const snap = await tx.get(kuotaRef);
+      const jumlahSaatIni = typeof snap.data()?.[field] === "number" ? snap.data()![field] : 0;
+      tx.set(kuotaRef, { [field]: jumlahSaatIni + 1 }, { merge: true });
+    });
 
-    return Response.json({ ok: true, sudahAda: false, urlSaweria, pesan: pesanDukungan, terkirim, alasanGagal });
+    return Response.json({
+      ok: true,
+      sudahAda: false,
+      urlSaweria,
+      pesan: pesanDukungan,
+      status: "tercatat",
+    });
   } catch (err) {
     if (err instanceof ApiAuthError || err instanceof DukunganNiatRouteError) {
       return Response.json({ error: err.message }, { status: err.status });

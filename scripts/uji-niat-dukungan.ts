@@ -16,8 +16,10 @@ import {
 } from "../src/lib/akses-kegiatan";
 import { templatEmailKodeAkses } from "../src/lib/email/templat";
 import {
+  BATAS_DUKUNGAN_ADMIN_PER_HARI,
   BATAS_NIAT_PER_HARI,
   idNiatDukungan,
+  putuskanBatasDukunganAdminHarian,
   putuskanBatasNiatHarian,
 } from "../src/lib/niat-dukungan";
 import type { HasilKeputusanKuota } from "../src/lib/kuota-peserta";
@@ -91,6 +93,30 @@ uji("putuskanBatasNiatHarian: jumlahSaatIni TEPAT di batas (5) -> DITOLAK (perco
 
 uji("putuskanBatasNiatHarian: jumlahSaatIni melewati batas (6) -> DITOLAK", () => {
   assert.equal(putuskanBatasNiatHarian(BATAS_NIAT_PER_HARI + 1).ok, false);
+});
+
+// --- putuskanBatasDukunganAdminHarian(): batas 20/hari POST /api/dukungan/admin ---
+
+uji("putuskanBatasDukunganAdminHarian: BATAS_DUKUNGAN_ADMIN_PER_HARI bernilai 20 (dipakai pesan galat di bawah)", () => {
+  assert.equal(BATAS_DUKUNGAN_ADMIN_PER_HARI, 20);
+});
+
+uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni 0 -> BOLEH", () => {
+  assert.equal(putuskanBatasDukunganAdminHarian(0).ok, true);
+});
+
+uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni di bawah batas (19) -> BOLEH", () => {
+  assert.equal(putuskanBatasDukunganAdminHarian(BATAS_DUKUNGAN_ADMIN_PER_HARI - 1).ok, true);
+});
+
+uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni TEPAT di batas (20) -> DITOLAK (percobaan ke-21 yang ditolak, bukan ke-20)", () => {
+  const hasil = putuskanBatasDukunganAdminHarian(BATAS_DUKUNGAN_ADMIN_PER_HARI);
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, "Anda sudah membuat 20 catatan dukungan hari ini. Coba lagi besok.");
+});
+
+uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni melewati batas (21) -> DITOLAK", () => {
+  assert.equal(putuskanBatasDukunganAdminHarian(BATAS_DUKUNGAN_ADMIN_PER_HARI + 1).ok, false);
 });
 
 // --- putuskanCatatanDukunganWajib(): fungsi murni gerbang #6 ---

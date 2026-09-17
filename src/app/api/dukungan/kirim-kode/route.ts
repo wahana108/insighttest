@@ -5,23 +5,38 @@ import { getAdminDb } from "@/lib/firebase/admin";
 import { tanggalJakarta } from "@/lib/kuota-peserta";
 import { idNiatDukungan } from "@/lib/niat-dukungan";
 
-class DukunganKirimUlangRouteError extends Error {
+class DukunganKirimKodeRouteError extends Error {
   status: number;
 
   constructor(status: number, message: string) {
     super(message);
-    this.name = "DukunganKirimUlangRouteError";
+    this.name = "DukunganKirimKodeRouteError";
     this.status = status;
   }
 }
 
-const BATAS_KIRIM_ULANG_PER_HARI = 3;
+const BATAS_KIRIM_KODE_PER_HARI = 5;
 
 /**
- * Slice "niat-dukungan" (6b) — mengirim ULANG kode ke alamat akun yang
- * sedang login (sama aturan keras dengan POST /api/dukungan/niat: TIDAK ADA
- * parameter alamat email di body). Menolak kalau belum ada catatan
- * niat_dukungan sama sekali — ini bukan jalur untuk membuat catatan baru.
+ * Slice "niat-dukungan" (6b), diganti nama dari POST /api/dukungan/kirim-ulang
+ * di Slice "urutan-dukungan" (6c) — sejak 6c ini SATU-SATUNYA tempat kode
+ * akses dibaca dari kegiatan_kode dan dikirim ke email; POST
+ * /api/dukungan/niat tidak lagi menyentuhnya sama sekali (lihat komentar di
+ * sana). Dipanggil klien SETELAH tab Saweria dibuka
+ * (src/app/kegiatan/[id]/dukungan/page.tsx) — itulah inti perbaikan urutan
+ * kejadian di 6c.
+ *
+ * Sama aturan keras dengan POST /api/dukungan/niat: TIDAK ADA parameter
+ * alamat email di body, tujuan SELALU akun yang sedang login. Menolak
+ * kalau belum ada catatan niat_dukungan sama sekali — ini bukan jalur
+ * untuk membuat catatan baru.
+ *
+ * Kalau status dokumen sudah 'terkirim' dari percobaan sebelumnya, route
+ * ini TETAP memproses permintaan (mengirim lagi) selama batas harian belum
+ * habis — TIDAK ada penolakan berbasis status "sudah pernah terkirim".
+ * Klien (halaman formulir) yang memutuskan kapan memanggil ulang endpoint
+ * ini secara otomatis vs menampilkan status yang sudah diketahui tanpa
+ * memanggil lagi.
  */
 export async function POST(request: Request) {
   try {
@@ -31,38 +46,42 @@ export async function POST(request: Request) {
     try {
       body = await request.json();
     } catch {
-      throw new DukunganKirimUlangRouteError(400, "Body permintaan harus JSON.");
+      throw new DukunganKirimKodeRouteError(400, "Body permintaan harus JSON.");
     }
     const parsed = typeof body === "object" && body !== null ? (body as Record<string, unknown>) : {};
     const kegiatanId = typeof parsed.kegiatanId === "string" ? parsed.kegiatanId : "";
     if (!kegiatanId) {
-      throw new DukunganKirimUlangRouteError(400, "kegiatanId wajib diisi.");
+      throw new DukunganKirimKodeRouteError(400, "kegiatanId wajib diisi.");
     }
 
     const db = getAdminDb();
     const niatRef = db.collection("niat_dukungan").doc(idNiatDukungan(kegiatanId, user.uid));
     const niatSnap = await niatRef.get();
     if (!niatSnap.exists) {
-      throw new DukunganKirimUlangRouteError(
+      throw new DukunganKirimKodeRouteError(
         404,
         "Anda belum mengisi formulir dukungan untuk kegiatan ini."
       );
     }
     const niatData = niatSnap.data() ?? {};
 
-    // Field diberi awalan "dukunganKirimUlang_" — batas 3/hari ini TIDAK
+    // Field diberi awalan "dukunganKirimKode_" — batas 5/hari ini TIDAK
     // berbagi angka dengan batas email uji (5/hari, Slice 6a) maupun
-    // pengiriman awal niat dukungan, lihat komentar di
-    // firestore.rules match /kuota_email/{tanggal}.
+    // pembuatan catatan niat dukungan (5/hari, POST /api/dukungan/niat),
+    // lihat komentar di firestore.rules match /kuota_email/{tanggal}.
+    // Naik dari 3 ke 5 di Slice 6c karena pemanggilan PERTAMA sekarang
+    // dipakai oleh tombol "Buka Saweria" itu sendiri (bukan lagi murni
+    // "kirim ulang") — 5 dipilih supaya masih ada beberapa kesempatan
+    // kirim ulang sungguhan sesudahnya.
     const tanggalHariIni = tanggalJakarta(new Date());
     const kuotaRef = db.collection("kuota_email").doc(tanggalHariIni);
-    const field = `dukunganKirimUlang_${user.uid}`;
+    const field = `dukunganKirimKode_${user.uid}`;
     const kuotaSnapAwal = await kuotaRef.get();
     const jumlahAwal = typeof kuotaSnapAwal.data()?.[field] === "number" ? kuotaSnapAwal.data()![field] : 0;
-    if (jumlahAwal >= BATAS_KIRIM_ULANG_PER_HARI) {
-      throw new DukunganKirimUlangRouteError(
+    if (jumlahAwal >= BATAS_KIRIM_KODE_PER_HARI) {
+      throw new DukunganKirimKodeRouteError(
         429,
-        `Anda sudah mengirim ulang kode ${BATAS_KIRIM_ULANG_PER_HARI} kali hari ini. Coba lagi besok.`
+        `Anda sudah mengirim kode ${BATAS_KIRIM_KODE_PER_HARI} kali hari ini. Coba lagi besok.`
       );
     }
 
@@ -124,7 +143,7 @@ export async function POST(request: Request) {
 
     return Response.json({ ok: true, terkirim, alasanGagal });
   } catch (err) {
-    if (err instanceof ApiAuthError || err instanceof DukunganKirimUlangRouteError) {
+    if (err instanceof ApiAuthError || err instanceof DukunganKirimKodeRouteError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
     return Response.json({ error: "Galat internal." }, { status: 500 });

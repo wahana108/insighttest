@@ -7,7 +7,15 @@
  * dokumen, bukan query.
  */
 
-export type StatusNiatDukungan = "terkirim" | "gagal";
+/**
+ * 'tercatat' (Slice "urutan-dukungan" 6c) — status AWAL, ditulis
+ * POST /api/dukungan/niat: dokumen sudah ada, kode BELUM PERNAH dicoba
+ * dikirim. 'terkirim'/'gagal' hanya ditulis POST /api/dukungan/kirim-kode
+ * (dan POST /api/dukungan/admin, yang masih mengirim langsung saat
+ * membuat) — kode baru dibaca/dikirim di sana, tidak lagi saat formulir
+ * pertama kali disimpan.
+ */
+export type StatusNiatDukungan = "tercatat" | "terkirim" | "gagal";
 
 /**
  * 'sendiri' — dibuat lewat POST /api/dukungan/niat oleh peserta sendiri.
@@ -30,9 +38,9 @@ export interface NiatDukungan {
   dibuatPada: string;
   dibuatOleh: DibuatOlehNiatDukungan;
   status: StatusNiatDukungan;
-  /** Kosong kalau status 'terkirim'. Berbahasa Indonesia, TIDAK PERNAH memuat BREVO_API_KEY (sama aturan dengan src/lib/email/brevo.ts). */
+  /** Kosong kalau status 'tercatat' atau 'terkirim'. Berbahasa Indonesia, TIDAK PERNAH memuat BREVO_API_KEY (sama aturan dengan src/lib/email/brevo.ts). */
   alasanGagal: string;
   dikirimPada: string | null;
-  /** Berapa kali kode berhasil dikirim ke alamat ini (pengiriman awal + kirim ulang). */
+  /** Berapa kali kode berhasil dikirim ke alamat ini lewat POST /api/dukungan/kirim-kode (Slice 6c) — bukan berapa kali formulir diisi. */
   jumlahKirim: number;
 }

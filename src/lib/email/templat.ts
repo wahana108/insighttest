@@ -35,10 +35,11 @@ export function templatEmailUji(namaPenerima: string): TemplatEmail {
 }
 
 /**
- * Slice "niat-dukungan" (6b) — dikirim POST /api/dukungan/niat dan POST
- * /api/dukungan/kirim-ulang setelah kirimEmail() dipanggil, ATAU
- * dipersiapkan sebelum panggilan itu — fungsi murni ini sendiri tidak
- * pernah tahu apakah pengirimannya sukses.
+ * Slice "niat-dukungan" (6b), dikirim dari POST /api/dukungan/kirim-kode
+ * (diganti nama dari /kirim-ulang di Slice "urutan-dukungan" 6c — POST
+ * /api/dukungan/niat sendiri sejak 6c tidak lagi mengirim email) setelah
+ * kirimEmail() dipanggil, ATAU dipersiapkan sebelum panggilan itu — fungsi
+ * murni ini sendiri tidak pernah tahu apakah pengirimannya sukses.
  *
  * Parameter SENGAJA hanya tiga: nama penerima, judul kegiatan, kode akses
  * — TIDAK ADA data peserta lain (bukan daftar penerima, bukan data
