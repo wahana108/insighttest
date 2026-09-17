@@ -1,4 +1,6 @@
 import type { HasilKeputusanKuota } from "@/lib/kuota-peserta";
+import { kolomTambahanUntukFormulir } from "@/lib/services/impor-hadir";
+import type { FormulirPeserta } from "@/types/kegiatan";
 import type {
   DibuatOlehNiatDukungan,
   NiatDukungan,
@@ -90,6 +92,32 @@ function isStatusNiatDukungan(value: unknown): value is StatusNiatDukungan {
 
 function isDibuatOlehNiatDukungan(value: unknown): value is DibuatOlehNiatDukungan {
   return value === "sendiri" || value === "admin";
+}
+
+/**
+ * Slice "csv-siap-impor" (6d) — satu baris niat_dukungan dipetakan jadi satu
+ * baris CSV yang dimengerti importir peserta yang sudah ada
+ * (uraiDaftarHadir(), src/lib/services/impor-hadir.ts). URUTAN dan JUMLAH
+ * kolom di sini HARUS sama persis dengan headerTemplatImporCsv(formulirPeserta)
+ * untuk formulirPeserta yang SAMA — importir membaca kolom berdasarkan
+ * POSISI, bukan nama, jadi kolom asing/tertukar akan membuatnya salah baca.
+ *
+ * niat_dukungan TIDAK PERNAH mengumpulkan institusi/nomorIdentitas/noTelepon
+ * (lihat NiatDukungan, src/types/niat-dukungan.ts) — kolom itu SELALU
+ * dikosongkan di sini, apa pun isinya di formulirPeserta kegiatan ini.
+ * DIPUTUSKAN (bukan diakali dengan data karangan): kalau kegiatan
+ * mewajibkan salah satunya, baris ini akan tertandai 'data_wajib_kurang'
+ * saat ditempel ke Impor peserta — mekanisme yang SUDAH ADA di
+ * tandaiBarisImpor() ("kolomnya ADA di baris ini tapi KOSONG, isi
+ * nilainya"), bukan kegagalan diam-diam — admin mengisinya manual di
+ * spreadsheet sebelum mengimpor sungguhan.
+ */
+export function petakanNiatDukunganKeBarisImpor(
+  item: Pick<NiatDukungan, "email" | "namaDipakai">,
+  formulirPeserta: FormulirPeserta
+): string[] {
+  const kolomTambahan = kolomTambahanUntukFormulir(formulirPeserta);
+  return [item.email, item.namaDipakai, ...kolomTambahan.map(() => "")];
 }
 
 /**

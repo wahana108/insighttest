@@ -1,10 +1,12 @@
 /**
  * Alat pengembangan — BUKAN bagian aplikasi, tidak diimpor dari src/app.
- * Menguji idNiatDukungan() + putuskanBatasNiatHarian() (src/lib/niat-dukungan.ts),
- * putuskanCatatanDukunganWajib() + putuskanAksesMandiri()
- * (src/lib/akses-kegiatan.ts), dan templatEmailKodeAkses()
- * (src/lib/email/templat.ts) sebagai fungsi murni. Pakai node:assert saja,
- * tidak ada framework tes baru, TANPA jaringan dan TANPA Firestore.
+ * Menguji idNiatDukungan() + putuskanBatasNiatHarian() +
+ * putuskanBatasDukunganAdminHarian() + petakanNiatDukunganKeBarisImpor()
+ * (src/lib/niat-dukungan.ts), putuskanCatatanDukunganWajib() +
+ * putuskanAksesMandiri() (src/lib/akses-kegiatan.ts), dan
+ * templatEmailKodeAkses() (src/lib/email/templat.ts) sebagai fungsi murni.
+ * Pakai node:assert saja, tidak ada framework tes baru, TANPA jaringan dan
+ * TANPA Firestore.
  *
  * Jalankan: npx tsx scripts/uji-niat-dukungan.ts
  * (juga dipanggil otomatis lewat npm run uji)
@@ -19,10 +21,13 @@ import {
   BATAS_DUKUNGAN_ADMIN_PER_HARI,
   BATAS_NIAT_PER_HARI,
   idNiatDukungan,
+  petakanNiatDukunganKeBarisImpor,
   putuskanBatasDukunganAdminHarian,
   putuskanBatasNiatHarian,
 } from "../src/lib/niat-dukungan";
+import { headerTemplatImporCsv } from "../src/lib/services/impor-hadir";
 import type { HasilKeputusanKuota } from "../src/lib/kuota-peserta";
+import type { FormulirPeserta } from "../src/types/kegiatan";
 
 let lulus = 0;
 let gagal = 0;
@@ -117,6 +122,74 @@ uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni TEPAT di batas (20) -> DITO
 
 uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni melewati batas (21) -> DITOLAK", () => {
   assert.equal(putuskanBatasDukunganAdminHarian(BATAS_DUKUNGAN_ADMIN_PER_HARI + 1).ok, false);
+});
+
+// --- petakanNiatDukunganKeBarisImpor(): jembatan ke importir peserta (Slice 6d) ---
+
+const FORMULIR_TIDAK_ADA: FormulirPeserta = {
+  institusi: "tidak",
+  nomorIdentitas: "tidak",
+  noTelepon: "tidak",
+};
+const FORMULIR_CAMPURAN: FormulirPeserta = {
+  institusi: "wajib",
+  nomorIdentitas: "opsional",
+  noTelepon: "tidak",
+};
+
+uji("petakanNiatDukunganKeBarisImpor: email dan namaDipakai masuk ke dua kolom pertama, apa adanya", () => {
+  const baris = petakanNiatDukunganKeBarisImpor(
+    { email: "budi@contoh.com", namaDipakai: "Budi Santoso" },
+    FORMULIR_TIDAK_ADA
+  );
+  assert.deepEqual(baris, ["budi@contoh.com", "Budi Santoso"]);
+});
+
+uji("petakanNiatDukunganKeBarisImpor: panjang & urutan baris SAMA PERSIS dengan headerTemplatImporCsv() (formulir tanpa kolom tambahan)", () => {
+  const header = headerTemplatImporCsv(FORMULIR_TIDAK_ADA);
+  const baris = petakanNiatDukunganKeBarisImpor(
+    { email: "budi@contoh.com", namaDipakai: "Budi Santoso" },
+    FORMULIR_TIDAK_ADA
+  );
+  assert.equal(baris.length, header.length);
+});
+
+uji("petakanNiatDukunganKeBarisImpor: kolom tambahan (institusi wajib, nomorIdentitas opsional) dikosongkan, BUKAN dikarang — panjang tetap sama dengan header", () => {
+  const header = headerTemplatImporCsv(FORMULIR_CAMPURAN);
+  const baris = petakanNiatDukunganKeBarisImpor(
+    { email: "siti@contoh.com", namaDipakai: "Siti" },
+    FORMULIR_CAMPURAN
+  );
+  assert.equal(baris.length, header.length);
+  assert.deepEqual(baris, ["siti@contoh.com", "Siti", "", ""]);
+});
+
+uji("petakanNiatDukunganKeBarisImpor: namaDipakai kosong -> kolom nama ikut kosong, TIDAK dikarang dari mana pun", () => {
+  const baris = petakanNiatDukunganKeBarisImpor(
+    { email: "kosong@contoh.com", namaDipakai: "" },
+    FORMULIR_TIDAK_ADA
+  );
+  assert.deepEqual(baris, ["kosong@contoh.com", ""]);
+});
+
+uji("petakanNiatDukunganKeBarisImpor: field lain pada item (nominal null, catatan, dll) sama sekali tidak memengaruhi hasil — hanya email & namaDipakai yang dibaca", () => {
+  const itemLengkap = {
+    id: "keg1__uid1",
+    kegiatanId: "keg1",
+    uid: "uid1",
+    email: "andi@contoh.com",
+    namaDipakai: "Andi",
+    nominal: null,
+    catatan: "",
+    dibuatPada: "2026-01-01T00:00:00.000Z",
+    dibuatOleh: "sendiri" as const,
+    status: "tercatat" as const,
+    alasanGagal: "",
+    dikirimPada: null,
+    jumlahKirim: 0,
+  };
+  const baris = petakanNiatDukunganKeBarisImpor(itemLengkap, FORMULIR_TIDAK_ADA);
+  assert.deepEqual(baris, ["andi@contoh.com", "Andi"]);
 });
 
 // --- putuskanCatatanDukunganWajib(): fungsi murni gerbang #6 ---

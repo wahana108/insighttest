@@ -6,6 +6,9 @@ import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { izinPanitia } from "@/lib/izin-panitia";
+import { keCsv, type SelRekap } from "@/lib/rekap-csv";
+import { headerTemplatImporCsv } from "@/lib/services/impor-hadir";
+import { petakanNiatDukunganKeBarisImpor } from "@/lib/niat-dukungan";
 import type { NiatDukungan } from "@/types/niat-dukungan";
 
 const LABEL_DIBUAT_OLEH: Record<string, string> = {
@@ -56,6 +59,10 @@ export default function AdminDukunganPage({
   // yang tadinya beda cuma UI ini hanya punya satu tombol (selalu memakai
   // bawaan titik koma, tidak pernah memberi pilihan koma).
   const [mengunduh, setMengunduh] = useState<"koma" | "titik-koma" | null>(null);
+  // Slice "csv-siap-impor" (6d) — dibangun LANGSUNG dari `items` yang sudah
+  // dimuat untuk tabel di bawah (tidak lewat route server terpisah): tidak
+  // ada data baru yang dibutuhkan selain yang sudah ada di halaman ini.
+  const [mengunduhImpor, setMengunduhImpor] = useState(false);
 
   const muat = useCallback(() => {
     fetchWithAuth(`/api/admin/kegiatan/${encodeURIComponent(kegiatanId)}/dukungan`)
@@ -104,6 +111,44 @@ export default function AdminDukunganPage({
     }
   }
 
+  /**
+   * Slice "csv-siap-impor" (6d) — SELURUH baris niat dukungan kegiatan ini
+   * (tidak disaring status), dipetakan ke kolom yang PERSIS sama dengan
+   * headerTemplatImporCsv() supaya siap ditempel ke Impor peserta.
+   * HANYA pemisah koma (bukan pilihan koma/titik-koma seperti dua tombol
+   * di atas) — uraiDaftarHadir() (importir) hanya mengenali TAB atau KOMA
+   * sebagai pemisah, tidak titik koma; menyediakan pilihan titik-koma di
+   * sini akan membuat berkasnya rusak kalau ditempel mentah ke importir.
+   * Dibangun sinkron dari `items`/`kegiatan` yang sudah dimuat di halaman
+   * ini — tidak ada panggilan jaringan baru.
+   */
+  function handleUnduhCsvImpor() {
+    if (!kegiatan) {
+      return;
+    }
+    setMengunduhImpor(true);
+    try {
+      const header = headerTemplatImporCsv(kegiatan.formulirPeserta);
+      const baris: SelRekap[][] = [
+        header,
+        ...items.map((item) => petakanNiatDukunganKeBarisImpor(item, kegiatan.formulirPeserta)),
+      ];
+      const BOM_UTF8 = String.fromCharCode(0xfeff);
+      const isiBerkas = BOM_UTF8 + keCsv(baris, ",");
+      const blob = new Blob([isiBerkas], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `dukungan-siap-impor-${kegiatanId}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } finally {
+      setMengunduhImpor(false);
+    }
+  }
+
   return (
     <div className="max-w-4xl space-y-6">
       <div>
@@ -145,6 +190,21 @@ export default function AdminDukunganPage({
             </div>
             <p className="text-xs text-zinc-500">
               Kalau kolomnya menumpuk jadi satu saat dibuka di Excel, coba unduhan yang satunya.
+            </p>
+          </div>
+
+          <div className="space-y-1 rounded-lg border border-zinc-200 bg-zinc-50 p-3 dark:border-zinc-800 dark:bg-zinc-900">
+            <button
+              type="button"
+              onClick={handleUnduhCsvImpor}
+              disabled={mengunduhImpor || !kegiatan}
+              className="inline-flex min-h-11 items-center justify-center rounded border border-zinc-300 bg-white px-4 text-sm font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-300"
+            >
+              {mengunduhImpor ? "Mengunduh..." : "Unduh CSV siap impor"}
+            </button>
+            <p className="text-xs text-zinc-500">
+              Berkas ini bisa langsung ditempel ke Impor peserta. Saring dulu barisnya di
+              spreadsheet — semua baris ikut terunduh, termasuk yang belum Anda setujui.
             </p>
           </div>
 
