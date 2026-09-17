@@ -1,7 +1,7 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { tanggalJakarta } from "@/lib/kuota-peserta";
-import { idNiatDukungan, putuskanBatasNiatHarian } from "@/lib/niat-dukungan";
+import { idNiatDukungan, putuskanBatasNiatHarian, tentukanStatusAwalNiat } from "@/lib/niat-dukungan";
 
 class DukunganNiatRouteError extends Error {
   status: number;
@@ -72,6 +72,12 @@ export async function POST(request: Request) {
     }
     const urlSaweria = typeof dukunganRaw.urlSaweria === "string" ? dukunganRaw.urlSaweria : "";
     const pesanDukungan = typeof dukunganRaw.pesan === "string" ? dukunganRaw.pesan : "";
+    // Slice "persetujuan-dukungan" (6e) — bawaan false (KA-1): kegiatan
+    // lama/tanpa field ini sama sekali berperilaku PERSIS seperti sebelum
+    // slice ini (status awal 'tercatat'). Dikembalikan di SETIAP respons di
+    // bawah supaya halaman formulir tahu harus menampilkan status
+    // "menunggu admin" atau langsung memanggil kirim-kode.
+    const perluPersetujuan = dukunganRaw.perluPersetujuan === true;
 
     const niatRef = db.collection("niat_dukungan").doc(idNiatDukungan(kegiatanId, user.uid));
     const niatSnapAwal = await niatRef.get();
@@ -89,6 +95,7 @@ export async function POST(request: Request) {
         urlSaweria,
         pesan: pesanDukungan,
         status: statusAwal,
+        perluPersetujuan,
       });
     }
 
@@ -113,6 +120,14 @@ export async function POST(request: Request) {
       throw new DukunganNiatRouteError(429, hasilBatasNiat.pesan ?? "Batas harian tercapai.");
     }
 
+    // Slice "persetujuan-dukungan" (6e) — satu-satunya percabangan status
+    // awal di seluruh route ini: perluPersetujuan false (bawaan) -> sama
+    // seperti sebelum slice ini ('tercatat', kirim-kode boleh langsung
+    // dipanggil sendiri). true -> 'menunggu', POST /api/dukungan/kirim-kode
+    // menolaknya sampai admin/panitia menyetujui lewat POST
+    // /api/dukungan/setujui.
+    const statusAwal = tentukanStatusAwalNiat(perluPersetujuan);
+
     const now = new Date().toISOString();
     try {
       // .create() (bukan .set()) — kalau dua permintaan datang nyaris
@@ -130,7 +145,7 @@ export async function POST(request: Request) {
         catatan,
         dibuatPada: now,
         dibuatOleh: "sendiri",
-        status: "tercatat",
+        status: statusAwal,
         alasanGagal: "",
         dikirimPada: null,
         jumlahKirim: 0,
@@ -140,10 +155,20 @@ export async function POST(request: Request) {
       // pembacaan dan penulisan). Perlakukan sama seperti sudahAda; JANGAN
       // menimpa catatan yang sudah tersimpan. Status pemenang balapan tidak
       // dibaca ulang di sini (percobaan tambahan untuk kasus yang sangat
-      // jarang) — klien memperlakukan sudahAda:true tanpa status eksplisit
-      // sebagai 'tercatat', aman karena itu status TERLONGGAR (paling
-      // sedikit mengasumsikan kode sudah terkirim).
-      return Response.json({ ok: true, sudahAda: true, urlSaweria, pesan: pesanDukungan });
+      // jarang, dua permintaan dalam milidetik yang sama) — klien
+      // memperlakukan sudahAda:true tanpa status eksplisit sebagai
+      // 'tercatat'. Kalau tebakan itu salah (pemenangnya sebenarnya
+      // 'menunggu', perluPersetujuan true) klien akan mencoba memanggil
+      // kirim-kode dan DITOLAK 403 oleh server di sana — bukan celah
+      // keamanan, cuma pesan galat yang kurang pas di kasus yang sangat
+      // jarang ini.
+      return Response.json({
+        ok: true,
+        sudahAda: true,
+        urlSaweria,
+        pesan: pesanDukungan,
+        perluPersetujuan,
+      });
     }
 
     // Dinaikkan HANYA setelah create() sukses, transaksi TERPISAH — sama
@@ -162,7 +187,8 @@ export async function POST(request: Request) {
       sudahAda: false,
       urlSaweria,
       pesan: pesanDukungan,
-      status: "tercatat",
+      status: statusAwal,
+      perluPersetujuan,
     });
   } catch (err) {
     if (err instanceof ApiAuthError || err instanceof DukunganNiatRouteError) {

@@ -13,6 +13,8 @@
  */
 import assert from "node:assert/strict";
 import {
+  PESAN_MENUNGGU_PERSETUJUAN_DUKUNGAN,
+  PESAN_WAJIB_CATATAN_DUKUNGAN,
   putuskanAksesMandiri,
   putuskanCatatanDukunganWajib,
 } from "../src/lib/akses-kegiatan";
@@ -24,6 +26,7 @@ import {
   petakanNiatDukunganKeBarisImpor,
   putuskanBatasDukunganAdminHarian,
   putuskanBatasNiatHarian,
+  tentukanStatusAwalNiat,
 } from "../src/lib/niat-dukungan";
 import { headerTemplatImporCsv } from "../src/lib/services/impor-hadir";
 import type { HasilKeputusanKuota } from "../src/lib/kuota-peserta";
@@ -124,6 +127,16 @@ uji("putuskanBatasDukunganAdminHarian: jumlahSaatIni melewati batas (21) -> DITO
   assert.equal(putuskanBatasDukunganAdminHarian(BATAS_DUKUNGAN_ADMIN_PER_HARI + 1).ok, false);
 });
 
+// --- tentukanStatusAwalNiat(): status awal POST /api/dukungan/niat (Slice 6e) ---
+
+uji("tentukanStatusAwalNiat: perluPersetujuan false -> 'tercatat' (perilaku sebelum Slice 6e)", () => {
+  assert.equal(tentukanStatusAwalNiat(false), "tercatat");
+});
+
+uji("tentukanStatusAwalNiat: perluPersetujuan true -> 'menunggu'", () => {
+  assert.equal(tentukanStatusAwalNiat(true), "menunggu");
+});
+
 // --- petakanNiatDukunganKeBarisImpor(): jembatan ke importir peserta (Slice 6d) ---
 
 const FORMULIR_TIDAK_ADA: FormulirPeserta = {
@@ -192,24 +205,74 @@ uji("petakanNiatDukunganKeBarisImpor: field lain pada item (nominal null, catata
   assert.deepEqual(baris, ["andi@contoh.com", "Andi"]);
 });
 
-// --- putuskanCatatanDukunganWajib(): fungsi murni gerbang #6 ---
+// --- putuskanCatatanDukunganWajib(): fungsi murni gerbang #6, diperluas Slice "persetujuan-dukungan" (6e) ---
 
-uji("putuskanCatatanDukunganWajib: wajibCatatan false -> selalu BOLEH, apa pun punyaCatatan", () => {
-  assert.equal(putuskanCatatanDukunganWajib({ wajibCatatan: false, punyaCatatan: false }).ok, true);
-  assert.equal(putuskanCatatanDukunganWajib({ wajibCatatan: false, punyaCatatan: true }).ok, true);
-});
-
-uji("putuskanCatatanDukunganWajib: wajibCatatan true + punyaCatatan false -> DITOLAK", () => {
-  const hasil = putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: false });
-  assert.equal(hasil.ok, false);
+uji("putuskanCatatanDukunganWajib: wajibCatatan false -> selalu BOLEH, apa pun statusCatatan/perluPersetujuan", () => {
   assert.equal(
-    hasil.pesan,
-    "Kode ini baru berlaku setelah Anda mengisi formulir dukungan pada kegiatan ini."
+    putuskanCatatanDukunganWajib({ wajibCatatan: false, perluPersetujuan: false, statusCatatan: null }).ok,
+    true
+  );
+  assert.equal(
+    putuskanCatatanDukunganWajib({ wajibCatatan: false, perluPersetujuan: true, statusCatatan: "menunggu" }).ok,
+    true
   );
 });
 
-uji("putuskanCatatanDukunganWajib: wajibCatatan true + punyaCatatan true -> BOLEH", () => {
-  assert.equal(putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: true }).ok, true);
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan false + statusCatatan null (belum mengisi) -> DITOLAK, pesan wajib-mengisi", () => {
+  const hasil = putuskanCatatanDukunganWajib({
+    wajibCatatan: true,
+    perluPersetujuan: false,
+    statusCatatan: null,
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, PESAN_WAJIB_CATATAN_DUKUNGAN);
+});
+
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan false + statusCatatan 'tercatat' -> BOLEH (cukup ada catatan, status apa pun)", () => {
+  assert.equal(
+    putuskanCatatanDukunganWajib({ wajibCatatan: true, perluPersetujuan: false, statusCatatan: "tercatat" })
+      .ok,
+    true
+  );
+});
+
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan true + statusCatatan null (belum mengisi) -> DITOLAK, pesan wajib-mengisi (BUKAN pesan menunggu)", () => {
+  const hasil = putuskanCatatanDukunganWajib({
+    wajibCatatan: true,
+    perluPersetujuan: true,
+    statusCatatan: null,
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, PESAN_WAJIB_CATATAN_DUKUNGAN);
+});
+
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan true + statusCatatan 'menunggu' -> DITOLAK, pesan menunggu-persetujuan ('menunggu' TIDAK CUKUP)", () => {
+  const hasil = putuskanCatatanDukunganWajib({
+    wajibCatatan: true,
+    perluPersetujuan: true,
+    statusCatatan: "menunggu",
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, PESAN_MENUNGGU_PERSETUJUAN_DUKUNGAN);
+  assert.equal(hasil.pesan, "Permintaan Anda pada kegiatan ini belum disetujui admin.");
+});
+
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan true + statusCatatan 'gagal' -> DITOLAK, pesan menunggu-persetujuan ('gagal' juga bukan 'terkirim')", () => {
+  const hasil = putuskanCatatanDukunganWajib({
+    wajibCatatan: true,
+    perluPersetujuan: true,
+    statusCatatan: "gagal",
+  });
+  assert.equal(hasil.ok, false);
+  assert.equal(hasil.pesan, PESAN_MENUNGGU_PERSETUJUAN_DUKUNGAN);
+});
+
+uji("putuskanCatatanDukunganWajib: wajibCatatan true + perluPersetujuan true + statusCatatan 'terkirim' -> BOLEH (satu-satunya status yang cukup saat perluPersetujuan true)", () => {
+  assert.equal(
+    putuskanCatatanDukunganWajib({ wajibCatatan: true, perluPersetujuan: true, statusCatatan: "terkirim" })
+      .ok,
+    true
+  );
 });
 
 // --- putuskanAksesMandiri() + hasilCatatanDukungan: empat kasus persis diminta ---
@@ -222,7 +285,11 @@ uji("kode benar + wajibCatatan false + tanpa catatan -> BOLEH", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
-    hasilCatatanDukungan: putuskanCatatanDukunganWajib({ wajibCatatan: false, punyaCatatan: false }),
+    hasilCatatanDukungan: putuskanCatatanDukunganWajib({
+      wajibCatatan: false,
+      perluPersetujuan: false,
+      statusCatatan: null,
+    }),
   });
   assert.equal(hasil.ok, true, `Diharapkan BOLEH, dapat ditolak: ${hasil.pesan}`);
 });
@@ -235,7 +302,11 @@ uji("kode benar + wajibCatatan true + tanpa catatan -> DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
-    hasilCatatanDukungan: putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: false }),
+    hasilCatatanDukungan: putuskanCatatanDukunganWajib({
+      wajibCatatan: true,
+      perluPersetujuan: false,
+      statusCatatan: null,
+    }),
   });
   assert.equal(hasil.ok, false);
   assert.equal(
@@ -252,7 +323,11 @@ uji("kode benar + wajibCatatan true + ada catatan -> BOLEH", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
-    hasilCatatanDukungan: putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: true }),
+    hasilCatatanDukungan: putuskanCatatanDukunganWajib({
+      wajibCatatan: true,
+      perluPersetujuan: false,
+      statusCatatan: "tercatat",
+    }),
   });
   assert.equal(hasil.ok, true, `Diharapkan BOLEH, dapat ditolak: ${hasil.pesan}`);
 });
@@ -265,7 +340,11 @@ uji("kode salah + ada catatan -> DITOLAK (catatan tidak bisa menggantikan kode y
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
-    hasilCatatanDukungan: putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: true }),
+    hasilCatatanDukungan: putuskanCatatanDukunganWajib({
+      wajibCatatan: true,
+      perluPersetujuan: false,
+      statusCatatan: "tercatat",
+    }),
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -279,7 +358,11 @@ uji("caraMasuk 'terbuka' + wajibCatatan true tanpa catatan (diabaikan, hanya rel
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
-    hasilCatatanDukungan: putuskanCatatanDukunganWajib({ wajibCatatan: true, punyaCatatan: false }),
+    hasilCatatanDukungan: putuskanCatatanDukunganWajib({
+      wajibCatatan: true,
+      perluPersetujuan: false,
+      statusCatatan: null,
+    }),
   });
   assert.equal(hasil.ok, true, `hasilCatatanDukungan hanya relevan untuk caraMasuk 'kode': ${hasil.pesan}`);
 });

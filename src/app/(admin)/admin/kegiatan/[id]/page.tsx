@@ -1746,6 +1746,26 @@ export default function AdminKegiatanDetailPage({
                 akun). Kalau dimatikan (bawaan): kode yang benar langsung berlaku, persis
                 seperti sebelum fitur dukungan ada.
               </p>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editingKegiatanForm.dukungan.perluPersetujuan}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      dukungan: {
+                        ...editingKegiatanForm.dukungan,
+                        perluPersetujuan: event.target.checked,
+                      },
+                    })
+                  }
+                />
+                Kode akses menunggu persetujuan admin
+              </label>
+              <p className="text-xs text-zinc-500">
+                Kalau dicentang, kode akses tidak dikirim otomatis. Anda yang menekan Kirim
+                kode setelah mencocokkan dengan daftar donatur.
+              </p>
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">

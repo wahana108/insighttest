@@ -13,7 +13,8 @@ import {
   putuskanKuotaKegiatan,
   tanggalJakarta,
 } from "@/lib/kuota-peserta";
-import { idNiatDukungan } from "@/lib/niat-dukungan";
+import { idNiatDukungan, mapNiatDukungan } from "@/lib/niat-dukungan";
+import type { StatusNiatDukungan } from "@/types/niat-dukungan";
 
 class PendaftaranRouteError extends Error {
   status: number;
@@ -182,27 +183,34 @@ export async function POST(request: Request) {
       const jumlahDipakaiBaru = jumlahDipakaiSaatIni + 1;
       const hasilBatasPemakaianKode = putuskanBatasPemakaianKode(kodeMaksPakai, jumlahDipakaiBaru);
 
-      // Slice "niat-dukungan" (6b) — dukungan.wajibCatatan bawaan false
-      // (KA-1): kegiatan lama/tanpa peta dukungan sama sekali berperilaku
-      // PERSIS seperti sebelum slice ini, putuskanCatatanDukunganWajib()
-      // langsung lolos tanpa pernah membaca niat_dukungan. Hanya kalau
-      // true, satu pembacaan tambahan (deterministik lewat idNiatDukungan(),
-      // bukan query) dilakukan DI DALAM transaksi yang sama.
+      // Slice "niat-dukungan" (6b), diperluas Slice "persetujuan-dukungan"
+      // (6e) — dukungan.wajibCatatan bawaan false (KA-1): kegiatan lama/
+      // tanpa peta dukungan sama sekali berperilaku PERSIS seperti sebelum
+      // Slice 6b, putuskanCatatanDukunganWajib() langsung lolos tanpa
+      // pernah membaca niat_dukungan. Hanya kalau true, satu pembacaan
+      // tambahan (deterministik lewat idNiatDukungan(), bukan query)
+      // dilakukan DI DALAM transaksi yang sama — dipetakan lewat
+      // mapNiatDukungan() (KA-1) supaya status yang dioper selalu salah
+      // satu nilai StatusNiatDukungan yang sah, bukan data mentah.
       const dukunganData =
         typeof kegiatanData.dukungan === "object" && kegiatanData.dukungan !== null
           ? (kegiatanData.dukungan as Record<string, unknown>)
           : {};
       const wajibCatatanDukungan = dukunganData.wajibCatatan === true;
-      let punyaCatatanDukungan = true;
+      const perluPersetujuanDukungan = dukunganData.perluPersetujuan === true;
+      let statusCatatanDukungan: StatusNiatDukungan | null = null;
       if (wajibCatatanDukungan) {
         const niatSnap = await tx.get(
           db.collection("niat_dukungan").doc(idNiatDukungan(kegiatanId, user.uid))
         );
-        punyaCatatanDukungan = niatSnap.exists;
+        if (niatSnap.exists) {
+          statusCatatanDukungan = mapNiatDukungan(niatSnap.id, niatSnap.data() ?? {}).status;
+        }
       }
       const hasilCatatanDukungan = putuskanCatatanDukunganWajib({
         wajibCatatan: wajibCatatanDukungan,
-        punyaCatatan: punyaCatatanDukungan,
+        perluPersetujuan: perluPersetujuanDukungan,
+        statusCatatan: statusCatatanDukungan,
       });
 
       const keputusanAkses = putuskanAksesMandiri({

@@ -41,6 +41,7 @@ export const DUKUNGAN_KEGIATAN_KOSONG: DukunganKegiatan = {
   urlSaweria: "",
   pesan: "",
   wajibCatatan: false,
+  perluPersetujuan: false,
 };
 
 export class KegiatanError extends Error {
@@ -124,6 +125,10 @@ function mapDukungan(value: unknown): DukunganKegiatan {
     urlSaweria: typeof data.urlSaweria === "string" ? data.urlSaweria : "",
     pesan: typeof data.pesan === "string" ? data.pesan : "",
     wajibCatatan: data.wajibCatatan === true,
+    // Slice "persetujuan-dukungan" (6e) — bawaan false (KA-1), kegiatan
+    // lama/tanpa field ini sama sekali berperilaku persis seperti sebelum
+    // slice ini.
+    perluPersetujuan: data.perluPersetujuan === true,
   };
 }
 
@@ -133,6 +138,7 @@ function normalizeDukungan(d: DukunganKegiatan): DukunganKegiatan {
     urlSaweria: d.urlSaweria.trim(),
     pesan: d.pesan.trim(),
     wajibCatatan: d.wajibCatatan,
+    perluPersetujuan: d.perluPersetujuan,
   };
 }
 

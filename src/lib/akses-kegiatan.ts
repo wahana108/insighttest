@@ -1,6 +1,7 @@
 import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
 import type { HasilKeputusanKuota } from "@/lib/kuota-peserta";
 import type { CaraMasukKegiatan, Kegiatan } from "@/types/kegiatan";
+import type { StatusNiatDukungan } from "@/types/niat-dukungan";
 
 /**
  * Slice "akses-kegiatan" (docs/kickoff.md §R, SLICE 4) — fungsi murni saja
@@ -51,27 +52,44 @@ export const PESAN_KODE_SALAH = "Kode akses salah atau belum diisi.";
 export const PESAN_KODE_BATAS_PEMAKAIAN_TERCAPAI = "Kode ini sudah mencapai batas pemakaiannya.";
 export const PESAN_WAJIB_CATATAN_DUKUNGAN =
   "Kode ini baru berlaku setelah Anda mengisi formulir dukungan pada kegiatan ini.";
+export const PESAN_MENUNGGU_PERSETUJUAN_DUKUNGAN =
+  "Permintaan Anda pada kegiatan ini belum disetujui admin.";
 
 /**
- * Slice "niat-dukungan" (6b) — dukungan.wajibCatatan (src/types/kegiatan.ts)
- * 0/false berarti tak ada syarat tambahan (BAWAAN, sama pola dengan
- * kodeMaksPakai/kuotaPeserta): kode yang benar SUDAH CUKUP, perilaku persis
- * seperti sebelum slice ini — tidak ada perubahan sama sekali. true berarti
- * kode yang benar TIDAK CUKUP — juga wajib ada dokumen
- * niat_dukungan/{kegiatanId}__{uid} (idNiatDukungan(), src/lib/niat-dukungan.ts),
- * diperiksa pemanggil (POST /api/pendaftaran) lewat SATU pembacaan dokumen
- * di dalam transaksi pendaftaran yang sama, dioper ke sini sebagai boolean
- * murni supaya fungsi ini tidak menyentuh Firestore.
+ * Slice "niat-dukungan" (6b), diperluas Slice "persetujuan-dukungan" (6e) —
+ * dukungan.wajibCatatan (src/types/kegiatan.ts) false berarti tak ada syarat
+ * tambahan (BAWAAN, sama pola dengan kodeMaksPakai/kuotaPeserta): kode yang
+ * benar SUDAH CUKUP, perilaku persis seperti sebelum Slice 6b — tidak ada
+ * perubahan sama sekali.
+ *
+ * wajibCatatan true berarti kode yang benar TIDAK CUKUP — juga wajib ada
+ * dokumen niat_dukungan/{kegiatanId}__{uid} (idNiatDukungan(),
+ * src/lib/niat-dukungan.ts). statusCatatan null berarti dokumen itu belum
+ * ada sama sekali (diperiksa pemanggil, POST /api/pendaftaran, lewat SATU
+ * pembacaan di dalam transaksi pendaftaran yang sama) — dioper ke sini
+ * sebagai status murni (bukan boolean punyaCatatan seperti sebelum 6e)
+ * supaya fungsi ini bisa membedakan "belum mengisi" dari "sudah mengisi
+ * tapi belum disetujui" tanpa menyentuh Firestore sendiri.
+ *
+ * perluPersetujuan (dukungan.perluPersetujuan) menaikkan syaratnya: kalau
+ * true, statusCatatan HARUS 'terkirim' — status 'menunggu' (kode belum
+ * dikonfirmasi admin lewat POST /api/dukungan/setujui) TIDAK CUKUP, walau
+ * dokumennya sudah ada. Kalau perluPersetujuan false (bawaan), status
+ * 'tercatat' pun sudah cukup, sama seperti sebelum Slice 6e.
  */
 export function putuskanCatatanDukunganWajib(params: {
   wajibCatatan: boolean;
-  punyaCatatan: boolean;
+  perluPersetujuan: boolean;
+  statusCatatan: StatusNiatDukungan | null;
 }): HasilKeputusanKuota {
   if (!params.wajibCatatan) {
     return OK_KUOTA;
   }
-  if (!params.punyaCatatan) {
+  if (params.statusCatatan === null) {
     return { ok: false, pesan: PESAN_WAJIB_CATATAN_DUKUNGAN };
+  }
+  if (params.perluPersetujuan && params.statusCatatan !== "terkirim") {
+    return { ok: false, pesan: PESAN_MENUNGGU_PERSETUJUAN_DUKUNGAN };
   }
   return OK_KUOTA;
 }

@@ -11,8 +11,15 @@ interface HasilKirim {
   sudahAda: boolean;
   urlSaweria: string;
   pesan: string;
-  /** 'tercatat' | 'terkirim' | 'gagal' — status TERSIMPAN di server SAAT formulir ini dikirim/dibaca, BUKAN diperbarui live setelah itu (lihat kodeStatus di bawah untuk status kode SETELAH interaksi di halaman ini). */
+  /** 'tercatat' | 'menunggu' | 'terkirim' | 'gagal' — status TERSIMPAN di server SAAT formulir ini dikirim/dibaca, BUKAN diperbarui live setelah itu (lihat kodeStatus di bawah untuk status kode SETELAH interaksi di halaman ini). */
   status?: string;
+  /**
+   * Slice "persetujuan-dukungan" (6e) — kalau true DAN status 'menunggu',
+   * "Buka Saweria" TIDAK memanggil kirim-kode (server menolaknya 403);
+   * kode baru terkirim setelah admin menyetujui lewat POST
+   * /api/dukungan/setujui.
+   */
+  perluPersetujuan?: boolean;
 }
 
 type StatusKode = "idle" | "mengirim" | "terkirim" | "gagal";
@@ -66,6 +73,12 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
   // hasil.status untuk kasus itu.
   const [kodeStatus, setKodeStatus] = useState<StatusKode>("idle");
   const [kodeAlasanGagal, setKodeAlasanGagal] = useState<string | null>(null);
+
+  // Slice "persetujuan-dukungan" (6e) — 'menunggu' TIDAK PERNAH berubah
+  // lewat interaksi di halaman ini (kirim-kode ditolak server selama
+  // status ini bertahan, lihat handleBukaSaweria()), jadi kodeStatus tetap
+  // 'idle' selama status ini berlaku.
+  const statusMenunggu = kodeStatus === "idle" && hasil?.status === "menunggu";
 
   useEffect(() => {
     if (!loading && !user) {
@@ -144,6 +157,14 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
     // sesi halaman ini) — tab tetap dibuka di atas, tapi TIDAK memanggil
     // kirim-kode lagi.
     if (hasil.status === "terkirim" || kodeStatus === "terkirim") {
+      return;
+    }
+    // Slice "persetujuan-dukungan" (6e) — status 'menunggu' berarti server
+    // (POST /api/dukungan/kirim-kode) akan MENOLAK 403 sampai admin
+    // menyetujui lewat POST /api/dukungan/setujui: tab tetap dibuka di
+    // atas, tapi TIDAK memanggil kirim-kode sama sekali — bukan cuma
+    // menyembunyikan tombolnya, memanggilnya di sini akan selalu gagal.
+    if (hasil.perluPersetujuan && hasil.status === "menunggu") {
       return;
     }
     await panggilKirimKode();
@@ -294,20 +315,28 @@ export default function DukunganPage({ params }: { params: Promise<{ id: string 
               Kode akses sudah pernah dikirim ke {user.email}.
             </p>
           )}
-
-          <div>
-            <button
-              type="button"
-              onClick={handleKirimUlang}
-              disabled={mengirimUlang}
-              className="text-xs font-medium text-zinc-700 underline disabled:opacity-50 dark:text-zinc-300"
-            >
-              {mengirimUlang ? "Mengirim ulang..." : "Kirim ulang kode ke email saya"}
-            </button>
-            <p className="mt-1 text-xs text-zinc-500">
-              Gunakan ini kalau email pertama tidak sampai.
+          {statusMenunggu && (
+            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+              Permintaan Anda sudah tercatat. Kode akses akan dikirim ke {user.email} setelah
+              admin mengonfirmasi dukungan Anda.
             </p>
-          </div>
+          )}
+
+          {!statusMenunggu && (
+            <div>
+              <button
+                type="button"
+                onClick={handleKirimUlang}
+                disabled={mengirimUlang}
+                className="text-xs font-medium text-zinc-700 underline disabled:opacity-50 dark:text-zinc-300"
+              >
+                {mengirimUlang ? "Mengirim ulang..." : "Kirim ulang kode ke email saya"}
+              </button>
+              <p className="mt-1 text-xs text-zinc-500">
+                Gunakan ini kalau email pertama tidak sampai.
+              </p>
+            </div>
+          )}
 
           {error && <p className="text-sm text-red-600">{error}</p>}
 

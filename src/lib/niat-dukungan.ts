@@ -70,6 +70,18 @@ export function putuskanBatasDukunganAdminHarian(jumlahSaatIni: number): HasilKe
 }
 
 /**
+ * Slice "persetujuan-dukungan" (6e) — status AWAL dokumen niat_dukungan
+ * saat POST /api/dukungan/niat membuatnya (dan HANYA di situ — dokumen
+ * yang sudah ada tidak pernah dibuat ulang lewat sini). Murni dari
+ * dukungan.perluPersetujuan kegiatan ini; diekstrak jadi fungsi murni
+ * (dipakai satu baris di route itu) supaya bisa diuji tanpa Firestore,
+ * sama pola dengan putuskan*() lain di berkas ini.
+ */
+export function tentukanStatusAwalNiat(perluPersetujuan: boolean): StatusNiatDukungan {
+  return perluPersetujuan ? "menunggu" : "tercatat";
+}
+
+/**
  * ID dokumen DETERMINISTIK untuk niat_dukungan/{id} — "sudah pernah mengisi
  * atau belum" dijawab dengan SATU pembacaan dokumen (tx.get()/doc().get()),
  * bukan query — hemat kuota baca Spark, dan tidak ada bentuk query yang
@@ -87,7 +99,7 @@ export function idNiatDukungan(kegiatanId: string, uid: string): string {
 }
 
 function isStatusNiatDukungan(value: unknown): value is StatusNiatDukungan {
-  return value === "tercatat" || value === "terkirim" || value === "gagal";
+  return value === "tercatat" || value === "menunggu" || value === "terkirim" || value === "gagal";
 }
 
 function isDibuatOlehNiatDukungan(value: unknown): value is DibuatOlehNiatDukungan {

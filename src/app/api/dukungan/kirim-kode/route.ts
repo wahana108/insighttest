@@ -37,6 +37,17 @@ const BATAS_KIRIM_KODE_PER_HARI = 5;
  * Klien (halaman formulir) yang memutuskan kapan memanggil ulang endpoint
  * ini secara otomatis vs menampilkan status yang sudah diketahui tanpa
  * memanggil lagi.
+ *
+ * PENGECUALIAN (Slice "persetujuan-dukungan" 6e): kalau kegiatan ini
+ * dukungan.perluPersetujuan true DAN status dokumen MASIH 'menunggu' (belum
+ * pernah disetujui admin), route ini MENOLAK 403 — penegakan WAJIB di
+ * server, bukan sekadar menyembunyikan tombol di klien, karena permintaan
+ * langsung ke endpoint ini (tanpa lewat UI) tetap harus tunduk pada aturan
+ * yang sama. Kode hanya bisa dikirim untuk dokumen 'menunggu' lewat POST
+ * /api/dukungan/setujui (admin/panitia). Begitu status sudah pernah
+ * 'terkirim' (persetujuan pertama sudah terjadi), pemanggilan berikutnya ke
+ * endpoint INI kembali diizinkan seperti biasa (mode otomatis) — larangan
+ * ini HANYA berlaku selama status persis 'menunggu'.
  */
 export async function POST(request: Request) {
   try {
@@ -65,6 +76,24 @@ export async function POST(request: Request) {
     }
     const niatData = niatSnap.data() ?? {};
 
+    const kegiatanSnap = await db.collection("kegiatan").doc(kegiatanId).get();
+    const dukunganRaw =
+      kegiatanSnap.exists &&
+      typeof kegiatanSnap.data()?.dukungan === "object" &&
+      kegiatanSnap.data()!.dukungan !== null
+        ? (kegiatanSnap.data()!.dukungan as Record<string, unknown>)
+        : {};
+    const perluPersetujuan = dukunganRaw.perluPersetujuan === true;
+    // PENEGAKAN WAJIB DI SERVER (lihat komentar berkas di atas) — ditolak
+    // SEBELUM pemeriksaan batas harian di bawah, supaya percobaan yang
+    // ditolak di sini tidak ikut memakan kuota kirim.
+    if (perluPersetujuan && niatData.status === "menunggu") {
+      throw new DukunganKirimKodeRouteError(
+        403,
+        "Permintaan Anda sedang menunggu konfirmasi admin. Kode akan dikirim ke email Anda setelah disetujui."
+      );
+    }
+
     // Field diberi awalan "dukunganKirimKode_" — batas 5/hari ini TIDAK
     // berbagi angka dengan batas email uji (5/hari, Slice 6a) maupun
     // pembuatan catatan niat dukungan (5/hari, POST /api/dukungan/niat),
@@ -85,7 +114,6 @@ export async function POST(request: Request) {
       );
     }
 
-    const kegiatanSnap = await db.collection("kegiatan").doc(kegiatanId).get();
     const judulKegiatan =
       kegiatanSnap.exists && typeof kegiatanSnap.data()?.judul === "string"
         ? (kegiatanSnap.data()!.judul as string)

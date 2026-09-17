@@ -17,8 +17,20 @@ const LABEL_DIBUAT_OLEH: Record<string, string> = {
 };
 
 const LABEL_STATUS: Record<string, string> = {
+  tercatat: "Tercatat",
+  // Slice "persetujuan-dukungan" (6e) — penanda jelas untuk baris yang
+  // menunggu admin menekan "Kirim kode" (lihat WARNA_STATUS di bawah untuk
+  // warnanya).
+  menunggu: "Menunggu persetujuan",
   terkirim: "Terkirim",
   gagal: "Gagal",
+};
+
+const WARNA_STATUS: Record<string, string> = {
+  tercatat: "text-zinc-500 dark:text-zinc-400",
+  menunggu: "text-amber-600 font-medium",
+  terkirim: "text-green-600",
+  gagal: "text-red-600",
 };
 
 /**
@@ -63,6 +75,10 @@ export default function AdminDukunganPage({
   // dimuat untuk tabel di bawah (tidak lewat route server terpisah): tidak
   // ada data baru yang dibutuhkan selain yang sudah ada di halaman ini.
   const [mengunduhImpor, setMengunduhImpor] = useState(false);
+  // Slice "persetujuan-dukungan" (6e) — id niat_dukungan yang SEDANG diproses
+  // POST /api/dukungan/setujui, null kalau tidak ada. Dipakai menonaktifkan
+  // tombol "Kirim kode" baris itu saja, bukan seluruh tabel.
+  const [menyetujui, setMenyetujui] = useState<string | null>(null);
 
   const muat = useCallback(() => {
     fetchWithAuth(`/api/admin/kegiatan/${encodeURIComponent(kegiatanId)}/dukungan`)
@@ -149,6 +165,47 @@ export default function AdminDukunganPage({
     }
   }
 
+  /**
+   * Slice "persetujuan-dukungan" (6e) — tombol "Kirim kode" pada baris
+   * berstatus 'menunggu'. Setelah sukses, baris ini diperbarui LANGSUNG di
+   * state lokal (bukan muat() ulang seluruh daftar) — perubahan yang
+   * relevan (status, alasanGagal, dikirimPada, jumlahKirim) sudah diketahui
+   * dari respons route ini sendiri.
+   */
+  async function handleSetujui(item: NiatDukungan) {
+    setError(null);
+    setMenyetujui(item.id);
+    try {
+      const res = await fetchWithAuth("/api/dukungan/setujui", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kegiatanId, uid: item.uid }),
+      });
+      const body = await res.json();
+      if (!res.ok) {
+        throw new Error(typeof body?.error === "string" ? body.error : "Gagal mengirim kode.");
+      }
+      const now = new Date().toISOString();
+      setItems((prev) =>
+        prev.map((it) =>
+          it.id === item.id
+            ? {
+                ...it,
+                status: body.terkirim ? "terkirim" : "gagal",
+                alasanGagal: typeof body.alasanGagal === "string" ? body.alasanGagal : "",
+                dikirimPada: body.terkirim ? now : it.dikirimPada,
+                jumlahKirim: body.terkirim ? it.jumlahKirim + 1 : it.jumlahKirim,
+              }
+            : it
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Gagal mengirim kode.");
+    } finally {
+      setMenyetujui(null);
+    }
+  }
+
   return (
     <div className="max-w-4xl space-y-6">
       <div>
@@ -226,6 +283,7 @@ export default function AdminDukunganPage({
                     <th className="px-3 py-2 font-medium">Waktu</th>
                     <th className="px-3 py-2 font-medium">Dibuat oleh</th>
                     <th className="px-3 py-2 font-medium">Status</th>
+                    <th className="px-3 py-2 font-medium">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -248,15 +306,23 @@ export default function AdminDukunganPage({
                       </td>
                       <td className="px-3 py-2">
                         <span
-                          className={
-                            item.status === "terkirim"
-                              ? "text-green-600"
-                              : "text-red-600"
-                          }
+                          className={WARNA_STATUS[item.status] ?? "text-zinc-500 dark:text-zinc-400"}
                           title={item.alasanGagal || undefined}
                         >
                           {LABEL_STATUS[item.status] ?? item.status}
                         </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        {item.status === "menunggu" && (
+                          <button
+                            type="button"
+                            onClick={() => handleSetujui(item)}
+                            disabled={menyetujui === item.id}
+                            className="inline-flex min-h-9 items-center rounded border border-zinc-300 px-3 text-xs font-medium text-zinc-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+                          >
+                            {menyetujui === item.id ? "Mengirim..." : "Kirim kode"}
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

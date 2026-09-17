@@ -146,6 +146,17 @@ export interface DukunganKegiatan {
    * src/lib/akses-kegiatan.ts, dipanggil dari POST /api/pendaftaran).
    */
   wajibCatatan: boolean;
+  /**
+   * Slice "persetujuan-dukungan" (6e) — bawaan false, kegiatan lama/tanpa
+   * field ini berperilaku PERSIS seperti sebelum slice ini (KA-1). true
+   * berarti POST /api/dukungan/niat membuat dokumen berstatus 'menunggu'
+   * (bukan 'tercatat') dan POST /api/dukungan/kirim-kode menolak mengirim
+   * sendiri — kode HANYA dikirim lewat POST /api/dukungan/setujui (admin/
+   * panitia), setelah mencocokkan dengan daftar donatur. Kalau wajibCatatan
+   * DAN ini sama-sama true, putuskanCatatanDukunganWajib() juga mensyaratkan
+   * status 'terkirim', bukan cukup 'menunggu' — lihat komentar di sana.
+   */
+  perluPersetujuan: boolean;
 }
 
 export interface Kegiatan {

@@ -8,14 +8,24 @@
  */
 
 /**
- * 'tercatat' (Slice "urutan-dukungan" 6c) — status AWAL, ditulis
- * POST /api/dukungan/niat: dokumen sudah ada, kode BELUM PERNAH dicoba
- * dikirim. 'terkirim'/'gagal' hanya ditulis POST /api/dukungan/kirim-kode
- * (dan POST /api/dukungan/admin, yang masih mengirim langsung saat
- * membuat) — kode baru dibaca/dikirim di sana, tidak lagi saat formulir
- * pertama kali disimpan.
+ * 'tercatat' (Slice "urutan-dukungan" 6c) — status AWAL kalau kegiatan
+ * TIDAK mensyaratkan persetujuan (dukungan.perluPersetujuan false): dokumen
+ * sudah ada, kode BELUM PERNAH dicoba dikirim, peserta boleh memanggil POST
+ * /api/dukungan/kirim-kode sendiri.
+ *
+ * 'menunggu' (Slice "persetujuan-dukungan" 6e) — status AWAL kalau
+ * dukungan.perluPersetujuan true: POST /api/dukungan/kirim-kode MENOLAK
+ * (403) selama status masih ini — kode hanya bisa dikirim admin/panitia
+ * lewat POST /api/dukungan/setujui, setelah mencocokkan dengan daftar
+ * donatur. Satu-satunya jalan keluar dari 'menunggu' adalah 'terkirim'
+ * (lewat /setujui) — tidak pernah otomatis berubah sendiri.
+ *
+ * 'terkirim'/'gagal' hanya ditulis POST /api/dukungan/kirim-kode, POST
+ * /api/dukungan/setujui, dan POST /api/dukungan/admin (yang masih mengirim
+ * langsung saat membuat) — kode baru dibaca/dikirim di sana, tidak lagi
+ * saat formulir pertama kali disimpan.
  */
-export type StatusNiatDukungan = "tercatat" | "terkirim" | "gagal";
+export type StatusNiatDukungan = "tercatat" | "menunggu" | "terkirim" | "gagal";
 
 /**
  * 'sendiri' — dibuat lewat POST /api/dukungan/niat oleh peserta sendiri.
