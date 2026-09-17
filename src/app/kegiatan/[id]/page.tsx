@@ -588,6 +588,19 @@ export default function KegiatanDetailPage({
                 </p>
               </div>
             )}
+            {kegiatan.dukungan.aktif && (
+              <div className="space-y-2 rounded border border-zinc-200 bg-zinc-50 p-3 text-sm dark:border-zinc-800 dark:bg-zinc-900">
+                {kegiatan.dukungan.pesan && (
+                  <p className="text-zinc-700 dark:text-zinc-300">{kegiatan.dukungan.pesan}</p>
+                )}
+                <Link
+                  href={`/kegiatan/${id}/dukungan`}
+                  className="inline-flex min-h-11 items-center font-medium text-black underline dark:text-zinc-50"
+                >
+                  Isi formulir dukungan
+                </Link>
+              </div>
+            )}
             {kuotaPenuh && (
               <p className="text-sm text-red-600">Kuota peserta kegiatan ini sudah penuh.</p>
             )}

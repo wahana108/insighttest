@@ -1,6 +1,11 @@
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { buatModulSnapshot } from "@/lib/api/pendaftaran-server";
-import { mapCaraMasuk, putuskanAksesMandiri, putuskanBatasPemakaianKode } from "@/lib/akses-kegiatan";
+import {
+  mapCaraMasuk,
+  putuskanAksesMandiri,
+  putuskanBatasPemakaianKode,
+  putuskanCatatanDukunganWajib,
+} from "@/lib/akses-kegiatan";
 import { getAdminDb } from "@/lib/firebase/admin";
 import { mapFormulirPeserta, periksaFormulirPeserta } from "@/lib/formulir-peserta";
 import {
@@ -8,6 +13,7 @@ import {
   putuskanKuotaKegiatan,
   tanggalJakarta,
 } from "@/lib/kuota-peserta";
+import { idNiatDukungan } from "@/lib/niat-dukungan";
 
 class PendaftaranRouteError extends Error {
   status: number;
@@ -176,6 +182,29 @@ export async function POST(request: Request) {
       const jumlahDipakaiBaru = jumlahDipakaiSaatIni + 1;
       const hasilBatasPemakaianKode = putuskanBatasPemakaianKode(kodeMaksPakai, jumlahDipakaiBaru);
 
+      // Slice "niat-dukungan" (6b) — dukungan.wajibCatatan bawaan false
+      // (KA-1): kegiatan lama/tanpa peta dukungan sama sekali berperilaku
+      // PERSIS seperti sebelum slice ini, putuskanCatatanDukunganWajib()
+      // langsung lolos tanpa pernah membaca niat_dukungan. Hanya kalau
+      // true, satu pembacaan tambahan (deterministik lewat idNiatDukungan(),
+      // bukan query) dilakukan DI DALAM transaksi yang sama.
+      const dukunganData =
+        typeof kegiatanData.dukungan === "object" && kegiatanData.dukungan !== null
+          ? (kegiatanData.dukungan as Record<string, unknown>)
+          : {};
+      const wajibCatatanDukungan = dukunganData.wajibCatatan === true;
+      let punyaCatatanDukungan = true;
+      if (wajibCatatanDukungan) {
+        const niatSnap = await tx.get(
+          db.collection("niat_dukungan").doc(idNiatDukungan(kegiatanId, user.uid))
+        );
+        punyaCatatanDukungan = niatSnap.exists;
+      }
+      const hasilCatatanDukungan = putuskanCatatanDukunganWajib({
+        wajibCatatan: wajibCatatanDukungan,
+        punyaCatatan: punyaCatatanDukungan,
+      });
+
       const keputusanAkses = putuskanAksesMandiri({
         caraMasuk,
         kodeDimasukkan: kodeAksesInput,
@@ -183,6 +212,7 @@ export async function POST(request: Request) {
         hasilKuotaKegiatan: hasilKuota,
         hasilBatasHarian,
         hasilBatasPemakaianKode,
+        hasilCatatanDukungan,
       });
       if (!keputusanAkses.ok) {
         throw new PendaftaranRouteError(

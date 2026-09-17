@@ -33,3 +33,43 @@ export function templatEmailUji(namaPenerima: string): TemplatEmail {
   ].join("");
   return { subjek, isiTeks, isiHtml };
 }
+
+/**
+ * Slice "niat-dukungan" (6b) — dikirim POST /api/dukungan/niat dan POST
+ * /api/dukungan/kirim-ulang setelah kirimEmail() dipanggil, ATAU
+ * dipersiapkan sebelum panggilan itu — fungsi murni ini sendiri tidak
+ * pernah tahu apakah pengirimannya sukses.
+ *
+ * Parameter SENGAJA hanya tiga: nama penerima, judul kegiatan, kode akses
+ * — TIDAK ADA data peserta lain (bukan daftar penerima, bukan data
+ * pendaftar lain) yang bisa ikut bocor lewat templat ini, karena memang
+ * tidak pernah dioper ke sini sama sekali.
+ */
+export function templatEmailKodeAkses(
+  namaPenerima: string,
+  judulKegiatan: string,
+  kodeAkses: string
+): TemplatEmail {
+  const nama = namaPenerima.trim() || "Pendukung";
+  const judul = judulKegiatan.trim() || "kegiatan ini";
+  const subjek = `Kode akses untuk ${judul}`;
+  const isiTeks = [
+    `Halo ${nama},`,
+    "",
+    `Terima kasih atas dukungan Anda untuk ${judul}. Berikut kode akses untuk mendaftar:`,
+    "",
+    kodeAkses,
+    "",
+    "Masukkan kode ini persis seperti tertulis di atas pada formulir pendaftaran kegiatan.",
+    "",
+    "Simpan email ini — kode akses tidak ditampilkan ulang di halaman mana pun.",
+  ].join("\n");
+  const isiHtml = [
+    `<p>Halo ${nama},</p>`,
+    `<p>Terima kasih atas dukungan Anda untuk <strong>${judul}</strong>. Berikut kode akses untuk mendaftar:</p>`,
+    `<p style="font-size:1.25em;font-weight:bold;letter-spacing:0.05em;">${kodeAkses}</p>`,
+    "<p>Masukkan kode ini persis seperti tertulis di atas pada formulir pendaftaran kegiatan.</p>",
+    "<p>Simpan email ini — kode akses tidak ditampilkan ulang di halaman mana pun.</p>",
+  ].join("");
+  return { subjek, isiTeks, isiHtml };
+}

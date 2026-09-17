@@ -38,6 +38,7 @@ import { verifikasiGameCcl } from "@/lib/verifikasi-atestasi-client";
 import { ekstrakYoutubeId } from "@/lib/youtube";
 import type {
   CaraMasukKegiatan,
+  DukunganKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   KategoriModul,
@@ -95,6 +96,7 @@ interface KegiatanFormState {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
   caraMasuk: CaraMasukKegiatan;
+  dukungan: DukunganKegiatan;
   urlGambar: string;
   penafsiranHasil: string;
 }
@@ -765,6 +767,7 @@ export default function AdminKegiatanDetailPage({
           formulirPeserta: kegiatan.formulirPeserta,
           kuotaPeserta: String(kegiatan.kuotaPeserta),
           caraMasuk: kegiatan.caraMasuk,
+          dukungan: kegiatan.dukungan,
           urlGambar: kegiatan.urlGambar,
           penafsiranHasil: kegiatan.penafsiranHasil,
         }
@@ -822,6 +825,22 @@ export default function AdminKegiatanDetailPage({
         return;
       }
     }
+    // Slice "niat-dukungan" (6b) — urlSaweria BUKAN gambar, jadi
+    // periksaUrlGambar() (memeriksa ekstensi berkas dkk.) tidak cocok di
+    // sini — cukup dipastikan https:// (satu-satunya syarat yang diminta).
+    const urlSaweriaTrim = editingKegiatanForm.dukungan.urlSaweria.trim();
+    if (urlSaweriaTrim) {
+      let protokolSaweriaValid = false;
+      try {
+        protokolSaweriaValid = new URL(urlSaweriaTrim).protocol === "https:";
+      } catch {
+        protokolSaweriaValid = false;
+      }
+      if (!protokolSaweriaValid) {
+        setKegiatanError("URL Saweria: harus tautan https:// yang sah.");
+        return;
+      }
+    }
 
     setSavingKegiatan(true);
     try {
@@ -849,6 +868,7 @@ export default function AdminKegiatanDetailPage({
         formulirPeserta: editingKegiatanForm.formulirPeserta,
         kuotaPeserta: Number(editingKegiatanForm.kuotaPeserta) || 0,
         caraMasuk: editingKegiatanForm.caraMasuk,
+        dukungan: editingKegiatanForm.dukungan,
         urlGambar: editingKegiatanForm.urlGambar,
         penafsiranHasil: editingKegiatanForm.penafsiranHasil,
       };
@@ -1621,6 +1641,111 @@ export default function AdminKegiatanDetailPage({
               {editingKegiatanForm.caraMasuk === "kode" && (
                 <KodeAksesKegiatan kegiatanId={id} />
               )}
+            </div>
+
+            <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                    Dukungan (formulir niat)
+                  </p>
+                  <p className="mt-1 text-xs text-zinc-500">
+                    Slice &quot;niat-dukungan&quot; — peserta mengisi formulir niat dukungan di
+                    halaman kegiatan, lalu kode akses dikirim ke email akun mereka sendiri.
+                  </p>
+                </div>
+                <Link
+                  href={`/admin/kegiatan/${id}/dukungan`}
+                  className="shrink-0 rounded border border-zinc-300 px-3 py-2 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:text-zinc-300"
+                >
+                  Daftar dukungan
+                </Link>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editingKegiatanForm.dukungan.aktif}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      dukungan: { ...editingKegiatanForm.dukungan, aktif: event.target.checked },
+                    })
+                  }
+                />
+                Aktifkan formulir dukungan
+              </label>
+              <div>
+                <label
+                  htmlFor="det-dukungan-url-saweria"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  URL Saweria (atau tautan donasi lain)
+                </label>
+                <input
+                  id="det-dukungan-url-saweria"
+                  type="url"
+                  placeholder="https://saweria.co/namaAnda"
+                  value={editingKegiatanForm.dukungan.urlSaweria}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      dukungan: { ...editingKegiatanForm.dukungan, urlSaweria: event.target.value },
+                    })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  TIDAK ditampilkan di halaman kegiatan — hanya muncul setelah peserta mengirim
+                  formulir.
+                </p>
+              </div>
+              <div>
+                <label
+                  htmlFor="det-dukungan-pesan"
+                  className="block text-sm font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Pesan
+                </label>
+                <textarea
+                  id="det-dukungan-pesan"
+                  rows={2}
+                  placeholder="Dukung kegiatan ini lewat Saweria, lalu isi formulir untuk mendapat kode akses."
+                  value={editingKegiatanForm.dukungan.pesan}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      dukungan: { ...editingKegiatanForm.dukungan, pesan: event.target.value },
+                    })
+                  }
+                  className="mt-1 w-full rounded border border-zinc-300 px-3 py-2 text-sm text-black dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-50"
+                />
+                <p className="mt-1 text-xs text-zinc-500">
+                  Tampil di blok dukungan pada halaman kegiatan, dan lagi setelah formulir
+                  dikirim.
+                </p>
+              </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editingKegiatanForm.dukungan.wajibCatatan}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      dukungan: {
+                        ...editingKegiatanForm.dukungan,
+                        wajibCatatan: event.target.checked,
+                      },
+                    })
+                  }
+                />
+                Wajibkan formulir sebelum kode akses berlaku
+              </label>
+              <p className="text-xs text-zinc-500">
+                Kalau dinyalakan: kode akses yang benar TIDAK CUKUP untuk mendaftar mandiri —
+                peserta wajib mengisi formulir dukungan pada kegiatan ini dulu (sekali per
+                akun). Kalau dimatikan (bawaan): kode yang benar langsung berlaku, persis
+                seperti sebelum fitur dukungan ada.
+              </p>
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">

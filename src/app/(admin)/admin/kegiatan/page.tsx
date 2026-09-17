@@ -15,6 +15,7 @@ import { useModulList } from "@/lib/hooks/use-modul-list";
 import { izinPanitia } from "@/lib/izin-panitia";
 import {
   createKegiatan,
+  DUKUNGAN_KEGIATAN_KOSONG,
   setKegiatanArchived,
   setKegiatanPublished,
   TEMPLATE_SERTIFIKAT_KOSONG,
@@ -23,6 +24,7 @@ import {
 } from "@/lib/services/kegiatan";
 import type {
   CaraMasukKegiatan,
+  DukunganKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   Kegiatan,
@@ -55,6 +57,7 @@ interface FormState {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: string;
   caraMasuk: CaraMasukKegiatan;
+  dukungan: DukunganKegiatan;
   urlGambar: string;
   penafsiranHasil: string;
 }
@@ -80,6 +83,9 @@ function emptyForm(): FormState {
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
     kuotaPeserta: "0",
     caraMasuk: "terbuka",
+    // Slice "niat-dukungan" — disunting di /admin/kegiatan/[id], bukan di
+    // sini — sama seperti templateSertifikat/formulirPeserta di atas.
+    dukungan: DUKUNGAN_KEGIATAN_KOSONG,
     // Slice "gambar-soal" — disunting di /admin/kegiatan/[id], bukan di
     // sini — sama seperti templateSertifikat/formulirPeserta di atas.
     urlGambar: "",
@@ -161,6 +167,9 @@ export default function AdminKegiatanPage() {
       formulirPeserta: kegiatan.formulirPeserta,
       kuotaPeserta: String(kegiatan.kuotaPeserta),
       caraMasuk: kegiatan.caraMasuk,
+      // Slice "niat-dukungan" — sama seperti templateSertifikat: disunting
+      // di /admin/kegiatan/[id].
+      dukungan: kegiatan.dukungan,
       // Slice "gambar-soal" — sampul kegiatan, sama seperti
       // templateSertifikat: disunting di /admin/kegiatan/[id].
       urlGambar: kegiatan.urlGambar,
@@ -196,6 +205,7 @@ export default function AdminKegiatanPage() {
         formulirPeserta: form.formulirPeserta,
         kuotaPeserta: Number(form.kuotaPeserta) || 0,
         caraMasuk: form.caraMasuk,
+        dukungan: form.dukungan,
         urlGambar: form.urlGambar,
         penafsiranHasil: form.penafsiranHasil,
       };

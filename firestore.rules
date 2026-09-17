@@ -76,7 +76,12 @@ service cloud.firestore {
     // tidak pernah ke /s/[kode], cetak, atau rekap. (Slice "gambar-soal",
     // docs/kickoff.md §S "Slice 7") urlGambar — sampul kegiatan, LIVE seperti
     // templateSertifikat.logoUrl/kopUrl, KA-8 (URL saja, tidak pernah
-    // diunggah). updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
+    // diunggah). (Slice "niat-dukungan", 6b) dukungan — SATU peta
+    // { aktif, urlSaweria, pesan, wajibCatatan } dihitung SATU kunci tingkat
+    // atas di sini walau isinya empat field — kodeAkses ITU SENDIRI tetap
+    // TIDAK PERNAH di sini (lihat kegiatan_kode/{id} di bawah), dan dokumen
+    // niat_dukungan/{id} (di bawah) server-only sama sekali, terpisah dari
+    // dokumen kegiatan ini. updatedAt/updatedBy ikut karena updateKegiatan() SELALU menulis
     // keduanya bersama field lain. TIDAK PERNAH menambah kode, isPublished,
     // isArchived, nomorUrutTerakhir, panitiaUids, atau panitiaIzin di sini —
     // itu justru maksudnya: apa pun yang tidak disebut secara eksplisit di
@@ -88,7 +93,7 @@ service cloud.firestore {
       return [
         'judul', 'deskripsi', 'dibukaPada', 'ditutupPada',
         'syaratSertifikat', 'templateSertifikat', 'formulirPeserta',
-        'kuotaPeserta', 'caraMasuk', 'urlGambar', 'penafsiranHasil',
+        'kuotaPeserta', 'caraMasuk', 'urlGambar', 'dukungan', 'penafsiranHasil',
         'updatedAt', 'updatedBy'
       ];
     }
@@ -401,15 +406,24 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
-    // kuota_email/{tanggal}: penghitung email uji per akun per hari (Slice
-    // "email-brevo" 6a) — id dokumen = tanggal Asia/Jakarta (YYYY-MM-DD,
-    // sama seperti kuota_harian di atas), isi {uid: jumlah}. SERVER SAJA,
-    // tanpa kecuali — TERMASUK admin, sama semangatnya dengan kegiatan_kode
-    // di bawah: tidak ada alasan operasional apa pun bagi client SDK
-    // menyentuhnya, dan yang perlu dilihat admin (hasil kirim, sisa kuota)
-    // sudah dikembalikan langsung oleh POST /api/email/uji, bukan dibaca
-    // ulang dari sini. Dinaikkan Admin SDK di dalam transaksi terpisah
-    // SETELAH pengiriman Brevo sukses — lihat src/app/api/email/uji/route.ts.
+    // kuota_email/{tanggal}: penghitung pengiriman email per akun per hari
+    // — id dokumen = tanggal Asia/Jakarta (YYYY-MM-DD, sama seperti
+    // kuota_harian di atas). SATU dokumen dipakai BERSAMA oleh beberapa
+    // tujuan berbeda (Slice "email-brevo" 6a: email uji, {uid: jumlah};
+    // Slice "niat-dukungan" 6b: pengiriman awal kode dukungan dan kirim
+    // ulang) — dipisah lewat AWALAN pada nama field, bukan {uid: jumlah}
+    // polos untuk semuanya, supaya batas 5/hari punya email uji TIDAK
+    // ikut terpakai oleh batas 3/hari kirim ulang kode dukungan atau
+    // sebaliknya. Lihat pemanggilnya masing-masing:
+    // src/app/api/email/uji/route.ts, src/app/api/dukungan/niat/route.ts,
+    // src/app/api/dukungan/kirim-ulang/route.ts.
+    //
+    // SERVER SAJA, tanpa kecuali — TERMASUK admin, sama semangatnya dengan
+    // kegiatan_kode di bawah: tidak ada alasan operasional apa pun bagi
+    // client SDK menyentuhnya, dan yang perlu dilihat pemanggil (hasil
+    // kirim, sisa kuota) sudah dikembalikan langsung oleh Route Handler
+    // yang bersangkutan, bukan dibaca ulang dari sini. Dinaikkan Admin SDK
+    // di dalam transaksi terpisah SETELAH pengiriman Brevo sukses.
     match /kuota_email/{tanggal} {
       allow read, write: if false;
     }
@@ -429,6 +443,20 @@ service cloud.firestore {
     // bukan lewat client SDK sama sekali — lihat
     // src/app/api/admin/kegiatan/[kegiatanId]/kode-akses/route.ts.
     match /kegiatan_kode/{kegiatanId} {
+      allow read, write: if false;
+    }
+
+    // niat_dukungan/{kegiatanId}__{uid}: satu pengajuan formulir dukungan
+    // (Slice "niat-dukungan" 6b) — id DETERMINISTIK (idNiatDukungan(),
+    // src/lib/niat-dukungan.ts) supaya "sudah pernah mengisi atau belum"
+    // dijawab dengan satu get(), bukan query — tidak ada bentuk query yang
+    // perlu diizinkan di sini sama sekali. SERVER SAJA, tanpa kecuali —
+    // TERMASUK admin, sama semangatnya dengan kegiatan_kode di atas:
+    // dokumen ini memuat email/nominal/catatan peserta, admin melihatnya
+    // lewat GET /api/admin/kegiatan/[kegiatanId]/dukungan (Admin SDK), bukan
+    // client SDK sama sekali. Ditulis dari POST /api/dukungan/{niat,admin},
+    // dibaca (untuk gerbang kode akses) dari POST /api/pendaftaran.
+    match /niat_dukungan/{id} {
       allow read, write: if false;
     }
 

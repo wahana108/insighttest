@@ -44,6 +44,12 @@ const BATAS_PEMAKAIAN_KODE_TERCAPAI: HasilKeputusanKuota = {
   ok: false,
   pesan: "Kode ini sudah mencapai batas pemakaiannya.",
 };
+// Slice "niat-dukungan" (6b) — kasus-kasus khusus hasilCatatanDukungan
+// sendiri (wajibCatatan true/false, punya/tidak punya catatan) diuji
+// tersendiri di scripts/uji-niat-dukungan.ts; di sini cukup nilai OK supaya
+// tidak ikut mempengaruhi skenario yang sedang diuji (kuota/batas harian/
+// batas pemakaian kode).
+const HASIL_CATATAN_DUKUNGAN_OK: HasilKeputusanKuota = { ok: true, pesan: null };
 
 uji("terbuka + kuota kegiatan penuh → DITOLAK", () => {
   const hasil = putuskanAksesMandiri({
@@ -53,6 +59,7 @@ uji("terbuka + kuota kegiatan penuh → DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_PENUH,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota peserta kegiatan ini sudah penuh.");
@@ -66,6 +73,7 @@ uji("terbuka + batas harian penuh → DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_PENUH,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota pendaftaran hari ini sudah penuh. Coba lagi besok.");
@@ -79,6 +87,7 @@ uji("kode + kode benar + batas harian penuh → LOLOS (melewati batas harian)", 
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_PENUH,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, true, `Diharapkan lolos, dapat ditolak: ${hasil.pesan}`);
 });
@@ -91,6 +100,7 @@ uji("kode + kode benar + kuota kegiatan penuh → DITOLAK (tetap terikat kuota k
     hasilKuotaKegiatan: KUOTA_PENUH,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kuota peserta kegiatan ini sudah penuh.");
@@ -104,6 +114,7 @@ uji("kode + kode salah → DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -117,6 +128,7 @@ uji("kode + kode kosong → DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -130,6 +142,7 @@ uji("kode + kegiatan_kode belum pernah diisi admin (kodeTersimpan null) → DITO
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
 });
@@ -142,6 +155,7 @@ uji("kode dengan spasi dan huruf kecil → tetap cocok setelah dinormalkan", () 
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, true, `Diharapkan lolos setelah normalisasi, dapat ditolak: ${hasil.pesan}`);
 });
@@ -154,6 +168,7 @@ uji("hanya_admin + pendaftaran mandiri → DITOLAK", () => {
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.match(hasil.pesan ?? "", /admin/i);
@@ -170,6 +185,7 @@ uji("kegiatan lama tanpa field caraMasuk (mapCaraMasuk(undefined)) → diperlaku
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_OK,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, true, "kegiatan lama harus berperilaku persis 'terbuka'");
 });
@@ -236,6 +252,7 @@ uji("kode + kode benar + batas pemakaian kode tercapai → DITOLAK dengan pesan 
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode ini sudah mencapai batas pemakaiannya.");
@@ -249,6 +266,7 @@ uji("kode + kode salah + batas pemakaian kode SUDAH tercapai → tetap pesan 'ko
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode akses salah atau belum diisi.");
@@ -262,6 +280,7 @@ uji("kode + kode benar + batas pemakaian kode tercapai DAN kuota kegiatan penuh 
     hasilKuotaKegiatan: KUOTA_PENUH,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, false);
   assert.equal(hasil.pesan, "Kode ini sudah mencapai batas pemakaiannya.");
@@ -275,6 +294,7 @@ uji("terbuka + hasilBatasPemakaianKode tercapai (diabaikan untuk caraMasuk 'terb
     hasilKuotaKegiatan: KUOTA_OK,
     hasilBatasHarian: BATAS_HARIAN_OK,
     hasilBatasPemakaianKode: BATAS_PEMAKAIAN_KODE_TERCAPAI,
+    hasilCatatanDukungan: HASIL_CATATAN_DUKUNGAN_OK,
   });
   assert.equal(hasil.ok, true, `hasilBatasPemakaianKode hanya relevan untuk caraMasuk 'kode': ${hasil.pesan}`);
 });

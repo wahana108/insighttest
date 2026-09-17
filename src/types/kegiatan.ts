@@ -120,6 +120,34 @@ export interface FormulirPeserta {
 
 export type CaraMasukKegiatan = "terbuka" | "kode" | "hanya_admin";
 
+/**
+ * Slice "niat-dukungan" (6b) — formulir niat dukungan per kegiatan, satu
+ * peta ini adalah SATU kunci tingkat atas pada dokumen kegiatan (bukan
+ * empat field terpisah) — WAJIB ada di panitiaKegiatanKunciDiizinkan()
+ * (firestore.rules), tapi cuma SATU entri, bukan empat, karena hasOnly()
+ * menghitung per kunci tingkat atas.
+ *
+ * Kosong/tidak ada field ini sama sekali pada kegiatan lama HARUS berjalan
+ * persis seperti sebelum slice ini — mapDukungan() (src/lib/services/kegiatan.ts)
+ * memetakan itu ke { aktif: false, urlSaweria: "", pesan: "",
+ * wajibCatatan: false } (KA-1), bukan galat.
+ */
+export interface DukunganKegiatan {
+  /** Bawaan false — formulir dukungan tidak tampil sama sekali kalau ini false. */
+  aktif: boolean;
+  /** Divalidasi https:// di form admin (src/app/(admin)/admin/kegiatan/[id]/page.tsx) — TIDAK PERNAH dirender ke peserta sebelum formulir dikirim. */
+  urlSaweria: string;
+  /** Ditampilkan di halaman kegiatan (blok dukungan) DAN di layar setelah formulir dikirim. */
+  pesan: string;
+  /**
+   * Bawaan false. true berarti kode akses yang benar TIDAK CUKUP untuk
+   * mendaftar mandiri — WAJIB juga sudah ada dokumen
+   * niat_dukungan/{kegiatanId}__{uid} (lihat putuskanCatatanDukunganWajib(),
+   * src/lib/akses-kegiatan.ts, dipanggil dari POST /api/pendaftaran).
+   */
+  wajibCatatan: boolean;
+}
+
 export interface Kegiatan {
   id: string;
   /** Menyusun nomor serial sertifikat — lihat §10, docs/arsitektur.md. */
@@ -161,6 +189,8 @@ export interface Kegiatan {
    * dipakai katalog — lihat komentar bolehTampilDiKatalog()).
    */
   caraMasuk: CaraMasukKegiatan;
+  /** Slice "niat-dukungan" (6b) — lihat DukunganKegiatan di atas. */
+  dukungan: DukunganKegiatan;
   /**
    * Slice "gambar-soal" (docs/kickoff.md §S "Slice 7") — sampul kegiatan,
    * opsional, kosong berarti tidak ada gambar (KA-1). LIVE, dibaca langsung

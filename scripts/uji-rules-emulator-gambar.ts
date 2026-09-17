@@ -25,7 +25,11 @@ import { getAdminAuth, getAdminDb } from "../src/lib/firebase/admin";
 import { auth as clientAuth, db as clientDb } from "../src/lib/firebase/client";
 import { createSoal, getKunciSoal, updateSoal } from "../src/lib/services/soal";
 import { FORMULIR_PESERTA_DEFAULT } from "../src/lib/formulir-peserta";
-import { TEMPLATE_SERTIFIKAT_KOSONG, updateKegiatan } from "../src/lib/services/kegiatan";
+import {
+  DUKUNGAN_KEGIATAN_KOSONG,
+  TEMPLATE_SERTIFIKAT_KOSONG,
+  updateKegiatan,
+} from "../src/lib/services/kegiatan";
 import type { KegiatanWriteInput } from "../src/lib/services/kegiatan";
 import type { SoalWriteInput } from "../src/lib/services/soal";
 
@@ -155,6 +159,7 @@ async function main() {
     formulirPeserta: FORMULIR_PESERTA_DEFAULT,
     kuotaPeserta: 0,
     caraMasuk: "terbuka",
+    dukungan: DUKUNGAN_KEGIATAN_KOSONG,
     penafsiranHasil: "",
   };
 

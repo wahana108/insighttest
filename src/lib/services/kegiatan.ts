@@ -17,6 +17,7 @@ import { mapCaraMasuk } from "@/lib/akses-kegiatan";
 import { mapFormulirPeserta } from "@/lib/formulir-peserta";
 import type {
   CaraMasukKegiatan,
+  DukunganKegiatan,
   FormulirPeserta,
   JenisSyaratSertifikat,
   Kegiatan,
@@ -32,6 +33,14 @@ export const TEMPLATE_SERTIFIKAT_KOSONG: TemplateSertifikat = {
   penandatanganJabatan: "",
   tandaTanganUrl: "",
   teksTambahan: "",
+};
+
+/** Slice "niat-dukungan" (6b) — bawaan: fitur mati, sama seperti kegiatan lama tanpa field ini sama sekali. */
+export const DUKUNGAN_KEGIATAN_KOSONG: DukunganKegiatan = {
+  aktif: false,
+  urlSaweria: "",
+  pesan: "",
+  wajibCatatan: false,
 };
 
 export class KegiatanError extends Error {
@@ -108,6 +117,25 @@ function mapTemplateSertifikat(value: unknown): TemplateSertifikat {
   };
 }
 
+function mapDukungan(value: unknown): DukunganKegiatan {
+  const data = typeof value === "object" && value !== null ? (value as Record<string, unknown>) : {};
+  return {
+    aktif: data.aktif === true,
+    urlSaweria: typeof data.urlSaweria === "string" ? data.urlSaweria : "",
+    pesan: typeof data.pesan === "string" ? data.pesan : "",
+    wajibCatatan: data.wajibCatatan === true,
+  };
+}
+
+function normalizeDukungan(d: DukunganKegiatan): DukunganKegiatan {
+  return {
+    aktif: d.aktif,
+    urlSaweria: d.urlSaweria.trim(),
+    pesan: d.pesan.trim(),
+    wajibCatatan: d.wajibCatatan,
+  };
+}
+
 function normalizeTemplateSertifikat(t: TemplateSertifikat): TemplateSertifikat {
   return {
     logoUrl: t.logoUrl.trim(),
@@ -167,6 +195,10 @@ export function mapKegiatan(id: string, data: DocumentData): Kegiatan {
     formulirPeserta: mapFormulirPeserta(data.formulirPeserta),
     kuotaPeserta: typeof data.kuotaPeserta === "number" ? data.kuotaPeserta : 0,
     caraMasuk: mapCaraMasuk(data.caraMasuk),
+    // Slice "niat-dukungan" — kegiatan lama tanpa field ini sama sekali
+    // dipetakan ke DUKUNGAN_KEGIATAN_KOSONG (KA-1: aktif false = perilaku
+    // persis sebelum slice ini, tidak ada blok dukungan yang tampil).
+    dukungan: mapDukungan(data.dukungan),
     // Slice "gambar-soal" — kegiatan lama tanpa field ini sama sekali
     // dibaca sebagai "" (KA-1), bukan galat.
     urlGambar: typeof data.urlGambar === "string" ? data.urlGambar : "",
@@ -193,6 +225,8 @@ export interface KegiatanWriteInput {
   formulirPeserta: FormulirPeserta;
   kuotaPeserta: number;
   caraMasuk: CaraMasukKegiatan;
+  /** Slice "niat-dukungan" — lihat DukunganKegiatan, src/types/kegiatan.ts. */
+  dukungan: DukunganKegiatan;
   /** Slice "gambar-soal" — sampul kegiatan, opsional. */
   urlGambar: string;
   penafsiranHasil: string;
@@ -276,6 +310,7 @@ export async function createKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    dukungan: normalizeDukungan(input.dukungan),
     urlGambar: input.urlGambar.trim(),
     penafsiranHasil: input.penafsiranHasil,
     nomorUrutTerakhir: 0,
@@ -314,6 +349,7 @@ export async function updateKegiatan(
     formulirPeserta: input.formulirPeserta,
     kuotaPeserta: input.kuotaPeserta,
     caraMasuk: input.caraMasuk,
+    dukungan: normalizeDukungan(input.dukungan),
     urlGambar: input.urlGambar.trim(),
     penafsiranHasil: input.penafsiranHasil,
     updatedAt: new Date().toISOString(),
