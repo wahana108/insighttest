@@ -45,10 +45,16 @@ const LABEL_STATUS: Record<StatusBarisHadir, string> = {
   duplikat_dalam_tempelan: "Duplikat dalam tempelan",
   baris_tidak_sah: "Baris tidak sah",
   data_wajib_kurang: "Data wajib kurang",
+  // Slice "lengkapi-sendiri" (6f).
+  lengkapi_sendiri: "Akan didaftarkan — peserta melengkapi sendiri",
 };
 
 function badgeClass(status: StatusBarisHadir): string {
-  if (status === "akan_dibuatkan_akun" || status === "akun_sudah_ada") {
+  if (
+    status === "akan_dibuatkan_akun" ||
+    status === "akun_sudah_ada" ||
+    status === "lengkapi_sendiri"
+  ) {
     return "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-400";
   }
   if (status === "sudah_terdaftar") {

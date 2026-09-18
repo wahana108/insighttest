@@ -145,6 +145,9 @@ export async function GET(request: Request) {
         modulSnapshot: mapModulSnapshot(data.modulSnapshot),
         referensiDibuka: mapReferensiDibuka(data.referensiDibuka),
         atestasi: mapAtestasi(data.atestasi),
+        // Slice "lengkapi-sendiri" (6f) — opsional (KA-1), lihat komentar
+        // Pendaftaran.identitasBelumLengkap.
+        identitasBelumLengkap: data.identitasBelumLengkap === true,
       };
     });
 

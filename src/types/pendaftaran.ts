@@ -101,6 +101,21 @@ export interface Pendaftaran {
    * HasilAtestasi untuk detail per field.
    */
   atestasi: Record<string, HasilAtestasi>;
+  /**
+   * Slice "lengkapi-sendiri" (6f) — OPSIONAL, ditulis TRUE hanya oleh
+   * importir daftar hadir (POST /api/admin/kegiatan/[kegiatanId]/impor-hadir),
+   * dan HANYA kalau kegiatan.formulirPeserta.bolehDilengkapiSendiri true DAN
+   * baris impor itu punya kolom wajib yang kosong. Pendaftaran mandiri
+   * TIDAK PERNAH menulis field ini (selalu undefined); pendaftaran lama
+   * juga tidak punya field ini sama sekali. Dibaca dengan default FALSE
+   * (undefined -> lengkap) — inilah pagar anti-surut: mengubah
+   * bolehDilengkapiSendiri setelahnya tidak pernah menyentuh pendaftaran
+   * yang sudah ada. Diputuskan false kembali (dan namaLengkap/institusi/
+   * nomorIdentitas/noTelepon ditulis balik dari profil) oleh
+   * tulisBalikIdentitasPendaftaran() (src/lib/api/pendaftaran-server.ts)
+   * begitu putuskanIdentitasPendaftaran() menyatakan lengkap.
+   */
+  identitasBelumLengkap?: boolean;
 }
 
 /**
@@ -162,4 +177,5 @@ export type PendaftaranRingkas = Pick<
   | "modulSnapshot"
   | "referensiDibuka"
   | "atestasi"
+  | "identitasBelumLengkap"
 >;

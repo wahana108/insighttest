@@ -251,6 +251,8 @@ export async function GET(request: Request) {
         namaLengkap: typeof data.namaLengkap === "string" ? data.namaLengkap : "",
         email: typeof data.email === "string" ? data.email : "",
         institusi: typeof data.institusi === "string" ? data.institusi : "",
+        // Slice "lengkapi-sendiri" (6f) — opsional (KA-1).
+        identitasBelumLengkap: data.identitasBelumLengkap === true,
         sumber: isSumberPendaftaran(data.sumber) ? data.sumber : "mandiri",
         nomorUrut: typeof data.nomorUrut === "number" ? data.nomorUrut : 0,
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",

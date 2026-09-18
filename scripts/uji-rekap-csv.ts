@@ -105,6 +105,7 @@ function pesertaDasar(override: Partial<RekapPesertaBaris>): RekapPesertaBaris {
     nomorIdentitas: "",
     noTelepon: "",
     identitasDariProfil: false,
+    identitasBelumLengkap: false,
     sumber: "mandiri",
     status: "terdaftar",
     nilaiAkhir: 0,
@@ -126,6 +127,7 @@ uji("susunBarisRekap: header memuat satu trio kolom per modul evaluasi dan satu 
   const [header] = susunBarisRekap(KEGIATAN, []);
   assert.deepEqual(header, [
     "No.", "Nama", "Email", "Institusi", "Nomor Identitas", "No. Telepon", "Sumber Identitas",
+    "Identitas Belum Lengkap",
     "Sumber Pendaftaran", "Status Pendaftaran", "Nilai Akhir",
     "Skor: Evaluasi Satu", "Lulus: Evaluasi Satu", "Kedaluwarsa: Evaluasi Satu",
     "Skor: Evaluasi Dua", "Lulus: Evaluasi Dua", "Kedaluwarsa: Evaluasi Dua",
@@ -139,12 +141,14 @@ uji("susunBarisRekap: header memuat satu trio kolom per modul evaluasi dan satu 
 // evaluasi — HARUS bisa dibedakan dari CSV-nya saja, tanpa membuka
 // pendaftaran mentahnya. Slice "ujian-berwaktu" menambah kolom ketiga
 // (Kedaluwarsa) per modul evaluasi, jadi tiap modul sekarang 3 kolom.
-const IDX_SKOR_EVAL_1 = 10;
-const IDX_LULUS_EVAL_1 = 11;
-const IDX_KEDALUWARSA_EVAL_1 = 12;
-const IDX_SKOR_EVAL_2 = 13;
-const IDX_LULUS_EVAL_2 = 14;
-const IDX_KEDALUWARSA_EVAL_2 = 15;
+// Slice "lengkapi-sendiri" (6f) menambah kolom "Identitas Belum Lengkap"
+// di antara kolom tetap, menggeser semua indeks di bawah ini +1.
+const IDX_SKOR_EVAL_1 = 11;
+const IDX_LULUS_EVAL_1 = 12;
+const IDX_KEDALUWARSA_EVAL_1 = 13;
+const IDX_SKOR_EVAL_2 = 14;
+const IDX_LULUS_EVAL_2 = 15;
+const IDX_KEDALUWARSA_EVAL_2 = 16;
 
 uji("susunBarisRekap: modul TIDAK ADA di modulSnapshot peserta -> sel \"-\" (bukan kosong, bukan 0)", () => {
   const peserta = pesertaDasar({
@@ -222,7 +226,7 @@ uji("susunBarisRekap: kolom atestasi untuk modul di luar snapshot -> \"-\"; di d
 
   const [, barisTanpa] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaTanpaAtestasi]);
   const [, barisBelum] = susunBarisRekap(kegiatanDenganAtestasi, [pesertaBelumTuntasAtestasi]);
-  const idxAtestasi = 10; // setelah 10 kolom tetap, kegiatan ini tidak punya modul evaluasi
+  const idxAtestasi = 11; // setelah 11 kolom tetap (6f menambah 1), kegiatan ini tidak punya modul evaluasi
   assert.equal(barisTanpa[idxAtestasi], "-", "at-1 tidak ada di snapshot peserta -> \"-\"");
   assert.equal(
     barisBelum[idxAtestasi],
@@ -301,6 +305,7 @@ uji("susunBarisRekap: sertifikat DICABUT tetap punya kode verifikasi di CSV (Sli
 const IDX_NOMOR_IDENTITAS = 4;
 const IDX_NO_TELEPON = 5;
 const IDX_SUMBER_IDENTITAS = 6;
+const IDX_IDENTITAS_BELUM_LENGKAP = 7;
 
 uji("susunBarisRekap: pendaftaran dengan field beku (identitasDariProfil=false) -> \"Dibekukan saat mendaftar\"", () => {
   const peserta = pesertaDasar({
@@ -327,6 +332,23 @@ uji("susunBarisRekap: pendaftaran lama tanpa field beku (identitasDariProfil=tru
   assert.equal(baris[IDX_NOMOR_IDENTITAS], "3201yyyy0002");
   assert.equal(baris[IDX_NO_TELEPON], "0812yyyy0002");
   assert.equal(baris[IDX_SUMBER_IDENTITAS], "Profil saat ini (belum dibekukan)");
+});
+
+// ---------------------------------------------------------------------
+// Slice "lengkapi-sendiri" (6f): kolom "Identitas Belum Lengkap" — SENGAJA
+// "Ya"/kosong (bukan "Ya"/"Tidak"), pola yang sama dengan kolom Kedaluwarsa.
+// ---------------------------------------------------------------------
+
+uji("susunBarisRekap: identitasBelumLengkap true -> kolom \"Ya\"", () => {
+  const peserta = pesertaDasar({ identitasBelumLengkap: true });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_IDENTITAS_BELUM_LENGKAP], "Ya");
+});
+
+uji("susunBarisRekap: identitasBelumLengkap false -> kolom kosong, BUKAN \"Tidak\"", () => {
+  const peserta = pesertaDasar({ identitasBelumLengkap: false });
+  const [, baris] = susunBarisRekap(KEGIATAN, [peserta]);
+  assert.equal(baris[IDX_IDENTITAS_BELUM_LENGKAP], "");
 });
 
 uji("susunBarisRekap: campuran pendaftaran beku dan lama dalam SATU kegiatan -> tiap baris menandai sumbernya sendiri", () => {
@@ -356,7 +378,7 @@ uji("susunBarisRekap: campuran pendaftaran beku dan lama dalam SATU kegiatan -> 
 // Slice 6.2: kolom "Sumber Pendaftaran" — penting untuk 6.3 (peserta yang
 // diimpor karena hadir belum tentu mengerjakan evaluasi).
 // ---------------------------------------------------------------------
-const IDX_SUMBER_PENDAFTARAN = 7;
+const IDX_SUMBER_PENDAFTARAN = 8;
 
 uji("susunBarisRekap: sumber 'mandiri' -> \"Mandiri\"", () => {
   const peserta = pesertaDasar({ sumber: "mandiri" });

@@ -8,7 +8,11 @@ import { JalurDukungan } from "@/app/_jalur-dukungan";
 import { useAuth } from "@/lib/auth/auth-provider";
 import { fetchWithAuth } from "@/lib/api/client-fetch";
 import { formatDate, formatDateTime } from "@/lib/format-date";
-import { LABEL_FIELD_FORMULIR, periksaFormulirPeserta } from "@/lib/formulir-peserta";
+import {
+  LABEL_FIELD_FORMULIR,
+  periksaFormulirPeserta,
+  putuskanIdentitasPendaftaran,
+} from "@/lib/formulir-peserta";
 import { useKegiatanList } from "@/lib/hooks/use-kegiatan-list";
 import { statusJendelaKegiatan } from "@/lib/kegiatan-jendela";
 import { useModulList } from "@/lib/hooks/use-modul-list";
@@ -305,6 +309,21 @@ export default function KegiatanDetailPage({
   };
   const hasilFormulir = periksaFormulirPeserta(kegiatan.formulirPeserta, dataFormulirSaya);
 
+  // Slice "lengkapi-sendiri" (6f) — dihitung dari PROFIL SAAT INI (bukan
+  // snapshot impor), supaya spanduk di bawah selalu mencerminkan kolom yang
+  // MASIH kurang detik ini juga — begitu peserta melengkapi profilnya, sisi
+  // klien ini langsung tidak lagi menganggapnya kurang walau penulisan
+  // baliknya sendiri baru terjadi di server saat percobaan berikutnya
+  // membuka/mengerjakan modul (POST /api/attempt, POST /api/modul/dibuka).
+  const hasilIdentitas = pendaftaranKegiatanIni
+    ? putuskanIdentitasPendaftaran({
+        identitasBelumLengkap: pendaftaranKegiatanIni.identitasBelumLengkap,
+        formulirPeserta: kegiatan.formulirPeserta,
+        profil: dataFormulirSaya,
+      })
+    : null;
+  const identitasBelumLengkap = Boolean(hasilIdentitas && !hasilIdentitas.lengkap);
+
   return (
     <div className="mx-auto min-h-screen max-w-2xl space-y-6 bg-zinc-50 px-4 py-10 dark:bg-black">
       <Link href="/kegiatan" className="text-sm text-zinc-500 hover:underline">
@@ -359,6 +378,29 @@ export default function KegiatanDetailPage({
         <h2 className="mb-3 text-sm font-semibold text-black dark:text-zinc-50">
           Modul dalam kegiatan ini
         </h2>
+        {/* Slice "lengkapi-sendiri" (6f) — spanduk untuk peserta yang
+            didaftarkan admin lewat impor dengan data yang belum lengkap
+            (dukungan.bolehDilengkapiSendiri di kegiatan ini). Penjaga
+            SESUNGGUHNYA ada di server (POST /api/attempt, POST
+            /api/modul/dibuka) — ini hanya supaya orang tidak menabrak
+            pesan galat setelah mengeklik. */}
+        {identitasBelumLengkap && hasilIdentitas && (
+          <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950">
+            <p className="font-medium text-amber-800 dark:text-amber-200">
+              Lengkapi data Anda sebelum mengerjakan modul evaluasi
+            </p>
+            <p className="mt-1 text-amber-800 dark:text-amber-200">
+              Kolom yang masih kurang:{" "}
+              {hasilIdentitas.kurang.map((field) => LABEL_FIELD_FORMULIR[field]).join(", ")}.
+            </p>
+            <Link
+              href={`/profil?untuk=${id}`}
+              className="mt-2 inline-flex min-h-11 items-center rounded bg-amber-800 px-4 text-sm font-medium text-white dark:bg-amber-200 dark:text-amber-950"
+            >
+              Lengkapi di halaman Profil
+            </Link>
+          </div>
+        )}
         {pendaftaranKegiatanIni ? (
           // Sudah terdaftar — pakai modulSnapshot milik pendaftaran, BUKAN
           // daftar modul hidup. Admin bisa menyunting modul kegiatan setelah
@@ -425,14 +467,25 @@ export default function KegiatanDetailPage({
                       )}
                     </p>
                   </div>
-                  {modul.kategori === "evaluasi" && (
-                    <Link
-                      href={`/kegiatan/${id}/modul/${modul.modulId}`}
-                      className="inline-block shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
-                    >
-                      Kerjakan
-                    </Link>
-                  )}
+                  {modul.kategori === "evaluasi" &&
+                    (identitasBelumLengkap ? (
+                      // Slice "lengkapi-sendiri" (6f) — dinonaktifkan di
+                      // klien supaya tidak menabrak penolakan 403 dari POST
+                      // /api/attempt; penjaga SESUNGGUHNYA tetap di server.
+                      <span
+                        className="inline-block shrink-0 cursor-not-allowed text-sm font-medium text-zinc-400"
+                        title="Lengkapi data profil Anda dulu sebelum mengerjakan."
+                      >
+                        Kerjakan
+                      </span>
+                    ) : (
+                      <Link
+                        href={`/kegiatan/${id}/modul/${modul.modulId}`}
+                        className="inline-block shrink-0 text-sm font-medium text-black underline dark:text-zinc-50"
+                      >
+                        Kerjakan
+                      </Link>
+                    ))}
                   {(modul.kategori === "referensi" || modul.kategori === "atestasi") && (
                     <Link
                       href={`/kegiatan/${id}/modul/${modul.modulId}`}

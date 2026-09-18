@@ -43,6 +43,14 @@ export interface RekapPesertaBaris {
    */
   identitasDariProfil: boolean;
   /**
+   * Slice "lengkapi-sendiri" (6f) — true kalau peserta ini diimpor dengan
+   * data belum lengkap dan belum sempat melengkapinya sendiri (kolom
+   * institusi/nomorIdentitas/noTelepon di atas bisa saja masih kosong
+   * karenanya). Lihat komentar Pendaftaran.identitasBelumLengkap di
+   * src/types/pendaftaran.ts.
+   */
+  identitasBelumLengkap: boolean;
+  /**
    * Slice 6.2: dari mana pendaftaran ini berasal — 'mandiri' (peserta
    * sendiri) atau 'impor' (dibuatkan admin lewat impor daftar hadir).
    * Penting untuk 6.3: peserta yang diimpor karena hadir belum tentu
@@ -171,6 +179,7 @@ export function susunBarisRekap(
     "Nomor Identitas",
     "No. Telepon",
     "Sumber Identitas",
+    "Identitas Belum Lengkap",
     "Sumber Pendaftaran",
     "Status Pendaftaran",
     "Nilai Akhir",
@@ -220,6 +229,11 @@ export function susunBarisRekap(
       peserta.nomorIdentitas,
       peserta.noTelepon,
       peserta.identitasDariProfil ? LABEL_SUMBER_IDENTITAS.profil : LABEL_SUMBER_IDENTITAS.beku,
+      // Slice "lengkapi-sendiri" (6f) — SENGAJA "Ya"/kosong, bukan
+      // "Ya"/"Tidak", pola yang sama dengan kolom Kedaluwarsa di atas:
+      // mayoritas baris tidak pernah kena kasus ini, kolom penuh "Tidak"
+      // akan menenggelamkan baris yang benar-benar perlu perhatian admin.
+      peserta.identitasBelumLengkap ? "Ya" : "",
       LABEL_SUMBER_PENDAFTARAN[peserta.sumber],
       LABEL_STATUS_PENDAFTARAN[peserta.status],
       peserta.nilaiAkhir,

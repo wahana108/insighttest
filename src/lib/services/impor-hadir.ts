@@ -103,12 +103,18 @@ export type StatusBarisHadir =
   | "sudah_terdaftar"
   | "duplikat_dalam_tempelan"
   | "baris_tidak_sah"
-  | "data_wajib_kurang";
+  | "data_wajib_kurang"
+  // Slice "lengkapi-sendiri" (6f) — HANYA muncul kalau
+  // formulirPeserta.bolehDilengkapiSendiri true DAN baris ini punya kolom
+  // wajib kosong (kasus yang tanpa itu jadi 'data_wajib_kurang'). Baris ini
+  // TETAP dieksekusi — bukan ditolak — dengan pendaftaran ditandai
+  // identitasBelumLengkap: true.
+  | "lengkapi_sendiri";
 
 export interface HasilBarisHadir extends BarisMentahImpor {
   status: StatusBarisHadir;
   pesan: string[];
-  /** true hanya untuk 'akan_dibuatkan_akun' dan 'akun_sudah_ada' — status lain TIDAK PERNAH dieksekusi. */
+  /** true hanya untuk 'akan_dibuatkan_akun', 'akun_sudah_ada', dan 'lengkapi_sendiri' — status lain TIDAK PERNAH dieksekusi. */
   akanDieksekusi: boolean;
   /** uid akun yang SUDAH ADA untuk email ini — null kalau akan dibuatkan baru, atau baris ini tidak dieksekusi. */
   uidSudahAda: string | null;
@@ -161,7 +167,8 @@ const URUTAN_FIELD_WAJIB: KolomTambahanImpor[] = ["institusi", "nomorIdentitas",
  * "baris_tidak_sah" dan baris lainnya tetap diproses, bukan meruntuhkan
  * seluruh pratinjau/eksekusi. TIDAK ADA tempelan yang boleh menghasilkan
  * galat pada fungsi ini — kosong, satu kolom, seribu kolom, karakter
- * aneh, semuanya harus keluar sebagai salah satu dari enam status.
+ * aneh, semuanya harus keluar sebagai salah satu dari tujuh status
+ * (enam sejak 6.2a, ditambah 'lengkapi_sendiri' di Slice 6f).
  */
 export function tandaiBarisImpor(
   barisMentah: BarisMentahImpor[],
@@ -256,6 +263,23 @@ function tandaiSatuBaris(
     return !dariBaris && !dariProfil;
   });
   if (fieldKurang.length > 0) {
+    // Slice "lengkapi-sendiri" (6f) — kalau kegiatan ini mengizinkan,
+    // baris dengan kolom wajib kosong TIDAK ditolak: boleh dieksekusi,
+    // peserta melengkapi sendiri nanti (lihat putuskanIdentitasPendaftaran(),
+    // src/lib/formulir-peserta.ts). Saat bolehDilengkapiSendiri false
+    // (bawaan), jatuh ke 'data_wajib_kurang' seperti sebelum slice ini —
+    // TANPA perubahan sama sekali.
+    if (formulirPeserta.bolehDilengkapiSendiri) {
+      return {
+        ...baris,
+        status: "lengkapi_sendiri",
+        pesan: [
+          "Akan didaftarkan; peserta melengkapi datanya sendiri sebelum mengerjakan.",
+        ],
+        akanDieksekusi: true,
+        uidSudahAda: profil?.uid ?? null,
+      };
+    }
     return {
       ...baris,
       status: "data_wajib_kurang",

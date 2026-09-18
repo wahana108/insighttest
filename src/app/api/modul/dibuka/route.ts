@@ -1,6 +1,8 @@
 import { FieldValue } from "firebase-admin/firestore";
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
+import { tulisBalikIdentitasPendaftaran } from "@/lib/api/pendaftaran-server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { mapFormulirPeserta, putuskanIdentitasPendaftaran } from "@/lib/formulir-peserta";
 
 class ModulDibukaRouteError extends Error {
   status: number;
@@ -48,13 +50,43 @@ export async function POST(request: Request) {
     }
 
     const db = getAdminDb();
+    const kegiatanRef = db.collection("kegiatan").doc(kegiatanId);
     const pendaftaranRef = db.collection("pendaftaran").doc(`${kegiatanId}_${user.uid}`);
-    const pendaftaranSnap = await pendaftaranRef.get();
+    const [kegiatanSnap, pendaftaranSnap] = await Promise.all([
+      kegiatanRef.get(),
+      pendaftaranRef.get(),
+    ]);
     if (!pendaftaranSnap.exists) {
       throw new ModulDibukaRouteError(403, "Anda belum terdaftar di kegiatan ini.");
     }
 
     const data = pendaftaranSnap.data() ?? {};
+
+    // Slice "lengkapi-sendiri" (6f) — WAJIB di server, sebelum modul ini
+    // ditandai dibuka. Sama pola dengan POST /api/attempt: identitasBelumLengkap
+    // !== true (pendaftaran mandiri/lama) -> selalu lolos, tidak ada
+    // pemeriksaan sama sekali.
+    const hasilIdentitas = putuskanIdentitasPendaftaran({
+      identitasBelumLengkap: data.identitasBelumLengkap === true,
+      formulirPeserta: mapFormulirPeserta(kegiatanSnap.data()?.formulirPeserta),
+      profil: {
+        institusi: user.institusi,
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
+      },
+    });
+    if (!hasilIdentitas.lengkap) {
+      throw new ModulDibukaRouteError(403, hasilIdentitas.pesan ?? "Lengkapi data profil Anda dulu.");
+    }
+    if (data.identitasBelumLengkap === true) {
+      await tulisBalikIdentitasPendaftaran(pendaftaranRef, {
+        namaLengkap: user.namaLengkap,
+        institusi: user.institusi,
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
+      });
+    }
+
     const modulSnapshot = Array.isArray(data.modulSnapshot) ? data.modulSnapshot : [];
     const modul = modulSnapshot.find(
       (item): item is Record<string, unknown> =>

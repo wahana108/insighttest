@@ -650,6 +650,11 @@ export default function AdminPesertaPage({
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-black dark:text-zinc-50">
                     {item.nomorUrut}. {item.namaLengkap}
+                    {item.identitasBelumLengkap && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                        Belum lengkap
+                      </span>
+                    )}
                   </p>
                   <p className="break-words text-zinc-700 dark:text-zinc-300">{item.email}</p>
                 </div>
@@ -826,7 +831,14 @@ export default function AdminPesertaPage({
                     </td>
                   )}
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.nomorUrut}</td>
-                  <td className="px-3 py-2 text-black dark:text-zinc-50">{item.namaLengkap}</td>
+                  <td className="px-3 py-2 text-black dark:text-zinc-50">
+                    {item.namaLengkap}
+                    {item.identitasBelumLengkap && (
+                      <span className="ml-2 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-medium text-amber-700 dark:bg-amber-950 dark:text-amber-400">
+                        Belum lengkap
+                      </span>
+                    )}
+                  </td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">{item.email}</td>
                   <td className="px-3 py-2 text-zinc-700 dark:text-zinc-300">
                     {item.institusi || "-"}

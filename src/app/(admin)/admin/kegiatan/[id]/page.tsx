@@ -1574,6 +1574,28 @@ export default function AdminKegiatanDetailPage({
                   </div>
                 ))}
               </div>
+              <label className="flex items-center gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={editingKegiatanForm.formulirPeserta.bolehDilengkapiSendiri}
+                  onChange={(event) =>
+                    setKegiatanForm({
+                      ...editingKegiatanForm,
+                      formulirPeserta: {
+                        ...editingKegiatanForm.formulirPeserta,
+                        bolehDilengkapiSendiri: event.target.checked,
+                      },
+                    })
+                  }
+                />
+                Peserta boleh melengkapi data sendiri (impor daftar hadir)
+              </label>
+              <p className="text-xs text-zinc-500">
+                Kalau dicentang, baris impor yang kolom wajibnya kosong TETAP bisa didaftarkan —
+                peserta itu wajib melengkapi datanya sendiri di halaman Profil sebelum boleh
+                mengerjakan modul evaluasi. Kalau dimatikan (bawaan), baris seperti itu tetap
+                ditolak importir seperti sekarang.
+              </p>
             </div>
 
             <div className="space-y-3 rounded border border-zinc-200 p-4 dark:border-zinc-800">

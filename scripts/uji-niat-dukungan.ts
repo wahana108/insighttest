@@ -143,11 +143,13 @@ const FORMULIR_TIDAK_ADA: FormulirPeserta = {
   institusi: "tidak",
   nomorIdentitas: "tidak",
   noTelepon: "tidak",
+  bolehDilengkapiSendiri: false,
 };
 const FORMULIR_CAMPURAN: FormulirPeserta = {
   institusi: "wajib",
   nomorIdentitas: "opsional",
   noTelepon: "tidak",
+  bolehDilengkapiSendiri: false,
 };
 
 uji("petakanNiatDukunganKeBarisImpor: email dan namaDipakai masuk ke dua kolom pertama, apa adanya", () => {

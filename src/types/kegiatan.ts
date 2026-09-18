@@ -116,6 +116,19 @@ export interface FormulirPeserta {
   institusi: StatusFieldFormulir;
   nomorIdentitas: StatusFieldFormulir;
   noTelepon: StatusFieldFormulir;
+  /**
+   * Slice "lengkapi-sendiri" (6f) — bawaan FALSE (KA-1). Kalau false,
+   * SELURUH slice 6f tidak berpengaruh apa pun — perilaku importir daftar
+   * hadir persis seperti sebelum slice ini (baris dengan kolom wajib kosong
+   * tetap 'data_wajib_kurang', tidak bisa dieksekusi). Kalau true, admin
+   * boleh mengimpor baris yang kolom wajibnya kosong; pendaftaran itu
+   * ditandai identitasBelumLengkap: true (src/types/pendaftaran.ts) dan
+   * peserta WAJIB melengkapinya sendiri di /profil sebelum boleh membuka
+   * modul evaluasi/referensi (lihat putuskanIdentitasPendaftaran(),
+   * src/lib/formulir-peserta.ts, ditegakkan di POST /api/attempt dan POST
+   * /api/modul/dibuka).
+   */
+  bolehDilengkapiSendiri: boolean;
 }
 
 export type CaraMasukKegiatan = "terbuka" | "kode" | "hanya_admin";

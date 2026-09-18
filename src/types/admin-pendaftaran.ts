@@ -27,6 +27,12 @@ export interface PesertaAdminRingkas {
   email: string;
   institusi: string;
   /**
+   * Slice "lengkapi-sendiri" (6f) — true kalau peserta ini diimpor dengan
+   * data belum lengkap dan belum sempat melengkapinya sendiri. Lihat
+   * komentar Pendaftaran.identitasBelumLengkap di src/types/pendaftaran.ts.
+   */
+  identitasBelumLengkap: boolean;
+  /**
    * Slice 6.2: 'mandiri' | 'impor' — dari mana pendaftaran ini berasal.
    * Pendaftaran lama tanpa field sumber (sebelum slice ini) dibaca sebagai
    * 'mandiri', bukan galat — lihat komentar Pendaftaran.sumber di

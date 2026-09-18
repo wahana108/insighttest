@@ -36,7 +36,12 @@ function uji(nama: string, fn: () => void): void {
   }
 }
 
-const TIDAK_SEMUA: FormulirPeserta = { institusi: "tidak", nomorIdentitas: "tidak", noTelepon: "tidak" };
+const TIDAK_SEMUA: FormulirPeserta = {
+  institusi: "tidak",
+  nomorIdentitas: "tidak",
+  noTelepon: "tidak",
+  bolehDilengkapiSendiri: false,
+};
 
 function baris(email: string, namaLengkap: string, extra: Partial<BarisMentahImpor> = {}): BarisMentahImpor {
   return {
@@ -71,7 +76,12 @@ uji("kolomTambahanUntukFormulir: institusi wajib, sisanya tidak -> hanya institu
 
 uji("kolomTambahanUntukFormulir: institusi tidak, nomorIdentitas opsional, noTelepon wajib -> urutan tetap", () => {
   assert.deepEqual(
-    kolomTambahanUntukFormulir({ institusi: "tidak", nomorIdentitas: "opsional", noTelepon: "wajib" }),
+    kolomTambahanUntukFormulir({
+      institusi: "tidak",
+      nomorIdentitas: "opsional",
+      noTelepon: "wajib",
+      bolehDilengkapiSendiri: false,
+    }),
     ["nomorIdentitas", "noTelepon"]
   );
 });
@@ -203,7 +213,7 @@ uji("tandaiBarisImpor: baris satu karakter (dari uraiDaftarHadir) -> baris_tidak
 
 uji("tandaiBarisImpor: tempelan berantakan (kolom tidak sejajar, kolom kurang) -> SEMUA baris tetap dapat salah satu dari enam status, tidak melempar", () => {
   const kolomTambahan: ("institusi" | "nomorIdentitas" | "noTelepon")[] = ["institusi"];
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const teksBerantakan = [
     "tanpa-kolom-sama-sekali",
     "a@b.com",
@@ -234,7 +244,7 @@ uji("tandaiBarisImpor: tempelan berantakan (kolom tidak sejajar, kolom kurang) -
 // ---------------------------------------------------------------------
 
 uji("tandaiBarisImpor: data wajib kurang, kolom TIDAK ADA di baris (jumlahSel pendek) -> pesan menyebut 'TIDAK ADA'", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   // jumlahSel: 2 (bawaan baris()) -> posisi institusi (2+0=2) TIDAK tercapai.
   const hasil = tandaiBarisImpor(
     [baris("baru@contoh.com", "Peserta Baru")],
@@ -247,7 +257,7 @@ uji("tandaiBarisImpor: data wajib kurang, kolom TIDAK ADA di baris (jumlahSel pe
 });
 
 uji("tandaiBarisImpor: data wajib kurang, kolom ADA tapi selnya KOSONG -> pesan menyebut 'ADA...tapi KOSONG'", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   // jumlahSel: 3 -> posisi institusi (2) TERCAPAI, tapi nilainya tetap "".
   const hasil = tandaiBarisImpor(
     [baris("baru@contoh.com", "Peserta Baru", { jumlahSel: 3 })],
@@ -307,7 +317,7 @@ uji("headerTemplatImporCsv: ketiganya 'tidak' -> hanya email + nama lengkap", ()
 });
 
 uji("headerTemplatImporCsv: field wajib ditandai '(wajib)', field opsional tidak", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "opsional", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "opsional", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   assert.deepEqual(headerTemplatImporCsv(formulir), [
     "email",
     "nama lengkap",
@@ -317,14 +327,14 @@ uji("headerTemplatImporCsv: field wajib ditandai '(wajib)', field opsional tidak
 });
 
 uji("contohBarisImporCsv: kolom tambahan menyesuaikan formulirPeserta, bentuk koma", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const contoh = contohBarisImporCsv(formulir);
   assert.equal(contoh.split(",").length, 3, "email, nama, institusi -> 3 kolom");
   assert.ok(contoh.startsWith("budi@contoh.com,Budi Santoso,"));
 });
 
 uji("contohBarisImporCsv: hasilnya sendiri bisa diuraikan ulang tanpa galat dan tanpa data_wajib_kurang", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "wajib", noTelepon: "wajib" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "wajib", noTelepon: "wajib", bolehDilengkapiSendiri: false };
   const contoh = contohBarisImporCsv(formulir);
   const barisMentah = uraiDaftarHadir(contoh, kolomTambahanUntukFormulir(formulir));
   const hasil = tandaiBarisImpor(barisMentah, formulir, new Map(), new Set());
@@ -443,7 +453,7 @@ uji("tandaiBarisImpor: sudah terdaftar di kegiatan ini -> sudah_terdaftar, tidak
 });
 
 uji("tandaiBarisImpor: data wajib kurang — field wajib kosong di baris DAN tidak ada profil -> data_wajib_kurang, menyebut field", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const hasil = tandaiBarisImpor(
     [baris("baru@contoh.com", "Peserta Baru")],
     formulir,
@@ -455,8 +465,61 @@ uji("tandaiBarisImpor: data wajib kurang — field wajib kosong di baris DAN tid
   assert.ok(hasil[0].pesan[0].includes("Institusi"));
 });
 
+// --- Slice "lengkapi-sendiri" (6f): bolehDilengkapiSendiri ---
+
+uji("tandaiBarisImpor: bolehDilengkapiSendiri false + kolom wajib kosong -> TETAP data_wajib_kurang (kontrol negatif, perilaku lama TIDAK berubah)", () => {
+  const formulir: FormulirPeserta = {
+    institusi: "wajib",
+    nomorIdentitas: "tidak",
+    noTelepon: "tidak",
+    bolehDilengkapiSendiri: false,
+  };
+  const hasil = tandaiBarisImpor(
+    [baris("baru@contoh.com", "Peserta Baru")],
+    formulir,
+    new Map(),
+    new Set()
+  );
+  assert.equal(hasil[0].status, "data_wajib_kurang");
+  assert.equal(hasil[0].akanDieksekusi, false);
+});
+
+uji("tandaiBarisImpor: bolehDilengkapiSendiri true + kolom wajib kosong -> 'lengkapi_sendiri', BOLEH dieksekusi", () => {
+  const formulir: FormulirPeserta = {
+    institusi: "wajib",
+    nomorIdentitas: "tidak",
+    noTelepon: "tidak",
+    bolehDilengkapiSendiri: true,
+  };
+  const hasil = tandaiBarisImpor(
+    [baris("baru@contoh.com", "Peserta Baru")],
+    formulir,
+    new Map(),
+    new Set()
+  );
+  assert.equal(hasil[0].status, "lengkapi_sendiri");
+  assert.equal(hasil[0].akanDieksekusi, true);
+  assert.ok(hasil[0].pesan[0].includes("melengkapi datanya sendiri"));
+});
+
+uji("tandaiBarisImpor: bolehDilengkapiSendiri true TAPI kolom wajib SUDAH terisi -> status normal ('akan_dibuatkan_akun'), bukan 'lengkapi_sendiri'", () => {
+  const formulir: FormulirPeserta = {
+    institusi: "wajib",
+    nomorIdentitas: "tidak",
+    noTelepon: "tidak",
+    bolehDilengkapiSendiri: true,
+  };
+  const hasil = tandaiBarisImpor(
+    [baris("baru@contoh.com", "Peserta Baru", { institusi: "Dinas Baru" })],
+    formulir,
+    new Map(),
+    new Set()
+  );
+  assert.equal(hasil[0].status, "akan_dibuatkan_akun");
+});
+
 uji("tandaiBarisImpor: data wajib kurang di baris TAPI sudah ada di profil lama -> TIDAK data_wajib_kurang", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const profilByEmail = new Map<string, ProfilTersimpanRingkas>([
     ["ada@contoh.com", { uid: "uid-3", institusi: "Dinas Lama", nomorIdentitas: "", noTelepon: "" }],
   ]);
@@ -470,7 +533,7 @@ uji("tandaiBarisImpor: data wajib kurang di baris TAPI sudah ada di profil lama 
 });
 
 uji("tandaiBarisImpor: field wajib TERISI di baris -> lolos meski profil tidak ada", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const hasil = tandaiBarisImpor(
     [baris("baru@contoh.com", "Peserta Baru", { institusi: "Dinas Baru" })],
     formulir,
@@ -481,7 +544,7 @@ uji("tandaiBarisImpor: field wajib TERISI di baris -> lolos meski profil tidak a
 });
 
 uji("tandaiBarisImpor: field 'opsional' kosong -> TIDAK PERNAH data_wajib_kurang", () => {
-  const formulir: FormulirPeserta = { institusi: "opsional", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "opsional", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const hasil = tandaiBarisImpor(
     [baris("baru@contoh.com", "Peserta Baru")],
     formulir,
@@ -492,7 +555,7 @@ uji("tandaiBarisImpor: field 'opsional' kosong -> TIDAK PERNAH data_wajib_kurang
 });
 
 uji("tandaiBarisImpor: sudah_terdaftar TIDAK diperiksa data_wajib_kurang (tidak ada gunanya)", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const profilByEmail = new Map<string, ProfilTersimpanRingkas>([
     ["sudah@contoh.com", { uid: "uid-4", institusi: "", nomorIdentitas: "", noTelepon: "" }],
   ]);
@@ -506,7 +569,7 @@ uji("tandaiBarisImpor: sudah_terdaftar TIDAK diperiksa data_wajib_kurang (tidak 
 });
 
 uji("tandaiBarisImpor: gabungan — beberapa keadaan sekaligus dalam satu tempelan, tiap baris independen", () => {
-  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak" };
+  const formulir: FormulirPeserta = { institusi: "wajib", nomorIdentitas: "tidak", noTelepon: "tidak", bolehDilengkapiSendiri: false };
   const profilByEmail = new Map<string, ProfilTersimpanRingkas>([
     ["ada@contoh.com", { uid: "uid-5", institusi: "Dinas", nomorIdentitas: "", noTelepon: "" }],
     ["sudah@contoh.com", { uid: "uid-6", institusi: "Dinas", nomorIdentitas: "", noTelepon: "" }],

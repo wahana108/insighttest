@@ -317,6 +317,8 @@ export async function GET(
           : identitas?.nomorIdentitas ?? "",
         noTelepon: noTeleponBeku ? (data.noTelepon as string) : identitas?.noTelepon ?? "",
         identitasDariProfil: !nomorIdentitasBeku || !noTeleponBeku,
+        // Slice "lengkapi-sendiri" (6f) — opsional (KA-1).
+        identitasBelumLengkap: data.identitasBelumLengkap === true,
         sumber: isSumberPendaftaran(data.sumber) ? data.sumber : "mandiri",
         status: isStatusPendaftaran(data.status) ? data.status : "terdaftar",
         nilaiAkhir: kelayakan.nilaiAkhir,

@@ -219,6 +219,12 @@ export async function POST(
               sumber: "impor",
               diimporOleh: user.uid,
               diimporPada: now,
+              // Slice "lengkapi-sendiri" (6f) — HANYA true untuk baris
+              // berstatus 'lengkapi_sendiri' (formulirPeserta.bolehDilengkapiSendiri
+              // true DAN kolom wajib kosong saat diimpor). Field ini TIDAK
+              // ditulis sama sekali untuk baris lain — biarkan default KA-1
+              // (undefined -> lengkap) yang bicara, bukan `false` eksplisit.
+              ...(baris.status === "lengkapi_sendiri" ? { identitasBelumLengkap: true } : {}),
             });
             return { dibuat: true, nomorUrut };
           }

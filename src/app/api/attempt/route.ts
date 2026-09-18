@@ -1,7 +1,9 @@
 import type { QueryDocumentSnapshot } from "firebase-admin/firestore";
 import { ApiAuthError, verifyRequest } from "@/lib/api/auth-server";
 import { acakUrutan, AttemptRouteError, muatSoalUntukAttempt } from "@/lib/api/attempt-server";
+import { tulisBalikIdentitasPendaftaran } from "@/lib/api/pendaftaran-server";
 import { getAdminDb } from "@/lib/firebase/admin";
+import { mapFormulirPeserta, putuskanIdentitasPendaftaran } from "@/lib/formulir-peserta";
 import type { MulaiAttemptResponse } from "@/types/attempt";
 
 /**
@@ -61,6 +63,36 @@ export async function POST(request: Request) {
 
     if (!pendaftaranSnap.exists) {
       throw new AttemptRouteError(403, "Anda belum terdaftar di kegiatan ini.");
+    }
+    const pendaftaranData = pendaftaranSnap.data() ?? {};
+
+    // Slice "lengkapi-sendiri" (6f) — WAJIB di server, sebelum attempt
+    // dibuat. identitasBelumLengkap !== true (termasuk pendaftaran mandiri
+    // dan pendaftaran lama, yang tidak pernah punya field ini) -> selalu
+    // lolos tanpa pemeriksaan apa pun (pagar anti-surut), lihat komentar
+    // putuskanIdentitasPendaftaran().
+    const hasilIdentitas = putuskanIdentitasPendaftaran({
+      identitasBelumLengkap: pendaftaranData.identitasBelumLengkap === true,
+      formulirPeserta: mapFormulirPeserta(kegiatanData.formulirPeserta),
+      profil: {
+        institusi: user.institusi,
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
+      },
+    });
+    if (!hasilIdentitas.lengkap) {
+      throw new AttemptRouteError(403, hasilIdentitas.pesan ?? "Lengkapi data profil Anda dulu.");
+    }
+    // Lolos DAN dokumen ini masih menandai identitasBelumLengkap true ->
+    // tulis balik SEKALI di sini (lihat komentar tulisBalikIdentitasPendaftaran()
+    // untuk alasan rekap CSV membutuhkan ini).
+    if (pendaftaranData.identitasBelumLengkap === true) {
+      await tulisBalikIdentitasPendaftaran(pendaftaranRef, {
+        namaLengkap: user.namaLengkap,
+        institusi: user.institusi,
+        nomorIdentitas: user.nomorIdentitas,
+        noTelepon: user.noTelepon,
+      });
     }
 
     if (!modulSnap.exists) {
